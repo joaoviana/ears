@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \stab, \dur, 1/4, \amp, ~x.(["----X---------X-", "----X--X------X-"], 0.15), \midinote, Pseq([[60, 63, 67, 70], [60, 63, 67, 70], [65, 68, 72, 75], [60, 63, 67, 70]], inf).stutter(16), \cutoff, Pbrown(500, 1300, 100), \dec, 0.15, \send, 1)
+~d.(\d5, \instrument, \stab, \dur, 1/4, \amp, ~x.(["------X---------", "------X------x--"], 0.2), \midinote, [52, 55, 59, 62, 66], \cutoff, Pbrown(500, 1200, 100), \dec, 0.12, \send, 1)

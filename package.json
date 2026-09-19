@@ -13,7 +13,8 @@
     "ears:ref": "tsx tui/make-ref.ts",
     "ears:reset": "cp tui/set.start/*.scd tui/set/",
     "ears:tail": "tsx tui/tail.ts",
-    "test:ears": "tsx --test tui/tests/*.test.ts"
+    "test:ears": "tsx --test tui/tests/*.test.ts",
+    "ears:bench": "EARS_PORT=57300 EARS_SC_PORT=57190 tsx tui/dev/bench.ts"
   },
   "keywords": [],
   "author": "",

@@ -17,7 +17,7 @@ import { Bus, pretty, type Msg } from "./bus.ts";
 import { Evidence, type Context } from "./evidence.ts";
 import { applyPatch, describe } from "./patch.ts";
 import { validate } from "./agent.ts";
-import { SKILLS, skill, earned, missing, ensureVox, phrasesIn } from "./skills.ts";
+import { SKILLS, skill, earned, missing, ensureVox, phrasesIn, recordNote } from "./skills.ts";
 import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
@@ -117,7 +117,7 @@ function App() {
   const voiceRef = useRef(voice); voiceRef.current = voice;
   const logsRef = useRef(logs); logsRef.current = logs;
   const greet = useRef<{ who: string; rgb: number[]; text: string; until: number } | null>(null);
-  const showcase = useRef<{ agent: string; skill: string } | null>(null);
+  const showcase = useRef<{ agent: string; skill: string } | null>(null), recording = useRef(false);
   // called shots: what each taken idea predicted, the live noise floor, and the last graded call (shown for 8 bars)
   const shots = useRef(new Map<number, { agent: string; name: string; rgb: number[]; slot: string; expect: Expect }>()), noise = useRef(new NoiseFloor());
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
@@ -356,6 +356,12 @@ function App() {
     if (input === "f") setFull((x) => !x);
     if (input === "v") { setVoice((x) => !x); setSay(voice ? "DJs go quiet" : VOICES.length ? "DJs will speak their greeting when they walk in" : "no `say` voices found on this machine"); }
     if (input === "o" || input === "O") { const gs = input === "O" ? s.booth : [s.booth[s.turn % s.booth.length]], level = gs[0].level === "auto" ? "suggest" : "auto"; gs.forEach((g) => { g.level = level; bus.current.send("grant", "human", { agent: g.dj.id, level }); }); setSay(level === "auto" ? `${gs.map((g) => g.dj.name).join(" + ")} can take their own ideas after a 2-bar veto window. n vetoes, o takes it back` : "back to suggestions only"); if (level === "auto") s.autoAt = s.bar + 2; }
+    if (input === "R" && !recording.current) {   // a voice note: the mix drops out, you talk or sing for 4 s, it becomes a sample the DJs can chop
+      recording.current = true; const was = muted; eng.current?.volume(0); announce("REC", [255, 80, 80], 2); setSay("recording 4 seconds from the microphone… talk, sing, anything");
+      recordNote(4).then((name) => { const g = s.booth[s.turn % s.booth.length]; setSay(`recorded “${name}” → tui/samples/${name}.wav. DJs with vocals can use it`); if ((g.dj.skills || []).includes("vocals")) { showcase.current = { agent: g.dj.id, skill: "vocals" }; s.note = `The performer just recorded a voice note called "${name}". Build your vocal idea from it: ~v.("${name}"). Try \\voxpad or pitched \\vox chops.`; discardOptions("new voice note"); s.round++; think(); } else greet.current = { who: g.dj.name, rgb: accent(g.dj.palette), text: `nice voice. I need the vocals skill to use it: press K`, until: s.bar + 10 }; },
+        (e) => setSay(`couldn't record: ${e.message}. (First time? macOS asks to let your terminal use the microphone.)`)).finally(() => { recording.current = false; if (!was) eng.current?.volume(1); });
+      return;
+    }
     if (input === "K") { setOverlay("skills"); return; }
     if (input === "k") {
       const g = [s.booth[s.turn % s.booth.length], ...s.booth].find((x) => x.pending.length);
@@ -413,7 +419,7 @@ function App() {
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
-    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"]]],
+    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
     ["the set", [["g", "new random base, through a build"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];

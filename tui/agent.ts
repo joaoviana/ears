@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
 import { applyPatch, describe, parseSlot, type Patch } from "./patch.ts";
-import { SKILLS, missing } from "./skills.ts";
+import { SKILLS, missing, sampleNames } from "./skills.ts";
 import { parseExpect, METRICS, type Expect } from "./shots.ts";
 
 export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
@@ -28,6 +28,7 @@ Instruments and their arguments:
   \\acid  midinote, amp, cutoff (base Hz), env (how far the filter opens per note, 500-5000), res (0..1, 0.85+ squelches), dec, wave (0 saw .. 1 square), send
   \\stab  midinote (array = chord), amp, cutoff, dec, send
   \\fm    midinote, amp, ratio (1 warm, 2 hollow, 3.5 bell, 7.1 metal), index (0.5-8 bite), dec, pan, send
+  \\choir midinote (array = chord), amp (under 0.15), vowel (0 a, 1 e, 2 i, 3 o, 4 u; a Pseq morphs it), att, sus (seconds held), rel, bright (0.8-1.3), send, duck; long \\dur like 4 or 8. A synthetic choir pad.
   \\pad   midinote (array = chord), amp (keep under 0.15), cutoff, att, sus (seconds held), rel, send; use long \\dur like 8 or 16
   \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
 Nothing else exists. No new SynthDefs, no other functions, no semicolons, one expression.
@@ -151,7 +152,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
   return Promise.all(angles.slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
-      const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach).join("\n");
+      const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach + (k.id === "vocals" && sampleNames().length ? ` REAL RECORDED VOICES are available and sound far better than a rendered phrase: use them by name, e.g. ~v.("${sampleNames()[sampleNames().length - 1]}"). Names: ${sampleNames().slice(-12).join(", ")}.` : "")).join("\n");
       const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }

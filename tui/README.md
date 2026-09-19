@@ -108,6 +108,14 @@ markdown file (`skills: fills, vocals`), so they keep them next set.
 - **♪ vocals**: a new instrument, `\vox`. The DJ writes `~v.("machine soul")`; the host renders the phrase with
   macOS `say` in that DJ's voice, loads it into SuperCollider, and only then evaluates the slot. `chop`, `len` and
   `rate` patterns turn a phrase into a hook.
+  `\note` pitches a chop in semitones (a Pseq of notes turns one word into a melody); `\voxpad` holds one
+  syllable still with grains, pitched, as a chord if you like: the chopped, reverb-soaked vocal sound.
+  **Real voices beat the robot:** press **R** and talk or sing for 4 seconds (the mix drops out while it records);
+  it lands in `tui/samples/note-N.wav`, trimmed and normalised, and DJs with the vocals skill are told to build
+  from it. Any WAV/AIFF/FLAC you drop into `tui/samples/` works the same way, by file name: `~v.("hey-you")`.
+  First use: macOS asks to let your terminal use the microphone.
+- **`\choir`** is a base instrument (no skill needed): a formant choir that morphs between vowels
+  (`\vowel` 0 a · 1 e · 2 i · 3 o · 4 u). The progressive and halftime styles use it for their chords.
 - **▲ drops**: the patch carries `WITH build` or `WITH wash`, and the change lands on the drop.
 
 Same idea as takeover: a capability is a grant, it's on the wire (`unlock`, `grant`), and it's revocable by editing

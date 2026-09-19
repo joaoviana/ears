@@ -19,8 +19,8 @@ const STYLES: Style[] = [
   { name: "electro", bpm: [124, 130], scales: ["minor", "phrygian"], kick: [["X--X--X---X--X--", "X--X--X---X-X-X-"], ["X-----X-X-----X-", "X-----X-X--X--X-"]], hats: "sixteenths", clap: "snare", bass: "staccato", chords: "stabs", lead: "zaps" },
   { name: "two-step", bpm: [130, 134], scales: ["minor", "dorian"], kick: [["X---------X-----", "X------X--X-----"]], hats: "swung", clap: "backbeat", bass: "sub-bounce", chords: "organ", lead: "fm-sparse", swing: 0.045 },
   { name: "minimal", bpm: [124, 128], scales: ["minor", "mixolydian"], kick: [["X---X---X---X---"]], hats: "euclid", clap: "poly", bass: "one-note", chords: "none", lead: "blips" },
-  { name: "progressive", bpm: [128, 134], scales: ["minor", "harmonic minor"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "offbeat", chords: "pad", lead: "arp" },
-  { name: "halftime", bpm: [140, 150], scales: ["minor", "phrygian"], kick: [["X---------X-----", "X--------XX-----"]], hats: "rolls", clap: "three", bass: "reese", chords: "pad", lead: "fm-sparse" },
+  { name: "progressive", bpm: [128, 134], scales: ["minor", "harmonic minor"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "offbeat", chords: "choir", lead: "arp" },
+  { name: "halftime", bpm: [140, 150], scales: ["minor", "phrygian"], kick: [["X---------X-----", "X--------XX-----"]], hats: "rolls", clap: "three", bass: "reese", chords: "choir", lead: "fm-sparse" },
   { name: "house", bpm: [120, 126], scales: ["dorian", "mixolydian", "minor"], kick: [["X---X---X---X---", "X---X---X---X--x"]], hats: "offbeat-open", clap: "backbeat", bass: "octaves", chords: "organ", lead: "arp", swing: 0.02 },
 ];
 
@@ -73,6 +73,7 @@ export function makeBase(seed: number): Base {
     stabs: `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["----X---------X-", "----X--X------X-"], 0.15), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\cutoff, Pbrown(900, 2600, 200), \\dec, 0.15, \\send, 1)`,
     "dub-chord": `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["------X---------", "------X------x--"], 0.2), \\midinote, ${chord(0, 2)}, \\cutoff, Pbrown(600, 1900, 150), \\dec, 0.12, \\send, 1)`,
     organ: `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X--X----X--X--", "--X--X----X-X-X-"], 0.11), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, 1.4, \\dec, 0.18, \\send, 0.35)`,
+    choir: `~d.(\\d5, \\instrument, \\choir, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\vowel, Pseq([0, 3, 4, 1], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.5, \\rel, ${f((60 / bpm) * 1.5)}, \\duck, 0.7, \\amp, 0.1)`,
     pad: `~d.(\\d5, \\instrument, \\pad, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.4, \\rel, ${f((60 / bpm) * 1.5)}, \\cutoff, Pwhite(800, 2000), \\duck, 0.75, \\amp, 0.085)`,
   } as Record<string, string>)[st.chords];
 

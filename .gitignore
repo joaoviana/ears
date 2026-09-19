@@ -6,3 +6,4 @@ public/faust
 tui/sets
 tui/logs
 tui/vox
+tui/samples/note-*.wav

@@ -82,11 +82,32 @@ s.waitForBoot {
   }).add;
   // vocals: a phrase rendered by the host (macOS `say`) and loaded as a buffer. chop = where in the phrase to start
   // (0..1), len = how long to let it speak, rate = pitch/speed. Short len + a pattern of chops = a vocal hook.
-  SynthDef(\vox, { |out = 0, buf = 0, rate = 1, chop = 0, len = 0.4, amp = 0.5, pan = 0, send = 0.4, hp = 180|
+  SynthDef(\vox, { |out = 0, buf = 0, rate = 1, note = 0, chop = 0, len = 0.4, amp = 0.5, pan = 0, send = 0.4, hp = 180|
     var env = EnvGen.kr(Env.linen(0.004, len, 0.03), doneAction: 2);
-    var sig = PlayBuf.ar(1, buf, BufRateScale.kr(buf) * rate, 1, chop.clip(0, 0.98) * BufFrames.kr(buf), 0) * env;
+    var sig = PlayBuf.ar(1, buf, BufRateScale.kr(buf) * rate * note.midiratio, 1, chop.clip(0, 0.98) * BufFrames.kr(buf), 0) * env;
     sig = HPF.ar(sig, hp);
     Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
+  }).add;
+  // a voice held still: grains read around one point of the phrase (`chop`), so a syllable becomes a sustained,
+  // pitched vowel. \note in semitones; arrays make vocal chords. The Fred again.. trick, more or less.
+  SynthDef(\voxpad, { |out = 0, buf = 0, note = 0, chop = 0.3, len = 1.5, att = 0.08, rel = 0.6, amp = 0.35, spread = 0.02, send = 0.7, hp = 200, duck = 0.5|
+    var env = EnvGen.kr(Env.linen(att, len, rel, 1, \sine), doneAction: 2) * (1 - (In.kr(~duck) * duck).clip(0, 1));
+    var pos = (chop + LFNoise1.kr(7).range(spread.neg, spread)).clip(0, 0.98);
+    var sig = GrainBuf.ar(2, Impulse.ar(38), 0.11, buf, BufRateScale.kr(buf) * note.midiratio, pos, 2, LFNoise1.kr(3) * 0.6);
+    sig = HPF.ar(sig, hp) * env;
+    Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
+  }).add;
+  // a choir with no singers: detuned saws and breath through five moving formants. vowel 0..4 = a e i o u
+  SynthDef(\choir, { |out = 0, freq = 220, amp = 0.12, vowel = 0, att = 0.5, sus = 2, rel = 1.5, send = 0.7, duck = 0.6, bright = 1|
+    var env = EnvGen.kr(Env.linen(att, sus, rel, 1, \sine), doneAction: 2) * (1 - (In.kr(~duck) * duck).clip(0, 1));
+    var vib = SinOsc.kr(5.2 + LFNoise1.kr(0.3), 0, 0.006, 1);
+    var src = Mix(Saw.ar(freq * vib * [0.994, 1, 1.007, 0.5])) * 0.25 + (PinkNoise.ar(0.06));
+    var v = (vowel + LFNoise1.kr(0.2).range(-0.25, 0.25)).clip(0, 4);
+    var f = [[800, 1150, 2900, 3900, 4950], [350, 2000, 2800, 3600, 4950], [270, 2140, 2950, 3900, 4950], [450, 800, 2830, 3800, 4950], [325, 700, 2700, 3800, 4950]];
+    var a = [0, -6, -32, -20, -50].dbamp, a2 = [0, -20, -15, -40, -56].dbamp;
+    var sig = Mix.fill(5, { |i| BPF.ar(src, SelectX.kr(v, f.collect(_[i])) * bright, 0.06 + (i * 0.01)) * SelectX.kr(v.clip(0, 1), [a[i], a2[i]]) }) * 9;
+    sig = Splay.ar([sig, DelayN.ar(sig, 0.03, 0.013), DelayN.ar(sig, 0.03, 0.021)]) * env;
+    Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
   // the DJ mixer: a filter and an echo across the whole mix, for transitions
   // Bypassed unless a transition is riding it (`on`). A 2nd-order high-pass parked at 20 Hz, or a low-pass parked
