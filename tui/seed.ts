@@ -42,7 +42,7 @@ export function makeBase(seed: number, mood: Mood = "vibey"): Base {
   const offs = prog.map((d) => { const o = sc[d % sc.length]; return o > 6 ? o - 12 : o; });                      // chord roots as semitone offsets, kept near the tonic
   const follow = `\\ctranspose, Pseq([${offs.join(", ")}], inf).stutter(16)`;
   const chord = (d: number, oct: number) => `[${[0, 2, 4, 6].map((k) => deg(d + k, oct)).map((m) => (m > 79 ? m - 12 : m)).join(", ")}]`;
-  const ninth = (d: number, oct: number) => `[${[0, 2, 6, 8].map((k) => deg(d + k, oct)).map((m) => (m > 81 ? m - 12 : m)).join(", ")}]`;
+  const ninth = (d: number, oct: number) => `[${[0, 2, 6, 8].map((k) => deg(d + k, oct)).map((m, i, all) => (all[0] > 66 ? m - 12 : m)).join(", ")}]`;   // if the root sits high, drop the whole voicing an octave: folding single notes made seconds against the root
   const rows = (xs: string[]) => (xs.length === 1 ? `"${xs[0]}"` : `["${xs[0]}", "${xs[0]}", "${xs[0]}", "${xs[1]}"]`);
   const swing = st.swing ? `Pseq([${f(0.25 + st.swing)}, ${f(0.25 - st.swing)}], inf)` : "1/4";
   const ghosted = (n: number, k: number, rot: number) => Array.from({ length: n }, (_, i) => (((i + rot) * k) % n < k ? (chance(0.35) ? "x" : "X") : "-")).join("");
