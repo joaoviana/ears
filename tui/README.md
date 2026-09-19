@@ -67,6 +67,21 @@ When any change lands, the visuals wipe to a new look and palette on that bar.
 - Nothing calls `eval` on a suggestion. The only path to the engine is a file write, and the only thing that writes
   the file is the **y** key.
 
+## Transitions
+
+A DJ mixer sits across the whole mix in SuperCollider (`\djfx`: high-pass, low-pass, echo), and a transition rides it
+from now until a bar line, then lets go on the downbeat under a crash:
+
+- **build**: the high-pass sweeps up under a noise riser, the bass disappears, and it all comes back on the drop.
+- **wash**: the low-pass closes while the echo takes over, then opens on the drop.
+- **riser**: riser and crash only. A DJ walking in gets one automatically.
+
+**g** (new base) rides a two-bar build or wash and the new base lands exactly on the drop, tempo change included.
+**! @ #** (shift 1 2 3) take an option *with* a build, so the change arrives as a drop instead of just appearing.
+**u** and **w** fire a build or a wash by hand. The header shows the ride's progress.
+To add one: a new `case` in the `/transition` OSCdef in `engine.scd` (what to do to `~djfx` as `f` goes 0→1), and
+its name in `engine.ts`.
+
 ## Show moments
 
 - A DJ walking in, or a new seed, puts their name across the field in block letters that assemble out of static and

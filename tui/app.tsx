@@ -15,7 +15,8 @@ import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
 import { makeBase, type Base } from "./seed.ts";
 
-const SET = path.join(ROOT, "tui/set"), REF = path.join(ROOT, "tui/refs/detroit.json");
+const SET = process.env.EARS_SET || path.join(ROOT, "tui/set");   // EARS_SET lets a test instance play from its own folder
+const REF = path.join(ROOT, "tui/refs/detroit.json");
 const SLOTS = ["d1", "d2", "d3", "d4"], RAMP_NAMES: Ramp[] = ["ascii", "blocks", "dots", "code"];
 const AMBER = "#f2a93b", CYAN = "#6fc3d6", DIM = "#8d8474";
 const arg = (f: string) => process.argv.includes(f);
@@ -39,7 +40,7 @@ function App() {
   const barAt = useRef({ at: Date.now(), len: 1846 }), busy = useRef(false), t0 = useRef(Date.now()).current;
   const all = useRef<DJ[]>(roster());
   const base = useRef<Base | null>(null), lanes = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)]))), amps = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)])));
-  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; from: number; ms: number } | null>(null), bpmRef = useRef(130);
+  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; from: number; ms: number } | null>(null), bpmRef = useRef(130), build = useRef<{ from: number; until: number; kind: string } | null>(null);
   const st = useRef({
     slots: Object.fromEntries(SLOTS.map((s) => [s, read(s)])) as Record<string, string>, report: "", note: "", history: [] as Past[],
     options: null as Suggestion[] | null, by: "", bar: 0, booted: false, askAt: 4,
@@ -68,6 +69,11 @@ function App() {
     const before = new Set(tokens(st.current.slots[slot] || ""));
     authors.current[slot] = { ...a, bar: st.current.bar, fresh: new Set(tokens(code).filter((t) => !before.has(t))) };
   };
+  const ride = (kind: "build" | "wash" | "riser", bars: number, then?: () => void) => {
+    const now = Date.now(), nextBar = barAt.current.at + Math.ceil((now - barAt.current.at) / barAt.current.len) * barAt.current.len, drop = nextBar + (bars - 1) * barAt.current.len;
+    eng.current?.transition(kind, bars); build.current = { from: now, until: drop, kind };
+    if (then) setTimeout(then, Math.max(0, drop - now - 450));   // written just before the bar line, so Pdef's quantise lands it on the drop
+  };
   const newBase = (seed: number) => {
     const b = (base.current = makeBase(seed)), sd = { name: `seed ${seed}`, rgb: SEEDC };
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
@@ -87,7 +93,7 @@ function App() {
   const enter = (dj: DJ) => {
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0 }].slice(-3); s.turn = s.booth.length - 1; }
-    s.options = null; queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
+    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
   };
   const take = (i: number) => {
     const s = st.current, o = s.options?.[i]; if (!o) return;
@@ -160,6 +166,7 @@ function App() {
     if (input === "q") { eng.current.stop(); setTimeout(() => { exit(); process.exit(0); }, 600); }
     if (input === "y" || input === "1") take(0);
     if (input === "2") take(1);
+    if ("!@#".includes(input) && input && s.options?.["!@#".indexOf(input)]) { const i = "!@#".indexOf(input); setSay("building into it…"); ride("build", 2, () => take(i)); }
     if (input === "3") take(2);
     if (input === "n" && s.options) { s.options.forEach((o) => s.history.push({ slot: o.slot, why: o.why, verdict: "n" })); s.options = null; s.turn++; s.askAt = s.bar + 2; setSay("skipped. next DJ up"); }
     if (input === "a") think();
@@ -171,7 +178,9 @@ function App() {
     if (input === "p") s.scene = { ...s.scene, palette: PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % PALETTE_NAMES.length] };
     if (input === "c") setRamp((r) => (r + 1) % RAMP_NAMES.length);
     if (input === "f") setFull((x) => !x);
-    if (input === "g") newBase(Math.floor(Math.random() * 9000) + 1000);
+    if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
+    if (input === "u") ride("build", 2);
+    if (input === "w") ride("wash", 2);
     if (input === "m") { eng.current.volume(muted ? 1 : 0); setMuted(!muted); }
     if (input === "r" && last.current) { fs.mkdirSync(path.dirname(REF), { recursive: true }); fs.writeFileSync(REF, JSON.stringify(last.current, null, 2)); setRef(last.current); setLog("saved what you just heard as the reference"); }
   });
@@ -201,7 +210,7 @@ function App() {
       <Box justifyContent="space-between">
         <Text color={AMBER} bold>{full || compact ? "EARS" : figlet.textSync("EARS", { font: "Small" }).split("\n").slice(0, 4).join("\n")}</Text>
         <Box flexDirection="column" alignItems="flex-end">
-          <Text>bar <Text bold>{String(s.bar).padStart(3)}</Text>  {[0, 1, 2, 3].map((i) => (i === beat ? "●" : "○")).join(" ")}  {bpmRef.current} bpm {muted ? <Text color={AMBER}> MUTED</Text> : ""}</Text>
+          <Text>bar <Text bold>{String(s.bar).padStart(3)}</Text>  {[0, 1, 2, 3].map((i) => (i === beat ? "●" : "○")).join(" ")}  {bpmRef.current} bpm {build.current && now < build.current.until ? <Text color={AMBER}> {build.current.kind.toUpperCase()} {"▁▂▃▄▅▆▇█".slice(0, 1 + Math.floor(((now - build.current.from) / (build.current.until - build.current.from)) * 7.99))}</Text> : ""}{muted ? <Text color={AMBER}> MUTED</Text> : ""}</Text>
           {!full && !compact && <Text color={DIM}>{base.current ? `seed ${base.current.seed} · ${base.current.key} · ${base.current.about}` : "continuing the set on disk (--keep)"}</Text>}
           {!full && !compact && <Text color={DIM}>{log}</Text>}
         </Box>
@@ -243,7 +252,7 @@ function App() {
           })}
         </Box>
         <Box flexDirection="column" width={W - boothW} height={16} borderStyle="single" borderColor={AMBER} paddingX={1} overflow="hidden">
-          <Text color={AMBER} wrap="truncate">{who.name} OFFERS · <Text color={CYAN}>[1][2][3] take  [n] skip  [t] tell  [a] ask  [s] summon  [d] next DJ  [x] dismiss</Text></Text>
+          <Text color={AMBER} wrap="truncate">{who.name} OFFERS · <Text color={CYAN}>[1][2][3] take  [!][@][#] take with a build  [n] skip  [t] tell  [a] ask  [s] summon  [d] next DJ  [x] dismiss</Text></Text>
           {typing ? <Text>{typing.mode === "tell" ? `you → ${who.name}: ` : "summon a DJ who… "}{typing.text}<Text inverse> </Text></Text>
             : s.options ? s.options.map((o, i) => (
               <Box key={i} flexDirection="column" marginTop={i ? 1 : 0}>
@@ -263,7 +272,7 @@ function App() {
         {SLOTS.map((k) => { const v = slotView(k); return <Text key={k} wrap="truncate"><Text bold>{k}</Text> {v.laneStr}  {v.code[0]}</Text>; })}
         <Text wrap="truncate"><Text color="white" bold>{s.booth.map((g) => (g.dj.id === who.id ? "▶ " : "  ") + g.dj.name).join("   ")}</Text>  {s.options ? s.options.map((o, i) => `\x1b[38;2;111;195;214m[${i + 1}]\x1b[39m ${o.slot} ${o.why}`).join("   ") : <Text color={DIM}>{say}</Text>}</Text>
       </Box>}
-      <Text color={DIM} wrap="truncate"> [l/L] look: {s.scene.look}   [p] palette: {s.scene.palette}   [c] chars: {RAMP_NAMES[ramp]}   [g] new base   [f] fullscreen   [m] mute   [r] save ref   [q] quit</Text>
+      <Text color={DIM} wrap="truncate"> [l/L] look: {s.scene.look}   [p] palette: {s.scene.palette}   [c] chars: {RAMP_NAMES[ramp]}   [g] new base   [u] build  [w] wash   [f] fullscreen   [m] mute   [r] save ref   [q] quit</Text>
     </Box>
   );
 }

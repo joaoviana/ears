@@ -48,6 +48,7 @@ export class Engine extends EventEmitter {
       case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
       case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: this.toLocal(a[4], a[2]), amp: a[3], step: Math.floor(((a[5] % 4) + 4) % 4 * 4 + 0.001) % 16 } as Hit); break;
       case "/bar": this.emit("bar", { n: a[0], at: this.toLocal(a[3], a[1]), bpm: a[2] }); break;
+      case "/dropped": this.emit("dropped", a[0]); break;
       case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2] }); break;
     }
   }
@@ -58,6 +59,7 @@ export class Engine extends EventEmitter {
   eval(code: string, id: string) { this.send("/eval", [code, id]); }
   volume(v: number) { this.send("/vol", [v]); }
   tempo(bpm: number) { this.send("/tempo", [bpm]); }
+  transition(kind: "build" | "wash" | "riser", bars: number) { this.send("/transition", [kind, bars]); }
 
   /** Quits this engine's own server, then its sclang. Never touches another engine that may be running. */
   stop() {

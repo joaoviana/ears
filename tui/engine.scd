@@ -74,6 +74,23 @@ s.waitForBoot {
     var wet = FreeVerb2.ar(dry[0] + echo[0], dry[1] + echo[1], 1, 0.86, 0.35);
     Out.ar(out, (wet * 0.4) + (echo * 0.45));
   }).add;
+  // the DJ mixer: a filter and an echo across the whole mix, for transitions
+  SynthDef(\djfx, { |hp = 20, lp = 20000, echo = 0, dt = 0.346|
+    var sig = In.ar(0, 2);
+    sig = HPF.ar(HPF.ar(sig, hp.lag(0.08)), hp.lag(0.08));
+    sig = LPF.ar(LPF.ar(sig, lp.lag(0.08)), lp.lag(0.08));
+    sig = sig + CombL.ar(sig * echo.lag(0.05), 1, dt, 3.5);
+    ReplaceOut.ar(0, sig);
+  }).add;
+  SynthDef(\riser, { |dur = 4, amp = 0.16|
+    var env = EnvGen.kr(Env([0, 1, 0], [dur, 0.02], [4, 0]), doneAction: 2);
+    var sig = BPF.ar(WhiteNoise.ar, env.linexp(0, 1, 300, 10000), 0.25) + (Saw.ar(env.linexp(0, 1, 110, 880) * [1, 1.01]) * 0.15);
+    Out.ar(0, Pan2.ar(sig.sum, SinOsc.kr(env * 9) * 0.6) * env * amp);
+  }).add;
+  SynthDef(\crash, { |amp = 0.3|
+    var sig = HPF.ar(WhiteNoise.ar, 2500) * EnvGen.kr(Env.perc(0.001, 2.8, 1, -6), doneAction: 2);
+    Out.ar(0, sig * amp ! 2); Out.ar(~fx, sig * amp * 0.7 ! 2);
+  }).add;
   SynthDef(\master, {
     var sig = In.ar(0, 2) * 2.6;
     sig = Compander.ar(sig, sig, 0.35, 1, 0.5, 0.005, 0.12);
@@ -104,6 +121,7 @@ s.waitForBoot {
   s.sync;
 
   ~space = Synth.tail(s, \space);
+  ~djfx = Synth.tail(s, \djfx);
   Synth.tail(s, \master);
   Synth.tail(s, \ears);
   Synth.tail(s, \scope, [\buf, ~scopeBuf]);
@@ -134,6 +152,28 @@ s.waitForBoot {
   }, '/eval');
   // tempo changes land on the next bar, like everything else, and the dotted-8th echo follows
   OSCdef(\tempo, { |msg| var bpm = msg[1]; ~clock.schedAbs(~clock.nextBar, { ~clock.tempo = bpm / 60; ~space.set(\dt, 60 / bpm * 0.75); nil }) }, '/tempo');
+  // /transition kind bars : ride the mixer from now until a bar line `bars` ahead, then let go on the downbeat.
+  //   build = high-pass sweeps up under a riser · wash = low-pass closes while the echo takes over · riser = riser only
+  OSCdef(\transition, { |msg|
+    var kind = msg[1].asSymbol, bars = msg[2].asInteger.max(1);
+    var from = ~clock.beats, target = ~clock.nextBar + ((bars - 1) * 4);
+    Synth(\riser, [\dur, (target - from) / ~clock.tempo, \amp, if(kind == \riser, 0.12, 0.17)]);
+    ~djfx.set(\dt, 0.75 / ~clock.tempo);
+    ~clock.sched(0, {
+      var f = ((~clock.beats - from) / (target - from)).clip(0, 1);
+      if(~clock.beats >= (target - 0.01)) {
+        ~djfx.set(\hp, 20, \lp, 20000, \echo, 0);
+        s.makeBundle(s.latency, { Synth(\crash) });
+        tui.sendMsg('/dropped', kind);
+        nil
+      } {
+        case
+          { kind == \build } { ~djfx.set(\hp, f.linexp(0, 1, 20, 2200)) }
+          { kind == \wash } { ~djfx.set(\lp, f.linexp(0, 1, 20000, 350), \echo, f.squared * 0.7) };
+        0.125
+      }
+    });
+  }, '/transition');
   OSCdef(\vol, { |msg| ~master.set(\vol, msg[1]) }, '/vol');
 
   // bar clock for the TUI: bar number and when (in seconds from now) it lands
