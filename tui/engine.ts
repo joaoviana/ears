@@ -17,13 +17,9 @@ export class Engine extends EventEmitter {
   private sc: ChildProcess | null = null;
   private lang = 0;
   ready = false;
-  // SuperCollider stamps events with its own logical clock. Messages arrive late by a varying amount (UDP, a busy
-  // render loop), so the clock offset is the smallest lateness seen recently: jitter only ever adds.
-  private offset = Infinity;
-  private toLocal(scSeconds: number, latency: number) {
-    const sample = Date.now() / 1000 - scSeconds;
-    this.offset = Math.min(this.offset + 0.0002, sample);
-    return (scSeconds + this.offset + latency) * 1000;
+  private clock = new EngineClock();
+  private toLocal(scSeconds: number, latency: number, observedSeconds = scSeconds) {
+    return this.clock.map(scSeconds, latency, observedSeconds);
   }
 
   start(mute = false) {
@@ -32,8 +28,10 @@ export class Engine extends EventEmitter {
     this.sock.bind(Number(process.env.EARS_PORT || 57200), "127.0.0.1");
     this.sc = spawn(SCLANG, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
     this.sc.stdout?.on("data", (d) => {
-      for (const line of String(d).split("\n")) if (/ERROR|WARNING|FAILURE/.test(line) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line.trim());
+      for (const line of String(d).split("\n")) if (line.trim() && (process.env.EARS_ENGINE_DEBUG || /ERROR|WARNING|FAILURE/.test(line)) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line.trim());
     });
+    this.sc.stderr?.on("data", (d) => this.emit("log", String(d).trim()));
+    this.sc.on("error", (error) => this.emit("log", `engine process error: ${error.message}`));
     this.sc.on("exit", () => this.emit("log", "engine exited"));
   }
 
@@ -50,14 +48,15 @@ export class Engine extends EventEmitter {
       case "/bar": this.emit("bar", { n: a[0], at: this.toLocal(a[3], a[1]), bpm: a[2] }); break;
       case "/voxd": this.emit("voxd", String(a[0])); break;
       case "/dropped": this.emit("dropped", a[0]); break;
-      case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2] }); break;
+      case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2], execution_id: a[3], scheduled_at_ms: a[4] > 0 ? this.toLocal(a[4], a[5], a[6]) : undefined }); break;
+      case "/active": this.emit("active", { slot: a[0], execution_id: a[1], at: this.toLocal(a[3], a[2], a[5]), basis: a[4] }); break;
     }
   }
 
   private send(address: string, args: (string | number)[]) {
     if (this.lang) this.sock.send(osc.toBuffer({ address, args: args.map((v) => (typeof v === "number" ? { type: "float", value: v } : v)) } as any), this.lang, "127.0.0.1");
   }
-  eval(code: string, id: string) { this.send("/eval", [code, id]); }
+  eval(code: string, id: string, executionId = "") { this.send("/eval", [code, id, executionId]); }
   volume(v: number) { this.send("/vol", [v]); }
   vox(phrase: string, file: string) { this.send("/vox", [phrase, file]); }
   tempo(bpm: number) { this.send("/tempo", [bpm]); }
@@ -68,5 +67,15 @@ export class Engine extends EventEmitter {
     try { this.send("/eval", ["s.quit; { 0.exit }.defer(0.2); 1", "bye"]); } catch {}
     const sc = this.sc, sock = this.sock;
     setTimeout(() => { try { sc?.kill(); } catch {} try { sock.close(); } catch {} }, 400).unref?.();
+  }
+}
+
+// Calibrate with the engine's send-time clock, never with a planned future event.
+// UDP delay/clock uncertainty remains unmeasured; the minimum observed delay is an estimate.
+export class EngineClock {
+  private offset = Infinity;
+  map(eventSeconds: number, latency: number, sentSeconds: number, receivedMs = Date.now()) {
+    this.offset = Math.min(this.offset + 0.0002, receivedMs / 1000 - sentSeconds);
+    return (eventSeconds + this.offset + latency) * 1000;
   }
 }

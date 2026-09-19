@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import net from 'node:net';
+import { once } from 'node:events';
+import { Bus } from '../bus.ts';
+test('JSONL flushes ordered session IDs; late join receives latest snapshot even after history eviction', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ears-bus-test-'));
+  const bus = new Bus(); bus.open(0, dir);
+  const [address] = await once(bus, 'listening');
+  bus.send('hello', 'host', { host: 'test' }); bus.send('state', 'host', { revision: 's1', slots: {} });
+  for (let i = 0; i < 450; i++) bus.send('note', 'host', { text: String(i) });
+  bus.send('observation', 'ears', { id: 'o1', summary: '🎶' });
+  const socket = net.connect(address.port, '127.0.0.1'); socket.setEncoding('utf8');
+  let buffer = ''; const received = await new Promise<any[]>(resolve => { socket.on('data', d => { buffer += d; const rows = buffer.trim().split('\n'); if (rows.length === 3) resolve(rows.map(x => JSON.parse(x))); }); });
+  assert.deepEqual(received.map(x => x.type), ['hello', 'state', 'observation']);
+  assert.equal(received[2].summary, '🎶'); assert.equal(bus.recent.length, 400);
+  socket.destroy(); await bus.close();
+  const rows = fs.readFileSync(bus.path, 'utf8').trim().split('\n').map(x => JSON.parse(x));
+  assert.equal(rows.length, 453); rows.forEach((r, i) => { assert.equal(r.seq, i + 1); assert.equal(r.session_id, bus.session); });
+  fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -3,11 +3,13 @@ name: DUB SIREN
 description: Space and echo. Summon when it's too busy or too bright.
 palette: ice
 look: warp
+species: alien
 head: round
 hair: long
 eyes: closed
 cans: small
 body: laptop
+skills: fills, vocals, drops
 ---
 # Style
 Dub techno. Half as many notes, twice as much room. One chord, played rarely, sent hard into the delay and reverb so the tail does the playing. Hats are a whisper. Everything dark and soft-edged.

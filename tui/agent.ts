@@ -3,7 +3,7 @@
 // so the only thing it can produce is text, and the only path from that text to the speakers is a human pressing y.
 import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
-import { HAIR, EYES, CANS, BODY, HEAD, type DJ } from "./djs.ts";
+import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
 import { applyPatch, describe, type Patch } from "./patch.ts";
 import { SKILLS, missing } from "./skills.ts";
 
@@ -117,7 +117,7 @@ export function parsePatch(text: string): Parsed | null {
 
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
-export interface AskInput { dj: DJ; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
 
 /** Fires every angle at once and hands each idea over the moment it validates. Resolves when all are in. */
 export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent: (kind: string, detail: Record<string, unknown>) => void = () => {}): Promise<Suggestion[]> {
@@ -129,7 +129,11 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     "", "WHAT HAPPENED TO EARLIER IDEAS", input.history.length ? input.history.slice(-8).map((h) => `${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}`).join("\n") : "(none)",
   ].join("\n");
   const got: Suggestion[] = [], t0 = Date.now();
-  return Promise.all(Object.entries(ANGLES).slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
+  const sk = input.showcase ? SKILLS.find((k) => k.id === input.showcase) : null;
+  const angles: [string, string][] = sk
+    ? [["showcase", `YOUR ANGLE: showcase. The performer wants to hear your ${sk.name} skill NOW. This idea MUST use it, exactly as the skill text describes${sk.id === "vocals" ? ": SLOT d6 REPLACE (or an empty slot if there is one), instrument \\vox, a two-or-three-word phrase in your character via ~v.(\"...\"), with chop, len, rate and an ~x amp row" : sk.id === "fills" ? ": a one-bar drum fill or stutter with a FOR 1 line" : ": your boldest move with a WITH build line"}. Do not offer anything else.`], ...Object.entries(ANGLES).slice(0, 2)]
+    : Object.entries(ANGLES);
+  return Promise.all(angles.slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach).join("\n");
@@ -145,10 +149,10 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
 
 const DJ_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["id", "name", "tagline", "palette", "look", "head", "hair", "eyes", "cans", "body", "style", "idioms", "never", "greeting"],
+  required: ["id", "name", "tagline", "palette", "look", "species", "head", "hair", "eyes", "cans", "body", "style", "idioms", "never", "greeting"],
   properties: {
     id: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+){0,3}$" }, name: { type: "string" }, tagline: { type: "string" },
-    palette: { enum: PALETTE_NAMES }, look: { enum: LOOKS }, head: { enum: [...HEAD] }, hair: { enum: [...HAIR] }, eyes: { enum: [...EYES] }, cans: { enum: [...CANS] }, body: { enum: [...BODY] },
+    palette: { enum: PALETTE_NAMES }, look: { enum: LOOKS }, species: { enum: [...SPECIES] }, head: { enum: [...HEAD] }, hair: { enum: [...HAIR] }, eyes: { enum: [...EYES] }, cans: { enum: [...CANS] }, body: { enum: [...BODY] },
     style: { type: "string" }, idioms: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } }, never: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } }, greeting: { type: "string" },
   },
 };
@@ -156,6 +160,6 @@ const DJ_SCHEMA = {
 /** Writes a new guest from a description. The result is saved as markdown and joins the booth. */
 export function summon(description: string, taken: string[]): Promise<DJ> {
   const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns built from these instruments: \\kick (amp, tune, dec, drive), \\hat (amp, dec 0.03-0.16, hp, pan), \\clap (amp, send), \\bass (midinote, cutoff 200-4000 Hz, res 0-3.5, dec), \\acid (midinote, cutoff, env 500-5000, res 0-1, dec, wave), \\stab (chords, cutoff, dec, send), \\fm (midinote, ratio, index, dec, pan), \\pad (chords, cutoff, att, sus, rel), \\perc (freq Hz, dec, pan). Tempo and key vary per set, so describe notes as scale degrees or intervals from the root, not fixed pitches. Randomness (Prand, Pwhite, Pbrown, Pwrand) is available. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
-name: 1-3 words, uppercase stage name. tagline: one line, when to summon them. style: 2-3 sentences. greeting: what they say walking into the booth, under 12 words, in character. Pick the face parts, palette and visual look that suit them. id: kebab-case, not one of: ${taken.join(", ") || "(none)"}.`;
+name: 1-3 words, uppercase stage name. tagline: one line, when to summon them. style: 2-3 sentences. greeting: what they say walking into the booth, under 12 words, in character. Pick the species (their face is pixel art of that animal or creature), eyes (shades/visor put sunglasses on it), rig, palette and visual look that suit them. id: kebab-case, not one of: ${taken.join(", ") || "(none)"}.`;
   return claude<DJ>(`Create a guest DJ: ${description}`, system, DJ_SCHEMA).then((d) => ({ ...d, skills: [] }));
 }

@@ -154,8 +154,12 @@ s.waitForBoot {
   // ~d.(\name, \key, value, ...) : define or replace a voice. Swaps on the next bar, never mid-phrase.
   // Every event is announced to the TUI `s.latency` seconds before it sounds.
   ~d = { |name ... pairs|
+    var execution = ~evaluationId ? "", first = true;
+    ~scheduledSeconds = ~clock.beats2secs(~clock.nextBar);
     Pdef(name, Pbind(*(pairs ++ [\stretch, 1,
-      \tell, Pfunc { |ev| if(ev.isRest.not) { tui.sendMsg('/hit', name, ev[\instrument] ? \default, s.latency, (ev[\amp] ? 0.1).asFloat, thisThread.seconds, thisThread.beats) }; 0 }
+      \tell, Pfunc { |ev|
+        if(first) { first = false; tui.sendMsg('/active', name, execution, s.latency, thisThread.seconds, "pattern_event", Main.elapsedTime) };
+        if(ev.isRest.not) { tui.sendMsg('/hit', name, ev[\instrument] ? \default, s.latency, (ev[\amp] ? 0.1).asFloat, thisThread.seconds, thisThread.beats) }; 0 }
     ]))).quant_(4);
     if(Pdef(name).isPlaying.not) { Pdef(name).play(~clock, quant: 4) };
     name
@@ -174,13 +178,19 @@ s.waitForBoot {
     var key = msg[1].asString.asSymbol, path = msg[2].asString;
     Buffer.read(s, path, action: { |b| ~voxBufs[key] = b; tui.sendMsg('/voxd', key, b.numFrames) });
   }, '/vox');
-  ~hush = { |name| if(name.isNil) { Pdef.all.do(_.stop) } { Pdef(name).stop } };
+  ~hush = { |name|
+    if(name.isNil) { Pdef.all.do(_.stop) } { Pdef(name).stop };
+    if(name.notNil) { tui.sendMsg('/active', name, ~evaluationId ? "", 0, Main.elapsedTime, "pattern_stopped", Main.elapsedTime) };
+    name ? \all
+  };
 
   OSCdef(\eval, { |msg|
     var code = msg[1].asString, id = msg[2], ok = true, res;
+    ~evaluationId = msg[3] ? ""; ~scheduledSeconds = -1;
     res = try { code.interpret } { |e| ok = false; e.errorString };
     if(res.isNil and: ok) { ok = false; res = "syntax error (see engine log)" };
-    tui.sendMsg('/evald', id, ok.binaryValue, res.asString.keep(200));
+    tui.sendMsg('/evald', id, ok.binaryValue, res.asString.keep(200), ~evaluationId, ~scheduledSeconds, s.latency, Main.elapsedTime);
+    ~evaluationId = nil;
   }, '/eval');
   // tempo changes land on the next bar, like everything else, and the dotted-8th echo follows
   OSCdef(\tempo, { |msg| var bpm = msg[1]; ~clock.schedAbs(~clock.nextBar, { ~clock.tempo = bpm / 60; ~space.set(\dt, 60 / bpm * 0.75); nil }) }, '/tempo');

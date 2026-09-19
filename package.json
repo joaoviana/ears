@@ -12,7 +12,8 @@
     "ears:stage": "sh tui/ears.sh",
     "ears:ref": "tsx tui/make-ref.ts",
     "ears:reset": "cp tui/set.start/*.scd tui/set/",
-    "ears:tail": "tsx tui/tail.ts"
+    "ears:tail": "tsx tui/tail.ts",
+    "test:ears": "tsx --test tui/tests/*.test.ts"
   },
   "keywords": [],
   "author": "",

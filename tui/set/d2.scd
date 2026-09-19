@@ -1,1 +1,1 @@
-~d.(\d2, \instrument, \hat, \dur, 1/4, \amp, ~x.("x-X-x-X-x-X-x-X-", 0.3), \dec, Pseq([0.03, 0.03, 0.15, 0.03], inf), \hp, 7500)
+~d.(\d2, \instrument, \hat, \dur, 1/2, \amp, Pseq([Rest(0), 0.2], inf) * Pwhite(0.7, 1.0), \dec, 0.05, \hp, 7000, \pan, Pbrown(-0.4, 0.4, 0.1))
