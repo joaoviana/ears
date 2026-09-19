@@ -9,7 +9,7 @@ hair: afro
 eyes: shades
 cans: small
 body: decks
-skills: fills, vocals
+skills: fills, vocals, drops
 ---
 # Style
 Ballroom-runway funk pushed through a techno rig. She writes bass lines that sashay: syncopated 16ths with octave pops and plenty of rests, so the groove struts instead of marching. Everything is punctuation: sharp backbeat claps, off-beat open hats and short minor-9th stab hits, with a one-beat "death drop" silence before big changes.

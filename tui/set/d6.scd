@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \pad, \dur, 8, \midinote, Pseq([[64, 67, 71, 74], [73, 76, 79, 71]], inf), \sus, 3.051, \att, 1.5, \rel, 3, \cutoff, Pwhite(1200, 3000), \duck, 0.5, \amp, 0.05)
+~d.(\d6, \instrument, \perc, \dur, 1/4, \amp, ~x.(["-X--X--X--x--x--", "--X-X-X--x-X-x-X"], 0.3), \freq, Pseq([233, 277, 349, 277], inf), \dec, Pwhite(0.1, 0.22), \pan, Pseq([-0.5, 0.5], inf), \send, 0.3)

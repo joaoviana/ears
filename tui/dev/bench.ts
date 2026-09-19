@@ -50,7 +50,7 @@ const rows: Row[] = [], noiseOfDistance: number[] = [];
 
 e.on("ready", async () => {
   for (const cond of CONDS) for (const seed of SEEDS) {
-    const base = makeBase(seed), clean = base.slots;
+    const base = makeBase(seed, "dark"), clean = base.slots;   // the dark family, so results stay comparable with earlier runs
     e.eval("Pdef.all.do(_.stop); 1", "stop"); e.tempo(base.bpm); await wait(barLen * 1.2);
     for (const k of SLOTS) if (clean[k]) e.eval(clean[k], k);
     await nextBar(); await nextBar();

@@ -12,7 +12,7 @@ import { ask, summon, type Suggestion, type Past } from "./agent.ts";
 import { render as field, LOOKS, PALETTE_NAMES, WIPES, UI, NEUTRAL, type Pulse, type Ramp, type Scene, type Banner } from "./ascii.ts";
 import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
-import { makeBase, type Base } from "./seed.ts";
+import { makeBase, type Base, type Mood } from "./seed.ts";
 import { Bus, pretty, type Msg } from "./bus.ts";
 import { Evidence, type Context } from "./evidence.ts";
 import { applyPatch, describe } from "./patch.ts";
@@ -41,6 +41,7 @@ const { text: TEXT, dim: DIM, faint: FAINT } = NEUTRAL;
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const arg = (f: string) => process.argv.includes(f);
 const MUTE = arg("--mute"), AUTO = !arg("--manual"), DEMO = arg("--demo"), KEEP = arg("--keep");
+const MOOD0 = ((): Mood => { const i = process.argv.indexOf("--mood"), v = i > 0 ? process.argv[i + 1] : "vibey"; return v === "dark" || v === "any" ? v : "vibey"; })();
 const SEED = (() => { const i = process.argv.indexOf("--seed"); return i > 0 ? Number(process.argv[i + 1]) : Math.floor(Math.random() * 9000) + 1000; })();
 const fgc = ([r, g, b]: number[], k = 1) => `\x1b[38;2;${Math.round(r * k)};${Math.round(g * k)};${Math.round(b * k)}m`, RESET = "\x1b[39m";
 const YOU = [255, 255, 255], SEEDC = [138, 135, 153];   // your own edits are white; the seed's are grey; DJs bring their colour
@@ -117,7 +118,7 @@ function App() {
   const voiceRef = useRef(voice); voiceRef.current = voice;
   const logsRef = useRef(logs); logsRef.current = logs;
   const greet = useRef<{ who: string; rgb: number[]; text: string; until: number } | null>(null);
-  const showcase = useRef<{ agent: string; skill: string } | null>(null), recording = useRef(false);
+  const showcase = useRef<{ agent: string; skill: string } | null>(null), recording = useRef(false), mood = useRef<Mood>(MOOD0);
   // called shots: what each taken idea predicted, the live noise floor, and the last graded call (shown for 8 bars)
   const shots = useRef(new Map<number, { agent: string; name: string; rgb: number[]; slot: string; expect: Expect }>()), noise = useRef(new NoiseFloor());
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
@@ -142,7 +143,7 @@ function App() {
     if (then) setTimeout(then, Math.max(0, drop - now - 450));   // written just before the bar line, so Pdef's quantise lands it on the drop
   };
   const newBase = (seed: number) => {
-    const b = (base.current = makeBase(seed)), sd = { name: `seed ${seed}`, rgb: SEEDC };
+    const b = (base.current = makeBase(seed, mood.current)), sd = { name: `seed ${seed}`, rgb: SEEDC };
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     for (const k of SLOTS) { author(k, b.slots[k], sd); authors.current[k].fresh = new Set();   // a whole new base isn't a 'change' to highlight
       writeSlot(k, b.slots[k]); evaluateSlot(k, b.slots[k], "seed"); }
@@ -370,6 +371,7 @@ function App() {
     }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
+    if (input === "b") { mood.current = mood.current === "vibey" ? "dark" : mood.current === "dark" ? "any" : "vibey"; setSay(`bases are now ${mood.current === "vibey" ? "vibey: deep house, nu disco, balearic, afro house, french touch, sunny garage" : mood.current === "dark" ? "dark: detroit, dub techno, acid, electro, two-step, minimal, progressive, halftime, house" : "anything goes"}. g rolls one`); }
     if (input === "u") ride("build", 2);
     if (input === "w") ride("wash", 2);
     if (input === "m") { eng.current.volume(muted ? 1 : 0); setMuted(!muted); }
@@ -420,7 +422,7 @@ function App() {
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
-    ["the set", [["g", "new random base, through a build"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
+    ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];
 

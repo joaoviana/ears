@@ -15,6 +15,10 @@ npm run ears -- --demo    # visuals only, fake pulse, no SuperCollider
 
 ## A different base every time
 
+Bases come in two moods. **Vibey** (the default): deep house, nu disco, balearic, afro house, french touch, sunny
+garage, in major, lydian, mixolydian or dorian, with 9th chords, electric piano, round basses, shakers and congas.
+**Dark**: the techno family below. **b** switches mood (vibey / dark / any); `--mood dark` starts there.
+
 Each launch rolls a seed, and the seed picks a **style** first: detroit, dub techno, acid, electro, two-step,
 minimal, progressive, halftime or house. The style decides how the six slots are rolled so they belong together:
 tempo (118–150, by style), kick figure, hat feel and swing, what the bass does, a four-bar chord progression the bass
