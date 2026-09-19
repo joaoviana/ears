@@ -82,6 +82,81 @@ Nothing calls `eval` on a proposal directly. Code reaches the engine by being wr
 written only by: your keypress (**1 2 3**, **! @ #**), the host acting under a grant you gave (`auto`), a fill
 putting a slot back, or a new base.
 
+## Called shots: a DJ has to say what will happen, and is graded on it
+
+Every idea carries `EXPECT <metric> <up|down|same>` (sub, low, mid, high, air, brightness, loudness, density,
+punch) or the host refuses it. The card shows the call (`calls air ↓`). When you take it, the call rides on the
+`applied` receipt; two bars after the change is active the evidence layer produces a before/after comparison and
+`shots.ts` grades it: **HIT**, **MISS**, **FLAT** (no detectable effect) or ungraded (no clean window). "Detectable"
+is relative to a live noise floor: the patterns are stochastic, so the host measures how much each metric moves
+between windows when nothing changed, and a call must clear twice that. The grade is pinned above the options,
+kept per DJ (`calls 2/3` under the face), sent on the wire as `outcome`, and written into that DJ's next prompt
+("you called brightness down; measured -41 Hz: FLAT, be bolder or pick a metric your change really moves").
+It is observational, on the live master mix, and says so; it is not proof the edit caused the change.
+
+The third option each round is a **left turn**: it must change that slot's instrument, rhythm or register, and
+name what it contrasts with. A tweak is refused and asked again once.
+
+## Skills: earned by the DJ, activated by you
+
+A DJ starts with the basic vocabulary. As you take its ideas it **unlocks** skills (fills after 1 take, vocals
+after 2, drops after 3); the glyph under its face blinks `k!`, and **k** activates it. Until then the DJ isn't told
+the skill exists, and the host refuses any proposal that reaches for it. Activated skills are saved in the DJ's
+markdown file (`skills: fills, vocals`), so they keep them next set.
+
+- **⟲ fills**: the patch carries `FOR 1` (or 2): the host keeps it for that many bars, then restores the slot.
+- **♪ vocals**: a new instrument, `\vox`. The DJ writes `~v.("machine soul")`; the host renders the phrase with
+  macOS `say` in that DJ's voice, loads it into SuperCollider, and only then evaluates the slot. `chop`, `len` and
+  `rate` patterns turn a phrase into a hook.
+- **▲ drops**: the patch carries `WITH build` or `WITH wash`, and the change lands on the drop.
+
+Same idea as takeover: a capability is a grant, it's on the wire (`unlock`, `grant`), and it's revocable by editing
+one line of a markdown file.
+
+## Takeover
+
+Autonomy is something you grant, per DJ, mid-set. **o** gives the active DJ `auto`: when it offers ideas you get a
+two-bar veto window (**n** vetoes), then the host takes one for it, rotating between its style, fix and bold
+angles, and riding a build into the bold ones. **O** grants everyone: a back-to-back set that plays itself while
+you stand there. **o** again takes control back. The DJ never gains a new ability; the host acts on its behalf, and
+every such verdict is logged as `grant:auto`.
+
+## Speed
+
+A DJ's three angles (fix the report · push its style · one bold move) are asked **in parallel**, each answers with
+a few lines of patch (`SET cutoff = 600`) instead of rewriting code, at low reasoning effort. The first idea is on
+screen in about 3 seconds and they appear as they arrive (it was 6–20 s for anything at all). The host turns the
+patch into code, shows it as a diff, and validates it. `EARS_MODEL` and `EARS_EFFORT` override the defaults.
+
+## The wire (for demos)
+
+**e** splits the field with a live log of every message: `observation`, `request`, `proposal`, `rejected`,
+`verdict`, `applied`, `landed`, `grant`… with timings. The same stream is written to `tui/logs/latest.jsonl`;
+`npm run ears:tail` follows it in another pane or on a second screen. It's the proof that nothing reaches the
+speakers without passing validation and a verdict.
+
+## The protocol, and outside agents
+
+The messages above are the [EARS protocol](../../ears-protocol/SPEC.md), in its own repo. This TUI is its reference
+host: it listens on `localhost:57400`, and anything that connects can watch the wire and send `proposal` and `note`
+and nothing else. `ears-protocol/src/mcp.ts` bridges that to MCP, so a Claude Code session can sit in the booth:
+it shows up as a robot marked `wire`, its ideas join the same option list, and they pass the same validator.
+
+## Transitions
+
+A DJ mixer sits across the whole mix in SuperCollider (`\djfx`: high-pass, low-pass, echo), and a transition rides it
+from now until a bar line, then lets go on the downbeat under a crash:
+
+- **build**: the high-pass sweeps up under a noise riser, the bass disappears, and it all comes back on the drop.
+- **wash**: the low-pass closes while the echo takes over, then opens on the drop.
+- **riser**: riser and crash only. A DJ walking in gets one automatically.
+
+**g** (new base) rides a two-bar build or wash and the new base lands exactly on the drop, tempo change included.
+**! @ #** (shift 1 2 3) take an option *with* a build, so the change arrives as a drop instead of just appearing.
+**u** and **w** fire a build or a wash by hand. The header shows the ride's progress.
+To add one: a new `case` in the `/transition` OSCdef in `engine.scd` (what to do to `~djfx` as `f` goes 0→1), and
+its name in `engine.ts`.
+
 ## Packages doing the work
 
 - **ink** renders the screen; **@inkjs/ui** provides the text input (tell, summon), the roster picker (**D**, arrows
