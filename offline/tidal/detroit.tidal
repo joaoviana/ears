@@ -1,0 +1,20 @@
+-- The brief in TidalCycles. Note how little changes from the Strudel version: same mini-notation,
+-- Haskell operators instead of method chains, SuperCollider (SuperDirt) making the sound.
+setcps (130/60/4)
+
+d1 $ stack [
+  s "909*4" # gain 1.1,
+  s "~ cp ~ cp" # room 0.3 # size 0.4 # gain 0.9,
+  s "hh*16" # gain "[0.7 0.8 1 0.8]*4" # pan (range 0.4 0.6 $ fast 2 sine),
+  s "[~ ho]*4" # gain 0.85 # cut 1
+  ]
+
+d2 $ note "f1 f1 [~ f1] af1 f1 f1 [~ c2] ef2" # s "supersaw"
+  # cutoff (range 260 1300 $ slow 8 sine) # resonance 0.3
+  # sustain 0.17 # gain 0.95
+
+d3 $ note "<[f3,af3,c4,ef4,g4] [df3,f3,af3,c4,ef4]>/2" # s "supersaw"
+  # struct "~ t ~ [~ t]" # sustain 0.14
+  # cutoff (range 900 2600 $ slow 4 perlin) # resonance 0.2
+  # delay 0.5 # delaytime (3/16/(130/60/4)) # delayfeedback 0.45
+  # room 0.5 # size 0.7 # gain 0.8 # pan 0.42

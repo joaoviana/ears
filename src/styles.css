@@ -1,0 +1,47 @@
+:root{--bg:#0C0B12;--bg2:#12111A;--surface:#181722;--line:#2A2836;--line2:#3A3749;--text:#EEECF4;--muted:#9E9AAE;--faint:#6D6980;--a:#FF6A98;--b:#5FD6BC;--c:#A093FF;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.5;padding:28px clamp(16px,4vw,48px) 80px}
+h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:-.015em}
+h1{font-size:44px;font-weight:800;line-height:1}h1 em{font-style:normal;color:var(--a)}
+p{margin:6px 0;color:var(--muted)}
+kbd,code{font-family:var(--mono);font-size:.85em;background:var(--bg2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--text)}
+header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;flex-wrap:wrap;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.meter{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+#scope{width:min(520px,90vw);height:84px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.levels{display:flex;gap:16px;font-family:var(--mono);font-size:12px;color:var(--muted)}.levels b{color:var(--text);font-weight:500}#now{color:var(--b)}
+main{display:grid;grid-template-columns:320px 1fr;gap:20px;margin-top:22px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+nav{display:flex;flex-direction:column;gap:10px}
+.engine{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:inherit;font:inherit;cursor:pointer}
+.engine:hover{border-color:var(--line2)}
+.engine[aria-pressed="true"]{border-color:var(--c)}
+.engine.playing{border-color:var(--b);box-shadow:0 0 0 1px var(--b) inset}
+.engine .top{display:flex;align-items:baseline;gap:8px}
+.engine .key{font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:0 5px}
+.engine h3{font-size:19px}
+.engine .lang{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:2px}
+.score{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);align-items:center}
+.score i{display:block;height:5px;border-radius:3px;background:var(--line)}
+.score i b{display:block;height:100%;border-radius:3px;background:var(--c)}
+.deck{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;min-width:0}
+.deck-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.deck h2{font-size:26px}
+.deck-head p{max-width:64ch}
+.btns{display:flex;gap:8px;flex:none}
+button{font:inherit;cursor:pointer}
+.btns button{background:transparent;border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:8px 16px}
+.btns .primary{background:var(--a);border-color:var(--a);color:#14060b;font-weight:600}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.chip{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 12px;font-size:13px}
+.chip[aria-pressed="true"]{border-color:var(--a);color:var(--a)}
+.note{font-size:14px;margin:10px 0}
+textarea{width:100%;height:52vh;min-height:320px;resize:vertical;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:12.5px;line-height:1.55;padding:14px;white-space:pre;overflow:auto;tab-size:2}
+.status{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px;min-height:18px;white-space:pre-wrap}
+.status.err{color:var(--a)}
+.offline{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+.offline h2{font-size:26px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.card h3{font-size:17px}.card p{font-size:14px}.card code{display:inline-block;margin-top:6px}
