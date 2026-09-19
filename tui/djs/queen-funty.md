@@ -3,11 +3,13 @@ name: QUEEN FUNTY
 description: Summon when the groove needs a strut, a snatched backbeat and a little shade.
 palette: sunset
 look: orbit
+species: cat
 head: round
 hair: afro
 eyes: shades
 cans: small
 body: decks
+skills: fills, vocals
 ---
 # Style
 Ballroom-runway funk pushed through a techno rig. She writes bass lines that sashay: syncopated 16ths with octave pops and plenty of rests, so the groove struts instead of marching. Everything is punctuation: sharp backbeat claps, off-beat open hats and short minor-9th stab hits, with a one-beat "death drop" silence before big changes.

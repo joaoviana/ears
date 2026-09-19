@@ -84,13 +84,15 @@ function App() {
   const evidence = evidenceRef.current;
   const seenRequests = useRef(new Set<string>());
   const closeSession = useRef<() => Promise<unknown> | void>(() => {});
-  const dispatched = useRef(new Map<string, string>()), activationTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const hostWrites = useRef(new Map<string, string>()), activationTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const stateContext = () => ({ tempo: bpmRef.current, key: base.current?.key ?? null, seed: base.current?.seed ?? null });
   const refreshState = () => evidence.sync(Object.fromEntries(SLOTS.map(k => [k, read(k)])), stateContext());
+  const writeSlot = (slot: string, code: string) => {
+    fs.writeFileSync(path.join(SET, slot + ".scd"), code + "\n");
+    hostWrites.current.set(slot, code.trim());
+  };
   const evaluateSlot = (slot: string, code: string, authorId: string, context: Context = {}) => {
     if (!DEMO && !eng.current?.ready) { st.current.slots[slot] = code; refreshState(); return; }
-    if (dispatched.current.get(slot) === code.trim()) return;
-    dispatched.current.set(slot, code.trim());
     const execution = evidence.begin(slot, code.trim(), authorId, context);
     st.current.slots[slot] = code;
     const run = () => { if (evidence.current(execution)) eng.current?.eval(code.trim() || `~hush.(\\${slot})`, slot, execution); };
@@ -139,7 +141,7 @@ function App() {
     const b = (base.current = makeBase(seed)), sd = { name: `seed ${seed}`, rgb: SEEDC };
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     for (const k of SLOTS) { author(k, b.slots[k], sd); authors.current[k].fresh = new Set();   // a whole new base isn't a 'change' to highlight
-      fs.writeFileSync(path.join(SET, k + ".scd"), b.slots[k] + "\n"); evaluateSlot(k, b.slots[k], "seed"); }
+      writeSlot(k, b.slots[k]); evaluateSlot(k, b.slots[k], "seed"); }
     bpmRef.current = b.bpm; eng.current?.tempo(b.bpm); refreshState(); discardOptions("new base"); st.current.askAt = st.current.bar + 4;
     setSay(`new base · seed ${seed} · ${b.bpm} bpm · ${b.key} · ${b.about}`); if (st.current.booted) { announce(`SEED ${seed}`, [237, 230, 216]); queueScene({}); }
   };
@@ -204,7 +206,7 @@ function App() {
     if (o.forBars) s.reverts.push({ slot: o.slot, code: evidence.slots[o.slot] || "", appliedCode: o.code.trim(), atBar: s.bar + o.forBars });   // FILLS: put it back afterwards
     if (g && !g.remote) for (const k of earned(g.taken, g.dj.skills || [], g.pending)) { g.pending.push(k.id); bus.current.send("unlock", "host", { agent: g.dj.id, skill: k.id }); setTimeout(() => setSay(`${g.dj.name} unlocked ${k.name}: ${k.blurb}.  k activates it`), 1500); }
     author(o.slot, o.code, { name: who.name, rgb: accent(who.palette) });   // set before writing, so the file watcher doesn't credit the change to you
-    fs.writeFileSync(path.join(SET, o.slot + ".scd"), o.code + "\n");
+    writeSlot(o.slot, o.code);
     bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "take", by });
     evaluateSlot(o.slot, o.code, o.agent, { ...o, proposal: o.id });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y" });
@@ -265,14 +267,14 @@ function App() {
       if (s.pending && n - s.lastWipeBar >= 2) { s.next = s.pending; s.pending = null; s.wipeAt = at; s.lastWipeBar = n; }   // a change in the music is a change on screen, on the bar
       if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); s.report = asText(l, "detroit"); { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; evidence.observe(p, summary, s.report, summary === lastSummary.current); lastSummary.current = summary; } const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       bus.current.bar = n;
-      for (const r of s.reverts.filter((r) => n >= r.atBar)) { if (read(r.slot).trim() !== r.appliedCode) { bus.current.send("note", "host", { text: `Skipped ${r.slot} fill restore: a newer edit is on disk` }); continue; } fs.writeFileSync(path.join(SET, r.slot + ".scd"), r.code + "\n"); evaluateSlot(r.slot, r.code, "fill over"); }
+      for (const r of s.reverts.filter((r) => n >= r.atBar)) { if (read(r.slot).trim() !== r.appliedCode) { bus.current.send("note", "host", { text: `Skipped ${r.slot} fill restore: a newer edit is on disk` }); continue; } writeSlot(r.slot, r.code); evaluateSlot(r.slot, r.code, "fill over"); }
       s.reverts = s.reverts.filter((r) => n < r.atBar);
       // takeover: a DJ you've granted `auto` takes its own idea once the veto window closes. n still vetoes.
       const owner = s.options?.length ? s.booth.find((g) => g.dj.id === s.options![0].agent) : null;
       if (owner?.level === "auto" && n >= s.autoAt && !busy.current) {
-        const want = ["style", "fix", "bold"][s.autoN++ % 3], i = Math.max(0, s.options!.findIndex((o) => o.angle === want));
+        const want = ["style", "fix", "turn"][s.autoN++ % 3], i = Math.max(0, s.options!.findIndex((o) => o.angle === want));
         const option = s.options![i];
-        if (option.angle === "bold") ride("build", 2, () => take(s.options?.indexOf(option) ?? -1, "grant:auto")); else take(i, "grant:auto");
+        if (option.angle === "turn") ride("build", 2, () => take(s.options?.indexOf(option) ?? -1, "grant:auto")); else take(i, "grant:auto");
       }
       if (AUTO && n >= s.askAt) think();
     };
@@ -285,9 +287,11 @@ function App() {
     } else e.start(MUTE);
     const w = chokidar.watch(SET, { ignoreInitial: true }).on("all", (_ev, file) => {
       const s = path.basename(file, ".scd");
-      if (!SLOTS.includes(s)) return;
+      if (!file.endsWith(".scd") || !SLOTS.includes(s)) return;
       const code = read(s);
-      if (dispatched.current.get(s) === code.trim()) return;
+      // Suppress our own write echo once. A later manual save of identical source still restarts its pattern.
+      const ownWrite = hostWrites.current.get(s); hostWrites.current.delete(s);
+      if (ownWrite === code.trim()) return;
       author(s, code, { name: "you", rgb: YOU });
       evaluateSlot(s, code, "human");
     });

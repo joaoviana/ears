@@ -121,6 +121,10 @@ try:
         assert active["active_at_ms"] >= applied["t"] - 50
         assert next(m for m in stages if m["type"] == "scheduled")["scheduled_at_ms"] >= applied["t"] - 50
         assert (work / "set/d1.scd").read_text().strip() == code.replace("0.4", "0.2")
+        previous_execution = active["execution_id"]
+        (work / "set/d1.scd").write_text(code.replace("0.4", "0.2"))
+        saved = wait(lambda m: m["type"] == "applied" and m.get("slot") == "d1" and m.get("author") == "human" and m["execution_id"] != previous_execution)
+        wait(lambda m: m["type"] == "active" and m["execution_id"] == saved["execution_id"])
         propose("taken", state()["revision"])
         assert "duplicate" in wait(lambda m: m.get("request_id") == "taken" and m["type"] == "rejected")["reason"]
         revision = state()["revision"]
@@ -132,7 +136,7 @@ try:
         rejected = wait(lambda m: m.get("request_id") == "stale-at-take" and m["type"] == "rejected")
         assert "stale" in rejected["reason"]
         assert (work / "set/d1.scd").read_text().strip() == code.replace("0.4", "0.2")
-    result = dict(ok=True, log=str((work / "logs/latest.jsonl").resolve()), checks=["stale admission", "human take", "ordered receipts", "clock ordering", "measured comparison", "duplicate request", "stale take preserves newer source"])
+    result = dict(ok=True, log=str((work / "logs/latest.jsonl").resolve()), checks=["stale admission", "human take", "ordered receipts", "clock ordering", "measured comparison", "identical manual save re-evaluates", "duplicate request", "stale take preserves newer source"])
 finally:
     if proc.poll() is None:
         os.write(master, b"q")

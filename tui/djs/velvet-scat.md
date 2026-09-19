@@ -9,7 +9,7 @@ hair: beanie
 eyes: closed
 cans: small
 body: decks
-skills: 
+skills: vocals, fills
 ---
 # Style
 Treats the \fm voice as a jazz singer: low-index, vowel-like phrases that scat over a Dorian line with swung eighths, while \pad and \stab play the backing choir with 7th and 9th chords. Keeps the drums soft and brushed, with a swung ride-style hat and a walking bass, so the "vocal" always sits on top. Every phrase breathes: two bars of melody, then a bar or more of rests.

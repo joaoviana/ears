@@ -4,7 +4,7 @@
 import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
-import { applyPatch, describe, type Patch } from "./patch.ts";
+import { applyPatch, describe, parseSlot, type Patch } from "./patch.ts";
 import { SKILLS, missing } from "./skills.ts";
 
 export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash" }
@@ -52,7 +52,8 @@ Rules:
 export const ANGLES: Record<string, string> = {
   fix: "YOUR ANGLE: fix. Find the single biggest problem in the listening report and correct it with the smallest patch.",
   style: "YOUR ANGLE: style. Ignore small mix problems. Push one slot further toward your own sound, using your idioms.",
-  bold: "YOUR ANGLE: bold. Make the move the room will notice: a new voice in an empty or weak slot, or a rewritten rhythm. replace: true is fine.",
+  // the third option is never a refinement: it is the thing least like what's playing, so there's always a way out
+  turn: `YOUR ANGLE: left turn. Ignore the listening report. Offer the move that is LEAST like what is playing right now. Read the code, name the thing everything has in common (all straight 16ths? everything dark and low? four-on-the-floor for ages? one chord? nothing above middle C? every slot busy?), and break exactly that in ONE slot: a different rhythm family (straight vs broken vs euclidean vs triplets vs half-time), a different instrument in that slot, a jump of an octave or more, silence where it's been busy, or a new harmonic centre via \\ctranspose. It must be a rewrite: "SLOT dN REPLACE" with every key set, and at least the instrument, the rhythm (\\dur or the ~x rows) or the register must differ from that slot's current code. Not a parameter tweak, not a filter move. Stay in key and in your character; keep it something a room can dance to. WHY must name what it contrasts with ("everything is straight 16ths, so: triplets").`,
 };
 
 const FORBIDDEN = /unixCmd|systemCmd|\bFile\b|\bPipe\b|interpret|compile|thisProcess|\.load|Quarks|NetAddr|Server|\bs\.|SynthDef|;|\bexit\b/;
@@ -117,6 +118,16 @@ export function parsePatch(text: string): Parsed | null {
 
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
+/** Is this patch really a departure? Different instrument, different rhythm, or a register an octave away. */
+function isTurn(before: string, p: Parsed): boolean {
+  const old = Object.fromEntries(parseSlot(before).map((x) => [x.key, x.value])), get = (k: string) => p.set.find((x) => x.key.replace(/^\\/, "") === k)?.value;
+  if (!before.trim()) return true;                                     // filling an empty slot is always new
+  const inst = get("instrument"), dur = get("dur"), amp = get("amp"), notes = get("midinote") ?? get("freq");
+  const mean = (v?: string) => { const n = (v?.match(/\b\d{2,4}\b/g) || []).map(Number); return n.length ? n.reduce((a, b) => a + b, 0) / n.length : null; };
+  const a = mean(notes), b = mean(old.midinote ?? old.freq), isFreq = !!get("freq");
+  return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
+}
+
 export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
 
 /** Fires every angle at once and hands each idea over the moment it validates. Resolves when all are in. */
@@ -139,6 +150,12 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach).join("\n");
       const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
+      if (angle === "turn" && !isTurn(input.slots[p.slot] || "", p)) {
+        onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
+        const again = parsePatch(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", SYSTEM + persona(input.dj) + "\n\n" + brief));
+        if (!again || !isTurn(input.slots[again.slot] || "", again)) return;
+        Object.assign(p, again);
+      }
       const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (missing(code, p, active) ? `uses ${missing(code, p, active)}, which this DJ hasn't been granted` : null) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
       if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: bad, ms: Date.now() - t0 }); return; }
       const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition };
