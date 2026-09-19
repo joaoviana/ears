@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \pad, \dur, 4, \midinote, Pseq([[52, 55, 59, 63], [57, 60, 64, 67], [60, 64, 67, 71], [59, 63, 66, 69]], inf), \sus, 1.385, \att, 0.4, \rel, 0.692, \cutoff, Pwhite(800, 2000), \duck, 0.75, \amp, 0.085)
+~d.(\d5, \instrument, \stab, \dur, 1/4, \amp, ~x.(["----X---------X-", "----X--X------X-"], 0.15), \midinote, Pseq([[60, 63, 67, 70], [60, 63, 67, 70], [65, 68, 72, 75], [60, 63, 67, 70]], inf).stutter(16), \cutoff, Pbrown(500, 1300, 100), \dec, 0.15, \send, 1)
