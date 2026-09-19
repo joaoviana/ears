@@ -13,10 +13,11 @@ import { Engine, ROOT } from "../engine.ts"; import { Listener, compare, asText,
 import { ask, type Past, type Suggestion } from "../agent.ts"; import { roster } from "../djs.ts"; import { makeBase } from "../seed.ts";
 import { parseSlot, applyPatch } from "../patch.ts";
 import { NoiseFloor, grade, forPrompt, MIN_SAMPLES, type Differences, type Metric } from "../shots.ts";
+import { brief as writeBrief, slotDrift, type Attempt } from "../brief.ts";
 process.env.EARS_ANGLES = "1";
 const N_SEEDS = Number(process.argv[2] || 2), ROUNDS = Number(process.argv[3] || 6), SEEDS = [41, 7, 77, 12, 33, 5, 21, 64].slice(0, N_SEEDS);
 const METRICS_USED: Metric[] = ["sub", "low", "mid", "high", "air", "brightness", "loudness"];   // density and punch have no per-slot measurement
-const CONDS = ["blind", "ears", "ears+shots"] as const, SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6"], BANDS = ["sub", "low", "mid", "high", "air"] as const;
+const CONDS = ["blind", "ears", "ears+shots", "brief+shots"] as const, SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6"], BANDS = ["sub", "low", "mid", "high", "air"] as const;
 const dj = roster().find((d) => d.id === "resident")!, e = new Engine(), wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let listener = new Listener(), taps: Record<string, { rms: number; centroid: number; bands: number[] }[]> = {}, barLen = 1846, barWaiters: (() => void)[] = [];
 e.on("ears", (f) => listener.push(f)); e.on("onset", () => listener.onset()); e.on("slotears", (f: any) => (taps[f.slot] ??= []).push(f));
@@ -74,14 +75,18 @@ e.on("ready", async () => {
     const calibrated = METRICS_USED.every((m) => masterNoise.ready(m) && SLOTS.every((k) => tapNoise[k].ready(m)));
     const slots = breakIt(clean); for (const k of ["d1", "d2", "d4"]) e.eval(slots[k], k);
     await nextBar(); await wait(barLen * 0.5);
-    let before = await window2(); const history: Past[] = [];
+    let before = await window2(); const history: Past[] = [], attempts: Attempt[] = [];
     const selfNoise = cal.slice(0, -1).reduce((a, w) => a + distance(w.taps, target.taps), 0) / (cal.length - 1); noiseOfDistance.push(selfNoise);
     if (!calibrated) console.log("   (noise floors not fully calibrated for this seed)");
     console.log(`\n${cond} · seed ${seed} · ${base.style} ${base.bpm} · clean base vs itself: ${selfNoise.toFixed(2)} · after breaking it: ${distance(before.taps, target.taps).toFixed(2)} · floors from ${cal.length - 1} baseline pairs`);
     for (let round = 1; round <= ROUNDS; round++) {
-      const report = cond === "blind" ? "NO LISTENING REPORT IS AVAILABLE. You have the code only. Still call your shot." : asText(compare(before.master, target.master), "this track as it should sound");
+      const worstSlot = slotDrift(before.taps, target.taps)[0]?.slot ?? "d1";
+      const lines = compare(before.master, target.master);
+      const report = cond === "blind" ? "NO LISTENING REPORT IS AVAILABLE. You have the code only. Still call your shot."
+        : cond === "brief+shots" ? writeBrief(lines, "this track as it should sound", slotDrift(before.taps, target.taps), Object.fromEntries(METRICS_USED.map((m) => [m, tapNoise[worstSlot].floor(m)])), attempts)
+        : asText(lines, "this track as it should sound");
       let got: Suggestion | null = null, refused = 0;
-      try { await ask({ dj, skills: [], slots, report, note: "", history: cond === "ears+shots" ? history : history.map((h) => ({ ...h, outcome: undefined })), context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` }, (o) => { got ??= o; }, (kind) => { if (kind === "rejected") refused++; }); } catch {}
+      try { await ask({ dj, skills: [], slots, report, note: "", history: cond.includes("shots") ? history : history.map((h) => ({ ...h, outcome: undefined })), context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` }, (o) => { got ??= o; }, (kind) => { if (kind === "rejected") refused++; }); } catch {}
       const o = got as Suggestion | null, d0 = distance(before.taps, target.taps);
       if (!o) { keep({ cond, seed, round, calibrated, ms: null, refused, slot: "-", call: "-", master: "no idea", tap: "no idea", tapDelta: null, dist_before: d0, dist_after: d0, why: "" }); console.log(`  r${round}  no usable idea`); continue; }
       let ok = true; const onEval = (r: any) => { if (r.id === o.slot && !r.ok) ok = false; }; e.on("evald", onEval);
@@ -90,6 +95,7 @@ e.on("ready", async () => {
       const gm = ok ? grade(o.expect, metricDelta(before.master, after.master) as any, masterNoise.floor(o.expect.metric)) : null;
       const gt = ok ? grade(o.expect, mixDiff(before.taps, { ...before.taps, [o.slot]: after.taps[o.slot] }, [before.master, after.master]), tapNoise[o.slot].floor(o.expect.metric)) : null;
       history.push({ slot: o.slot, why: o.why, verdict: "y", id: round, outcome: gt ? forPrompt(o.expect, gt) : "the engine refused this code" });
+      attempts.push({ metric: o.expect.metric, slot: o.slot, grade: gt?.grade ?? "ungraded" });
       const d1 = distance(after.taps, target.taps);
       keep({ cond, seed, round, calibrated, ms: o.ms, refused, slot: o.slot, call: `${o.expect.metric} ${o.expect.dir}`, master: gm?.grade ?? "engine refused", tap: gt?.grade ?? "engine refused", tapDelta: gt?.delta ?? null, dist_before: d0, dist_after: d1, why: o.why });
       console.log(`  ${clock()} r${round}  ${(o.ms / 1000).toFixed(1)}s ${o.slot} calls ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} master ${String(gm?.grade).toUpperCase().padEnd(5)} tap ${String(gt?.grade).toUpperCase().padEnd(5)} ${(gt?.text ?? "").padEnd(34).slice(0, 34)} dist ${d0.toFixed(2)}→${d1.toFixed(2)}  ${o.why.slice(0, 52)}`);
