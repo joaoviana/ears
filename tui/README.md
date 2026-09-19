@@ -11,8 +11,20 @@ npm run ears -- --manual  # the agent only speaks when you press a
 npm run ears:reset        # put the starting set back
 ```
 
-Keys: **y** take · **n** skip · **t** tell the agent something · **a** ask now · **l** look · **c** character ramp ·
-**m** mute · **r** save what's playing as the reference · **q** quit.
+Keys, booth: **1 2 3** take an option (**y** = 1) · **n** skip them all · **t** tell the active DJ something ·
+**a** ask now · **s** summon a new DJ from a description · **d** bring in someone from the roster · **x** dismiss.
+Keys, screen: **l / L** look · **p** palette · **c** characters · **f** fullscreen · **m** mute ·
+**r** save what's playing as the reference · **q** quit.
+
+## DJs
+
+A DJ is a markdown file in `tui/djs/`: frontmatter for the name, palette, look and face parts, then `# Style`,
+`# Idioms`, `# Never`, `# Greeting`. It's deliberately the shape of a Claude Code skill. Three ship with the repo
+(`resident`, `detroit-130`, `dub-siren`). **s** then a description ("plays acid, a bit unhinged") has Claude write a
+new one; it is saved, walks into the booth on the next bar, brings its own look and palette with a wipe, and says
+its greeting. Up to three DJs share the booth and take turns (back to back): each round the active one offers two or
+three options in their own voice, you take one or none, and the next DJ steps up. Faces are assembled from named
+parts (hair, eyes, headphones, rig), so a generated DJ chooses parts and never draws. They nod on the kick.
 
 ## The two loops
 
@@ -22,8 +34,9 @@ Keys: **y** take · **n** skip · **t** tell the agent something · **a** ask no
 **Agent loop.** An `ears` synth sits on the master bus and streams level, five bands, spectral centroid and onsets 15
 times a second. Every 2 bars that becomes a listening report: each number against `refs/detroit.json`, with one plain
 word (thin, boomy, dull, harsh, bright, sparse…). Every 8 bars the report, the code, your last verdicts and any note
-you typed go to Claude, which returns one slot's replacement code, a sentence, and the report line it acted on.
-**y** writes that code into the slot file, which is the human loop again.
+you typed go to Claude as the active DJ, which returns two or three options: a slot's replacement code, a sentence,
+and the report line or style rule behind it. **1/2/3** writes that code into the slot file, which is the human loop again.
+When any change lands, the visuals wipe to a new look and palette on that bar.
 
 ## What stops the agent touching the sound
 
@@ -42,9 +55,12 @@ kinds of look:
 - **field** looks run a function per cell like a fragment shader. `gyroid` raymarches a gyroid lattice with a tunnel
   bored through it; `torus` is a lit, raymarched torus that turns once per bar and swells on the kick; `warp` is
   three nested passes of fractal noise; `moire` is ring interference with kaleidoscope folds that add one every 8 bars.
-- **braille** looks draw lines on a dot canvas with 2×4 dots per cell, so 8× the grid's resolution. `wire` is two
-  counter-rotating icosahedra with shock rings on the snare and hats as orbiting sparks; `terrain` is an outrun
-  horizon whose mountain range is the five bands; `orbit` is lissajous figures whose ratios follow the band balance.
+- **braille** looks draw lines on a dot canvas with 2×4 dots per cell, so 8× the grid's resolution. `orbit` is the
+  real master bus in phase space (the signal against itself a few ms later: a bass note is an ellipse, harmonics knot
+  it, silence is a dot); `ring` wraps the live waveform into a circle around an FFT burst; `terrain` is an outrun
+  horizon whose mountains are the live spectrum; `wire` is two counter-rotating icosahedra with snare shock rings.
+- The audio is real: SuperCollider writes the master bus into a ring buffer, the TUI fetches 43 ms of it 20 times a
+  second and runs its own FFT (`audio.ts`). `orbit`, `ring`, `terrain` and `waterfall` draw that, not envelopes.
 - **glyph** looks: `codefield` tiles your live code across the screen and lights it with a plasma, with a shockwave
   leaving the centre on every kick. `waterfall` is a scrolling spectrogram, the listening report as a picture.
 

@@ -66,11 +66,19 @@ s.waitForBoot {
     SendReply.kr(Impulse.kr(15), '/ears', [amp.(sig), Peak.kr(sig, Impulse.kr(15)), SpecCentroid.kr(chain), SpecFlatness.kr(chain)] ++ bands);
     SendReply.kr(Onsets.kr(chain, 0.18), '/onset');
   }).add;
+  // the picture's raw material: the master bus itself, low-passed and written into a small ring buffer
+  // at a quarter of the sample rate (512 frames = 43 ms), which the TUI fetches 20 times a second
+  SynthDef(\scope, { |buf|
+    BufWr.ar(LPF.ar(In.ar(0, 2), 5500), buf, Phasor.ar(0, 0.25, 0, 512));
+  }).add;
+  ~scopeBuf = Buffer.alloc(s, 512, 2);
   s.sync;
 
   Synth.tail(s, \space);
   Synth.tail(s, \master);
   Synth.tail(s, \ears);
+  Synth.tail(s, \scope, [\buf, ~scopeBuf]);
+  Routine { loop { ~scopeBuf.getn(0, 1024, { |d| tui.sendMsg(*(['/scope'] ++ d)) }); 0.05.wait } }.play(SystemClock);
   ~master = Synth.tail(s, \vol, [\vol, if(mute, 0, 1)]);
 
   OSCdef(\ears, { |msg| tui.sendMsg(*(['/ears'] ++ msg[3..])) }, '/ears');

@@ -5,6 +5,7 @@
 // Every cell gets its own 24-bit colour from a cosine palette. Looks and palettes are picked by name,
 // so an agent chooses from a list and never writes drawing code.
 export interface Pulse { kick: number; snare: number; hat: number; stab: number; bar: number; barN: number; bands: number[] }
+import { audio } from "./audio.ts";
 export interface Ctx { code: string }
 
 const LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
@@ -159,7 +160,7 @@ const BRAILLE: Record<string, Brush> = {
     const hor = c.H * 0.42, cx = c.W / 2;
     const sunR = c.H * 0.3 * (1 + s.kick * 0.12);
     for (let y = -sunR; y < 0; y += 1) { if (Math.floor((y + sunR) / 3 + t * 2) % 3 === 0 && y > -sunR * 0.55) continue; const w = Math.sqrt(sunR * sunR - y * y) * 2.1; for (let x = -w; x < w; x += 1) c.set(cx + x, hor + y, colour(0.02 + (y / sunR) * 0.12, 0.95)); }
-    const band = (u: number) => { const f = Math.min(3.999, Math.max(0, u * 4)), i = Math.floor(f), k = (1 - Math.cos((f - i) * 3.1416)) / 2; return s.bands[i] * (1 - k) + s.bands[i + 1] * k; };
+    const band = (u: number) => { const f = Math.min(30.999, Math.max(0, u * 31)), i = Math.floor(f), k = f - i; return (audio.spec[i] * (1 - k) + audio.spec[i + 1] * k) * 0.42; };   // the FFT, bass at the centre
     for (let zi = 0; zi < 14; zi++) {
       const z = 0.35 + ((zi + 1 - ((s.bar * 4) % 1)) / 14) * 3.2, p = 1 / z; let px = NaN, py = 0;
       for (let xi = -30; xi <= 30; xi++) {
@@ -170,29 +171,51 @@ const BRAILLE: Record<string, Brush> = {
     }
     for (let xi = -30; xi <= 30; xi += 5) c.line(cx + xi * 0.13 * (1 / 0.35) * c.W * 0.5, c.H, cx + xi * 0.13 * (1 / 3.55) * c.W * 0.5, hor + 0.55 * (1 / 3.55) * c.H * 0.55, colour(0.62, 0.4));
   },
-  // lissajous figures whose frequency ratios come from the band balance; the trace thickens on the kick
+  // The actual master bus, 43 ms of it, drawn in phase space: x is the signal now, y is the same signal a few
+  // milliseconds later. A pure bass note traces an ellipse, harmonics fold it into knots, noise turns it to dust.
+  // Three delays give three nested figures. Nothing here is invented: silence draws a dot.
   orbit: (c, t, s) => {
-    const cx = c.W / 2, cy = c.H / 2;
-    for (let k = 0; k < 3; k++) {
-      const fa = 2 + k + Math.round(s.bands[1] * 8), fb = 3 + k * 2 + (Math.floor(s.barN / 4) % 3), ph = t * (0.25 + k * 0.1) + s.bar * 6.2832, A = c.W * (0.44 - k * 0.09) * (1 + s.kick * 0.08), B = c.H * (0.44 - k * 0.09);
+    const m = audio.mono, n = m.length, cx = c.W / 2, cy = c.H / 2;
+    const gain = 0.85 / Math.max(0.08, audio.level * 2.6);
+    [[70, 0.0, 1], [31, 0.33, 0.72], [11, 0.62, 0.45]].forEach(([tau, hue, size]) => {
       let px = NaN, py = 0;
-      for (let i = 0; i <= 700; i++) { const a = (i / 700) * 6.2832, X = cx + Math.sin(a * fa + ph) * A, Y = cy + Math.sin(a * fb) * B * Math.cos(a * 0.5 + t * 0.2 * (k + 1)); if (!Number.isNaN(px)) c.line(px, py, X, Y, colour(k * 0.3 + i / 1400 + t * 0.04, 0.5 + s.stab * 0.5)); px = X; py = Y; }
+      for (let i = 0; i + tau < n; i++) {
+        const X = cx + m[i] * gain * size * c.W * 0.46, Y = cy - m[i + tau] * gain * size * c.H * 0.46;
+        const col = colour(hue + i / n * 0.35 + t * 0.03, 0.35 + (i / n) * 0.65 + s.kick * 0.2);
+        if (!Number.isNaN(px) && Math.hypot(X - px, Y - py) < c.W * 0.12) c.line(px, py, X, Y, col); else c.set(X, Y, col);
+        px = X; py = Y;
+      }
+    });
+    // the stereo field as a thin goniometer along the bottom: left-right difference against the sum
+    for (let i = 0; i < n; i += 2) c.set(cx + (audio.l[i] - audio.r[i]) * gain * c.W * 1.2, c.H - 3 - Math.abs(audio.mono[i]) * gain * c.H * 0.12, colour(0.5, 0.5));
+  },
+  // the waveform itself, mirrored into a ring: radius is the signal, one lap is 43 ms
+  ring: (c, t, s) => {
+    const m = audio.mono, n = m.length, cx = c.W / 2, cy = c.H / 2, gain = 0.6 / Math.max(0.08, audio.level * 2.6);
+    for (const [base, hue] of [[0.62, 0], [0.34, 0.4]] as const) {
+      let px = NaN, py = 0;
+      for (let i = 0; i <= n; i++) {
+        const a = (i / n) * 6.2832 + t * 0.2 + s.bar * 6.2832 * (base > 0.5 ? 1 : -1), v = m[i % n] * gain, r = (base + v * 0.3) * (1 + s.kick * 0.06);
+        const X = cx + Math.cos(a) * r * c.W * 0.5 * 0.62, Y = cy + Math.sin(a) * r * c.H * 0.5;
+        if (!Number.isNaN(px)) c.line(px, py, X, Y, colour(hue + i / n * 0.5 + t * 0.04, 0.5 + Math.abs(v))); px = X; py = Y;
+      }
     }
+    for (let b = 0; b < audio.spec.length; b++) { const a = (b / audio.spec.length) * 6.2832 - 1.5708, r0 = 0.12, r1 = 0.12 + audio.spec[b] * 0.17; c.line(cx + Math.cos(a) * r0 * c.W * 0.31, cy + Math.sin(a) * r0 * c.H * 0.5, cx + Math.cos(a) * r1 * c.W * 0.31, cy + Math.sin(a) * r1 * c.H * 0.5, colour(b / 32, 0.9)); }
   },
 };
 
 // ---- waterfall: the listening report as a picture --------------------------------------------
-const history: number[][] = [];
+const history: Float32Array[] = [];
 function waterfall(w: number, h: number, s: Pulse, chars: string[]): { ch: string[]; col: number[] } {
-  history.unshift(s.bands.map((b, i) => Math.pow(Math.min(1, b * [1.8, 3.5, 9, 22, 60][i]), 1.7) + (i === 0 ? s.kick * 0.2 : 0)));
+  history.unshift(Float32Array.from(audio.spec));
   if (history.length > 200) history.pop();
-  const ch: string[] = [], col: number[] = [];
+  const ch: string[] = [], col: number[] = [], B = audio.spec.length;
   for (let j = 0; j < h; j++) {
-    const row = history[Math.min(history.length - 1, j)] ?? [0, 0, 0, 0, 0];
+    const row = history[Math.min(history.length - 1, j)];
     for (let i = 0; i < w; i++) {
-      const u = Math.abs((i / (w - 1)) * 2 - 1), f = Math.min(3.999, u * 4), k = Math.floor(f), m = (1 - Math.cos((f - k) * 3.1416)) / 2;
-      const v = (row[k] * (1 - m) + row[k + 1] * m) * (1 - (j / h) * 0.6);
-      ch.push(chars[Math.max(0, Math.min(chars.length - 1, Math.floor(v * chars.length)))]); col.push(colour(u * 0.6 + j * 0.01, v * 1.3));
+      const u = Math.abs((i / (w - 1)) * 2 - 1), f = Math.min(B - 1.001, u * (B - 1)), k = Math.floor(f);
+      const v = (row[k] * (1 - (f - k)) + row[k + 1] * (f - k)) * (1 - (j / h) * 0.5) + (j === 0 && u < 0.08 ? s.kick * 0.3 : 0);
+      ch.push(chars[Math.max(0, Math.min(chars.length - 1, Math.floor(v * chars.length)))]); col.push(colour(u * 0.7 + j * 0.012, v * 1.2));
     }
   }
   return { ch, col };
@@ -200,8 +223,9 @@ function waterfall(w: number, h: number, s: Pulse, chars: string[]): { ch: strin
 
 export const LOOKS = [...Object.keys(FIELDS), ...Object.keys(BRAILLE), "codefield", "waterfall"];
 
-/** Rows of text with 24-bit colour escapes, one escape per run of identical colour. */
-export function render(look: string, ramp: Ramp, palette: string, w: number, h: number, t: number, s: Pulse, ctx: Ctx): string[] {
+interface Cells { ch: string[]; col: number[] }
+
+function cells(look: string, ramp: Ramp, palette: string, w: number, h: number, t: number, s: Pulse, ctx: Ctx): Cells {
   pal = PALETTES[palette] ?? PALETTES.ember;
   const chars = [...RAMPS[ramp]], n = w * h; let ch: string[] = new Array(n), col: number[] = new Array(n);
   const aspect = w / h / 2.1;   // a terminal cell is about twice as tall as it is wide
@@ -230,7 +254,26 @@ export function render(look: string, ramp: Ramp, palette: string, w: number, h: 
       ch[k] = chars[Math.floor(l * chars.length)]; col[k] = colour(hue, 0.25 + l * 0.9);
     }
   }
+  return { ch, col };
+}
 
+export interface Scene { look: string; palette: string }
+
+/**
+ * Rows of text with 24-bit colour escapes, one escape per run of identical colour.
+ * `wipe` 0..1 brings `next` in over `now` as a ragged circle growing from the centre, with a bright rim.
+ */
+export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp, w: number, h: number, t: number, s: Pulse, ctx: Ctx): string[] {
+  let { ch, col } = cells(now.look, ramp, now.palette, w, h, t, s, ctx);
+  if (next && wipe > 0) {
+    const b = cells(next.look, ramp, next.palette, w, h, t, s, ctx), aspect = w / h / 2.1, reach = Math.hypot(aspect, 1) * 1.1 * wipe;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const x = ((i / (w - 1)) * 2 - 1) * aspect, y = (j / (h - 1)) * 2 - 1, k = j * w + i;
+      const edge = Math.hypot(x, y) + (vnoise(x * 3 + 9, y * 3) - 0.5) * 0.5 - reach;
+      if (edge < 0) { ch[k] = b.ch[k]; col[k] = b.col[k]; }
+      if (Math.abs(edge) < 0.06) { ch[k] = "█▓▒░"[Math.floor(hash(i, j + Math.floor(t * 20)) * 4)]; col[k] = 0xffffff; }
+    }
+  }
   const rows: string[] = [];
   for (let j = 0; j < h; j++) {
     let row = "", last = -1;

@@ -37,6 +37,7 @@ export class Engine extends EventEmitter {
       case "/ready": this.lang = a[0]; this.ready = true; this.emit("ready"); break;
       case "/ears": this.emit("ears", { rms: a[0], peak: a[1], centroid: a[2], flatness: a[3], bands: a.slice(4, 9) } as Ears); break;
       case "/onset": this.emit("onset"); break;
+      case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
       case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: Date.now() + a[2] * 1000, amp: a[3] } as Hit); break;
       case "/bar": this.emit("bar", { n: a[0], at: Date.now() + a[1] * 1000, bpm: a[2] }); break;
       case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2] }); break;
