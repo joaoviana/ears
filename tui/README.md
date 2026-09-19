@@ -36,11 +36,25 @@ you typed go to Claude, which returns one slot's replacement code, a sentence, a
 
 ## The visuals
 
-`ascii.ts` is a shader whose framebuffer is text: each look is a scalar field over (x, y, time, pulse) mapped onto a
-character ramp. `pulse` carries `kick / snare / hat / stab` envelopes, the bar phase and the five bands. The engine
-announces every hit 200 ms before it sounds (the server's scheduling latency), so the flash is fired on the hit
-rather than after it. Looks are chosen by name, so the agent can pick one but never writes drawing code.
-The banner is `figlet`.
+`ascii.ts` is a shader whose framebuffer is text. Every cell gets its own 24-bit colour from a cosine palette. Three
+kinds of look:
+
+- **field** looks run a function per cell like a fragment shader. `gyroid` raymarches a gyroid lattice with a tunnel
+  bored through it; `torus` is a lit, raymarched torus that turns once per bar and swells on the kick; `warp` is
+  three nested passes of fractal noise; `moire` is ring interference with kaleidoscope folds that add one every 8 bars.
+- **braille** looks draw lines on a dot canvas with 2×4 dots per cell, so 8× the grid's resolution. `wire` is two
+  counter-rotating icosahedra with shock rings on the snare and hats as orbiting sparks; `terrain` is an outrun
+  horizon whose mountain range is the five bands; `orbit` is lissajous figures whose ratios follow the band balance.
+- **glyph** looks: `codefield` tiles your live code across the screen and lights it with a plasma, with a shockwave
+  leaving the centre on every kick. `waterfall` is a scrolling spectrogram, the listening report as a picture.
+
+`pulse` carries `kick / snare / hat / stab` envelopes, bar phase, bar number and the five bands. The engine announces
+every hit 200 ms before it sounds, so the flash fires on the hit. Looks and palettes are chosen by name, so the agent
+can pick one but never writes drawing code.
+
+Keys: **l / L** next / previous look · **p** palette · **c** character ramp · **f** fullscreen field.
+`npm run ears -- --demo` runs the visuals with a fake pulse and no sound engine.
+`npx tsx tui/preview-html.ts` writes every look to `/tmp/looks.html` for checking colours outside a terminal.
 
 ## Files
 

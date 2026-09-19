@@ -9,7 +9,7 @@ import figlet from "figlet";
 import { Engine, ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, asText, type Profile, type Line } from "./report.ts";
 import { ask, type Suggestion, type Past } from "./agent.ts";
-import { render as field, LOOKS, type Pulse, type Ramp } from "./ascii.ts";
+import { render as field, LOOKS, PALETTE_NAMES, type Pulse, type Ramp } from "./ascii.ts";
 
 const SET = path.join(ROOT, "tui/set"), REF = path.join(ROOT, "tui/refs/detroit.json");
 const SLOTS = ["d1", "d2", "d3", "d4"];
@@ -23,7 +23,7 @@ function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const eng = useRef<Engine>(null as any), ears = useRef(new Listener());
-  const hits = useRef<Hit[]>([]), pulse = useRef<Pulse>({ kick: 0, snare: 0, hat: 0, stab: 0, bar: 0, bands: [0, 0, 0, 0, 0] });
+  const hits = useRef<Hit[]>([]), pulse = useRef<Pulse>({ kick: 0, snare: 0, hat: 0, stab: 0, bar: 0, barN: 0, bands: [0, 0, 0, 0, 0] });
   const barAt = useRef({ at: Date.now(), len: 1846 }), busy = useRef(false);
   const st = useRef({ slots: Object.fromEntries(SLOTS.map((s) => [s, read(s)])) as Record<string, string>, report: "", note: "", history: [] as Past[], sug: null as Suggestion | null, bar: 0 });
 
@@ -34,7 +34,7 @@ function App() {
   const last = useRef<Profile | null>(null);
   const [agent, setAgent] = useState("waiting for the first report");
   const [typing, setTyping] = useState<string | null>(null);
-  const [look, setLook] = useState(0), [ramp, setRamp] = useState<Ramp>("ascii"), [muted, setMuted] = useState(MUTE), [log, setLog] = useState("booting SuperCollider…");
+  const [look, setLook] = useState(0), [ramp, setRamp] = useState<Ramp>("ascii"), [palette, setPalette] = useState(0), [full, setFull] = useState(process.argv.includes("--full")), [muted, setMuted] = useState(MUTE), [log, setLog] = useState("booting SuperCollider…");
 
   const think = () => {
     const s = st.current;
@@ -54,14 +54,19 @@ function App() {
     e.on("evald", ({ id, ok, msg }) => setStatus((x) => ({ ...x, [id]: ok ? "ok" : msg })));
     e.on("log", (l: string) => setLog(l.slice(0, 120)));
     e.on("bar", ({ n, at, bpm }) => {
-      barAt.current = { at, len: (240 / bpm) * 1000 }; st.current.bar = n; ears.current.bar();
+      barAt.current = { at, len: (240 / bpm) * 1000 }; st.current.bar = n; setTimeout(() => (pulse.current.barN = n), Math.max(0, at - Date.now())); ears.current.bar();
       if (n % 2 === 0) {
         const p = ears.current.take();
         if (p) { last.current = p; const l = compare(p, ref); setLines(l); st.current.report = asText(l, "detroit"); }
       }
       if (AUTO && n % 8 === 4) think();
     });
-    e.start(MUTE);
+    if (process.argv.includes("--demo")) {
+      // visuals only: no engine, a fake 130 bpm pulse. For working on looks without SuperCollider.
+      const beat = 60000 / 130; let n = 0;
+      setInterval(() => { const at = Date.now() + 50; hits.current.push({ slot: "d1", inst: "kick", at, amp: 0.9 }); if (n % 2) hits.current.push({ slot: "d2", inst: "clap", at, amp: 0.5 }); for (let i = 0; i < 4; i++) hits.current.push({ slot: "d2", inst: "hat", at: at + (i * beat) / 4, amp: 0.2 }); if (n % 4 === 0) { barAt.current = { at, len: beat * 4 }; pulse.current.barN = st.current.bar = n / 4; } pulse.current.bands = [0.4, 0.18, 0.05, 0.015, 0.002].map((b) => b * (0.7 + Math.random() * 0.6)); n++; }, beat);
+      setLog("demo mode: no sound engine");
+    } else e.start(MUTE);
     const w = chokidar.watch(SET, { ignoreInitial: true }).on("all", (_ev, file) => {
       const s = path.basename(file, ".scd");
       if (!SLOTS.includes(s)) return;
@@ -95,28 +100,32 @@ function App() {
     if (input === "a") think();
     if (input === "t") setTyping("");
     if (input === "l") setLook((x) => (x + 1) % LOOKS.length);
+    if (input === "L") setLook((x) => (x + LOOKS.length - 1) % LOOKS.length);
+    if (input === "p") setPalette((x) => (x + 1) % PALETTE_NAMES.length);
+    if (input === "f") setFull((x) => !x);
     if (input === "c") setRamp((r) => (["ascii", "blocks", "dots", "code"] as Ramp[])[((["ascii", "blocks", "dots", "code"] as Ramp[]).indexOf(r) + 1) % 4]);
     if (input === "m") { eng.current.volume(muted ? 1 : 0); setMuted(!muted); }
     if (input === "r" && last.current) { fs.mkdirSync(path.dirname(REF), { recursive: true }); fs.writeFileSync(REF, JSON.stringify(last.current, null, 2)); setRef(last.current); setLog("saved what you just heard as the reference"); }
   });
 
   const W = Math.max(80, stdout.columns || 120), H = stdout.rows || 40, s = st.current, p = pulse.current;
-  const leftW = Math.floor(W * 0.55), fieldH = Math.max(6, H - 30);
-  const rows = field(LOOKS[look], ramp, W - 2, fieldH, Date.now() / 1000, p);
+  const leftW = Math.floor(W * 0.55), fieldH = full ? Math.max(6, H - 4) : Math.max(6, H - 30);
+  const t0 = useRef(Date.now()).current;
+  const rows = field(LOOKS[look], ramp, PALETTE_NAMES[palette], W - 2, fieldH, (Date.now() - t0) / 1000, p, { code: SLOTS.map((k) => s.slots[k]).join(" ") });
   const beat = Math.floor(p.bar * 4);
   const wordColor = (w: string) => (w === "ok" || !w ? DIM : AMBER);
 
   return (
     <Box flexDirection="column" width={W}>
       <Box justifyContent="space-between">
-        <Text color={AMBER} bold>{figlet.textSync("EARS", { font: "Small" }).split("\n").slice(0, 4).join("\n")}</Text>
+        <Text color={AMBER} bold>{full ? "EARS" : figlet.textSync("EARS", { font: "Small" }).split("\n").slice(0, 4).join("\n")}</Text>
         <Box flexDirection="column" alignItems="flex-end">
           <Text>bar <Text bold>{String(s.bar).padStart(3)}</Text>  {[0, 1, 2, 3].map((i) => (i === beat ? "●" : "○")).join(" ")}  130 bpm {muted ? <Text color={AMBER}> MUTED</Text> : ""}</Text>
-          <Text color={DIM}>human loop: save a file → next bar   agent loop: report → suggestion → your y/n</Text>
-          <Text color={DIM}>{log}</Text>
+          {!full && <Text color={DIM}>human loop: save a file → next bar   agent loop: report → suggestion → your y/n</Text>}
+          {!full && <Text color={DIM}>{log}</Text>}
         </Box>
       </Box>
-      <Box>
+      {!full && <Box>
         <Box flexDirection="column" width={leftW} borderStyle="single" borderColor={CYAN} paddingX={1}>
           <Text color={CYAN}>CODE · tui/set/*.scd · yours to edit</Text>
           {SLOTS.map((k) => (
@@ -143,11 +152,12 @@ function App() {
             <Text color={DIM}>last: {s.history.slice(-8).map((h) => h.verdict).join(" ") || "—"}{s.note ? `   note: "${s.note}"` : ""}</Text>
           </Box>
         </Box>
-      </Box>
+      </Box>}
+      {full && s.sug && <Text color={AMBER} wrap="truncate"> suggestion · {s.sug.why}  <Text color={CYAN}>[y] [n]</Text></Text>}
       <Box flexDirection="column" borderStyle="single" borderColor={DIM}>
-        {rows.map((r, i) => <Text key={i} color={p.snare > 0.5 ? "white" : i % 2 ? AMBER : CYAN} dimColor={p.kick < 0.25}>{r}</Text>)}
+        {rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
       </Box>
-      <Text color={DIM}> [l] look: {LOOKS[look]}   [c] chars: {ramp}   [m] mute   [r] save reference   [q] quit</Text>
+      <Text color={DIM}> [l] look: {LOOKS[look]}   [p] palette: {PALETTE_NAMES[palette]}   [c] chars: {ramp}   [f] fullscreen   [m] mute   [r] save ref   [q] quit</Text>
     </Box>
   );
 }

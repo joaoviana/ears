@@ -1,1 +1,1 @@
-~d.(\d2, \instrument, \hat, \dur, 1/4, \amp, Pseq([0.1, 0.15, 0.28, 0.15], inf))
+~d.(\d2, \instrument, \hat, \dur, 1/4, \amp, Pseq([0.16, 0.22, 0.4, 0.22], inf), \hp, 3000)
