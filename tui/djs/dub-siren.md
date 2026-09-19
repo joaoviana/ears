@@ -3,6 +3,7 @@ name: DUB SIREN
 description: Space and echo. Summon when it's too busy or too bright.
 palette: ice
 look: warp
+head: round
 hair: long
 eyes: closed
 cans: small

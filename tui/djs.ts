@@ -11,10 +11,11 @@ export const HAIR = ["bald", "mohawk", "cap", "afro", "long", "beanie", "antenna
 export const EYES = ["dots", "shades", "visor", "closed", "stars", "wide"] as const;
 export const CANS = ["big", "small", "none"] as const;
 export const BODY = ["decks", "laptop", "modular"] as const;
+export const HEAD = ["square", "round", "robot"] as const;
 
 export interface DJ {
   id: string; name: string; tagline: string; palette: string; look: string;
-  hair: (typeof HAIR)[number]; eyes: (typeof EYES)[number]; cans: (typeof CANS)[number]; body: (typeof BODY)[number];
+  hair: (typeof HAIR)[number]; eyes: (typeof EYES)[number]; cans: (typeof CANS)[number]; body: (typeof BODY)[number]; head: (typeof HEAD)[number];
   style: string; idioms: string[]; never: string[]; greeting: string;
 }
 
@@ -49,17 +50,19 @@ export function avatar(dj: DJ, p: Pulse, active: boolean): string[] {
   const can = dj.cans === "none" ? ["  ", "  ", "  "] : dj.cans === "big" ? ["╔╗", "║║", "╚╝"] : [" ╓", " ║", " ╙"];
   const canR = dj.cans === "none" ? ["  ", "  ", "  "] : dj.cans === "big" ? ["╔╗", "║║", "╚╝"] : ["╖ ", "║ ", "╜ "];
   const side = dj.hair === "long" ? "█" : " ";
+  const [tl, tr, bl, br, hz, vt] = dj.head === "round" ? "╭╮╰╯─│" : dj.head === "robot" ? "╔╗╚╝═║" : "┌┐└┘─│";
   const head = [
-    `  ${can[0]}┌─────────┐${canR[0]}  `,
-    ` ${side}${can[1]}│${eyes}│${canR[1]}${side} `,
-    ` ${side}${can[2]}│    ▵    │${canR[2]}${side} `,
-    ` ${side}  │ ${mouth} │  ${side} `,
-    `    └──┬───┬──┘    `,
+    `  ${can[0]}${tl}${hz.repeat(9)}${tr}${canR[0]}  `,
+    ` ${side}${can[1]}${vt}${eyes}${vt}${canR[1]}${side} `,
+    ` ${side}${can[2]}${vt}    ${dj.head === "robot" ? "▪" : "▵"}    ${vt}${canR[2]}${side} `,
+    ` ${side}  ${vt} ${mouth} ${vt}  ${side} `,
+    `    ${bl}${hz.repeat(2)}┬${hz.repeat(3)}┬${hz.repeat(2)}${br}    `,
   ];
   const canCol = fg(acc, dim * (0.6 + p.hat * 0.4)), skin = fg([235, 225, 205], dim), hairCol = fg(acc, dim * 0.85), body = fg(acc, dim * (0.55 + p.kick * 0.45));
   const rows = [
     ...HAIR_ROWS[dj.hair].map((r) => hairCol + r),
-    ...head.map((r) => skin + r.replace(/[╔╗║╚╝╓╖╙╜]+/g, (m) => canCol + m + skin).replace(/█/g, hairCol + "█" + skin)),
+    ...head.slice(0, 4).map((r, i) => (i < 3 ? r.slice(0, 2).replace(/█/g, hairCol + "█") + canCol + r.slice(2, 4) + skin + r.slice(4, 15) + canCol + r.slice(15, 17) + skin + r.slice(17).replace(/█/g, hairCol + "█") : skin + r.replace(/█/g, hairCol + "█" + skin))).map((r) => skin + r),
+    skin + head[4],
     ...BODY_ROWS[dj.body].map((r) => body + r),
   ].map((r) => r + "\x1b[39m");
   return hit && active ? ["", ...rows.slice(0, -1)] : rows;   // the nod: everything drops a row for the length of the kick
@@ -76,7 +79,7 @@ export function parse(md: string, id: string): DJ | null {
   const pick = <T extends readonly string[]>(v: string, opts: T, d: T[number]) => (opts.includes(v) ? v : d) as T[number];
   return {
     id, name: f.name || id, tagline: f.description || "", palette: pick(f.palette, PALETTE_NAMES as any, "ember"), look: pick(f.look, LOOKS as any, "orbit"),
-    hair: pick(f.hair, HAIR, "bald"), eyes: pick(f.eyes, EYES, "dots"), cans: pick(f.cans, CANS, "big"), body: pick(f.body, BODY, "decks"),
+    head: pick(f.head, HEAD, "square"), hair: pick(f.hair, HAIR, "bald"), eyes: pick(f.eyes, EYES, "dots"), cans: pick(f.cans, CANS, "big"), body: pick(f.body, BODY, "decks"),
     style: sec("Style") || "", idioms: list(sec("Idioms")), never: list(sec("Never")), greeting: sec("Greeting") || "",
   };
 }
@@ -86,6 +89,7 @@ name: ${d.name}
 description: ${d.tagline}
 palette: ${d.palette}
 look: ${d.look}
+head: ${d.head}
 hair: ${d.hair}
 eyes: ${d.eyes}
 cans: ${d.cans}

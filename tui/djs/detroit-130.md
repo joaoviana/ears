@@ -3,6 +3,7 @@ name: DETROIT 130
 description: Dark, driving, machine soul. Summon when the room wants harder.
 palette: neon
 look: gyroid
+head: robot
 hair: bald
 eyes: shades
 cans: big

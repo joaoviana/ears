@@ -67,6 +67,14 @@ When any change lands, the visuals wipe to a new look and palette on that bar.
 - Nothing calls `eval` on a suggestion. The only path to the engine is a file write, and the only thing that writes
   the file is the **y** key.
 
+## Show moments
+
+- A DJ walking in, or a new seed, puts their name across the field in block letters that assemble out of static and
+  dissolve back into it, in their colour, while the scene wipes to their look.
+- Four wipe styles, picked at random per change: `iris`, `blinds`, `sweep`, `shatter`.
+- **f** is stage mode: the field fills the screen, with the four lanes and code lines, the booth line-up and the
+  current options in a strip underneath. That's the projector layout.
+
 ## The visuals
 
 `ascii.ts` is a shader whose framebuffer is text. Every cell gets its own 24-bit colour from a cosine palette. Three

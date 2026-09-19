@@ -3,6 +3,7 @@ name: ACID REFLUX
 description: Summon when the groove is too polite and the bassline needs to start screaming.
 palette: acid
 look: warp
+head: round
 hair: mohawk
 eyes: wide
 cans: small

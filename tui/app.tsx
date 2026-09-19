@@ -10,7 +10,7 @@ import figlet from "figlet";
 import { Engine, ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, asText, type Profile, type Line } from "./report.ts";
 import { ask, summon, type Suggestion, type Past } from "./agent.ts";
-import { render as field, LOOKS, PALETTE_NAMES, type Pulse, type Ramp, type Scene } from "./ascii.ts";
+import { render as field, LOOKS, PALETTE_NAMES, WIPES, type Pulse, type Ramp, type Scene, type Banner } from "./ascii.ts";
 import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
 import { makeBase, type Base } from "./seed.ts";
@@ -39,7 +39,7 @@ function App() {
   const barAt = useRef({ at: Date.now(), len: 1846 }), busy = useRef(false), t0 = useRef(Date.now()).current;
   const all = useRef<DJ[]>(roster());
   const base = useRef<Base | null>(null), lanes = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)]))), amps = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)])));
-  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), bpmRef = useRef(130);
+  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; from: number; ms: number } | null>(null), bpmRef = useRef(130);
   const st = useRef({
     slots: Object.fromEntries(SLOTS.map((s) => [s, read(s)])) as Record<string, string>, report: "", note: "", history: [] as Past[],
     options: null as Suggestion[] | null, by: "", bar: 0, booted: false, askAt: 4,
@@ -56,7 +56,13 @@ function App() {
   const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
 
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
-  const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
+  const announce = (text: string, rgb: number[], bars = 2) => {
+    const W = (stdout.columns || 120) - 4;
+    for (const font of ["ANSI Shadow", "Calvin S", "Small"] as const) {
+      try { const lines = figlet.textSync(text, { font }).split("\n").filter((l) => l.trim()); const w = Math.max(...lines.map((l) => l.length)); if (w + 6 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "   " + l.padEnd(w) + "   "), rgb, from: Date.now(), ms: barAt.current.len * bars }; return; } } catch {}
+    }
+  };
+  const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { wipe: WIPES[Math.floor(Math.random() * WIPES.length)], look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
 
   const author = (slot: string, code: string, a: { name: string; rgb: number[] }) => {
     const before = new Set(tokens(st.current.slots[slot] || ""));
@@ -67,7 +73,7 @@ function App() {
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     for (const k of SLOTS) { author(k, b.slots[k], sd); fs.writeFileSync(path.join(SET, k + ".scd"), b.slots[k] + "\n"); st.current.slots[k] = b.slots[k]; }
     bpmRef.current = b.bpm; eng.current?.tempo(b.bpm); st.current.options = null; st.current.askAt = st.current.bar + 4;
-    setSay(`new base · seed ${seed} · ${b.bpm} bpm · ${b.key} · ${b.about}`);
+    setSay(`new base · seed ${seed} · ${b.bpm} bpm · ${b.key} · ${b.about}`); if (st.current.booted) { announce(`SEED ${seed}`, [237, 230, 216]); queueScene({}); }
   };
 
   const think = () => {
@@ -81,7 +87,7 @@ function App() {
   const enter = (dj: DJ) => {
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0 }].slice(-3); s.turn = s.booth.length - 1; }
-    s.options = null; queueScene({ look: dj.look, palette: dj.palette }); setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
+    s.options = null; queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
   };
   const take = (i: number) => {
     const s = st.current, o = s.options?.[i]; if (!o) return;
@@ -172,10 +178,11 @@ function App() {
 
   const W = Math.max(90, stdout.columns || 120), H = stdout.rows || 48, s = st.current, p = pulse.current, now = Date.now();
   const compact = H < 50, leftW = Math.floor(W * 0.55), boothW = Math.min(s.booth.length, 3) * 21 + 4;
-  const fieldH = full ? Math.max(6, H - 5) : Math.max(5, H - (compact ? 1 : 4) - 15 - 16 - 3);
+  const fieldH = full ? Math.max(6, H - 10) : Math.max(5, H - (compact ? 1 : 4) - 15 - 16 - 3);
   const wipe = s.next ? Math.min(1, Math.max(0, (now - s.wipeAt) / barAt.current.len)) : 0;
-  const rows = field(s.scene, s.next, wipe, RAMP_NAMES[ramp], W - 2, fieldH, (now - t0) / 1000, p, { code: SLOTS.map((k) => s.slots[k]).join(" ") });
-  const beat = Math.floor(p.bar * 4), who = active(), codeW = leftW - 4, step = Math.floor(p.bar * 16) % 16;
+  const bn = banner.current && now - banner.current.from < banner.current.ms ? ({ lines: banner.current.lines, rgb: banner.current.rgb, t: (now - banner.current.from) / banner.current.ms } as Banner) : null;
+  const rows = field(s.scene, s.next, wipe, RAMP_NAMES[ramp], W - 2, fieldH, (now - t0) / 1000, p, { code: SLOTS.map((k) => s.slots[k]).join(" "), banner: bn });
+  const beat = Math.floor(p.bar * 4), who = active(), codeW = (full ? W - 24 : leftW) - 4, step = Math.floor(p.bar * 16) % 16;
   // the code pane is the live thing: each slot has a 16-step lane lit by the hits that actually sounded,
   // coloured by whoever wrote the slot, and the tokens a change brought in glow for 8 bars
   const slotView = (k: string) => {
@@ -248,10 +255,14 @@ function App() {
           <Text color={DIM} wrap="truncate">taken/skipped: {s.history.slice(-14).map((h) => (h.verdict === "y" ? "●" : "○")).join("") || "—"}{s.note ? `   your note: "${s.note}"` : ""}</Text>
         </Box>
       </Box>}
-      {full && <Text color={AMBER} wrap="truncate"> {who.name}{s.options ? " · " + s.options.map((o, i) => `[${i + 1}] ${o.why}`).join("   ") : say ? " · " + say : ""}</Text>}
+
       <Box flexDirection="column" borderStyle="single" borderColor={DIM}>
         {rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
       </Box>
+      {full && <Box flexDirection="column" paddingX={1}>
+        {SLOTS.map((k) => { const v = slotView(k); return <Text key={k} wrap="truncate"><Text bold>{k}</Text> {v.laneStr}  {v.code[0]}</Text>; })}
+        <Text wrap="truncate"><Text color="white" bold>{s.booth.map((g) => (g.dj.id === who.id ? "▶ " : "  ") + g.dj.name).join("   ")}</Text>  {s.options ? s.options.map((o, i) => `\x1b[38;2;111;195;214m[${i + 1}]\x1b[39m ${o.slot} ${o.why}`).join("   ") : <Text color={DIM}>{say}</Text>}</Text>
+      </Box>}
       <Text color={DIM} wrap="truncate"> [l/L] look: {s.scene.look}   [p] palette: {s.scene.palette}   [c] chars: {RAMP_NAMES[ramp]}   [g] new base   [f] fullscreen   [m] mute   [r] save ref   [q] quit</Text>
     </Box>
   );

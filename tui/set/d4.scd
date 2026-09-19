@@ -1,1 +1,1 @@
-~d.(\d4, \instrument, \fm, \dur, 3/4, \midinote, Prand([68, 71, 75, 80, 83, 87, \r, \r], inf), \ratio, 2, \index, Pwhite(1.0, 5.0), \dec, Pwhite(0.15, 0.7), \amp, 0.14, \pan, Pwhite(-0.7, 0.7), \send, 0.7)
+~d.(\d4, \instrument, \perc, \dur, 1/4, \amp, ~x.("----X----x----X-", 0.3), \freq, Prand([494, 587, 740], inf), \dec, Pwhite(0.08, 0.25), \pan, Pwhite(-0.6, 0.6))

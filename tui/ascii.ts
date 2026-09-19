@@ -6,7 +6,8 @@
 // so an agent chooses from a list and never writes drawing code.
 export interface Pulse { kick: number; snare: number; hat: number; stab: number; bar: number; barN: number; bands: number[] }
 import { audio } from "./audio.ts";
-export interface Ctx { code: string }
+export interface Banner { lines: string[]; rgb: number[]; t: number }   // t runs 0..1 over the banner's life
+export interface Ctx { code: string; banner?: Banner | null }
 
 const LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
 const RAMPS = { ascii: LONG, blocks: " ░░▒▒▓▓██", dots: " ⠁⠂⠃⠇⠧⠷⡷⣷⣿", code: " .·:;=+x%#@" };
@@ -257,7 +258,8 @@ function cells(look: string, ramp: Ramp, palette: string, w: number, h: number, 
   return { ch, col };
 }
 
-export interface Scene { look: string; palette: string }
+export const WIPES = ["iris", "blinds", "sweep", "shatter"] as const;
+export interface Scene { look: string; palette: string; wipe?: (typeof WIPES)[number] }
 
 /**
  * Rows of text with 24-bit colour escapes, one escape per run of identical colour.
@@ -269,9 +271,26 @@ export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp,
     const b = cells(next.look, ramp, next.palette, w, h, t, s, ctx), aspect = w / h / 2.1, reach = Math.hypot(aspect, 1) * 1.1 * wipe;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       const x = ((i / (w - 1)) * 2 - 1) * aspect, y = (j / (h - 1)) * 2 - 1, k = j * w + i;
-      const edge = Math.hypot(x, y) + (vnoise(x * 3 + 9, y * 3) - 0.5) * 0.5 - reach;
+      const kind = next.wipe ?? "iris";
+      const edge = kind === "blinds" ? (((i / w) * 12) % 1) * 0.9 + Math.abs(y) * 0.1 - wipe * 1.05
+        : kind === "sweep" ? (x / aspect + 1) / 2 * 0.8 + (y + 1) / 2 * 0.2 + (vnoise(y * 6, 3) - 0.5) * 0.15 - wipe * 1.1
+        : kind === "shatter" ? hash(Math.floor(i / 6), Math.floor(j / 3)) * 0.9 + 0.05 - wipe * 1.05
+        : Math.hypot(x, y) + (vnoise(x * 3 + 9, y * 3) - 0.5) * 0.5 - reach;
       if (edge < 0) { ch[k] = b.ch[k]; col[k] = b.col[k]; }
-      if (Math.abs(edge) < 0.06) { ch[k] = "█▓▒░"[Math.floor(hash(i, j + Math.floor(t * 20)) * 4)]; col[k] = 0xffffff; }
+      if (Math.abs(edge) < (kind === "iris" ? 0.06 : 0.025)) { ch[k] = "█▓▒░"[Math.floor(hash(i, j + Math.floor(t * 20)) * 4)]; col[k] = 0xffffff; }
+    }
+  }
+  // a name in lights: big block letters over the field, assembled out of static and dissolving back into it
+  const bn = ctx.banner;
+  if (bn && bn.lines.length && bn.lines[0].length <= w) {
+    const top = Math.max(0, Math.floor((h - bn.lines.length) / 2)), left = Math.floor((w - bn.lines[0].length) / 2);
+    const present = bn.t < 0.18 ? bn.t / 0.18 : bn.t > 0.8 ? (1 - bn.t) / 0.2 : 1;
+    for (let j = 0; j < bn.lines.length && top + j < h; j++) for (let i = 0; i < bn.lines[j].length; i++) {
+      const g = bn.lines[j][i], k = (top + j) * w + left + i, n = hash(i * 1.3, j * 7.7);
+      if (g === " ") { if (present > 0.3) { ch[k] = hash(i, j) > 0.5 ? ch[k] : " "; col[k] = ((col[k] >> 17) << 16) | (((col[k] >> 9) & 127) << 8) | ((col[k] >> 1) & 127); } continue; }   // dim the field behind the letters
+      if (n > present) { if (n - present < 0.15) { ch[k] = "▓▒░"[Math.floor(n * 3)]; col[k] = 0xffffff; } continue; }
+      const flick = 0.85 + 0.15 * Math.sin(t * 30 + j);
+      ch[k] = g; col[k] = (Math.min(255, bn.rgb[0] * flick + s.kick * 60) << 16) | (Math.min(255, bn.rgb[1] * flick + s.kick * 60) << 8) | Math.min(255, bn.rgb[2] * flick + s.kick * 60);
     }
   }
   const rows: string[] = [];

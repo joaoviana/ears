@@ -3,7 +3,7 @@
 // so the only thing it can produce is text, and the only path from that text to the speakers is a human pressing y.
 import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
-import { HAIR, EYES, CANS, BODY, type DJ } from "./djs.ts";
+import { HAIR, EYES, CANS, BODY, HEAD, type DJ } from "./djs.ts";
 
 export interface Suggestion { slot: string; code: string; why: string; evidence: string }
 export interface Past { slot: string; why: string; verdict: "y" | "n" }
@@ -89,10 +89,10 @@ export async function ask(input: { dj: DJ; context: string; slots: Record<string
 
 const DJ_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["id", "name", "tagline", "palette", "look", "hair", "eyes", "cans", "body", "style", "idioms", "never", "greeting"],
+  required: ["id", "name", "tagline", "palette", "look", "head", "hair", "eyes", "cans", "body", "style", "idioms", "never", "greeting"],
   properties: {
     id: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+){0,3}$" }, name: { type: "string" }, tagline: { type: "string" },
-    palette: { enum: PALETTE_NAMES }, look: { enum: LOOKS }, hair: { enum: [...HAIR] }, eyes: { enum: [...EYES] }, cans: { enum: [...CANS] }, body: { enum: [...BODY] },
+    palette: { enum: PALETTE_NAMES }, look: { enum: LOOKS }, head: { enum: [...HEAD] }, hair: { enum: [...HAIR] }, eyes: { enum: [...EYES] }, cans: { enum: [...CANS] }, body: { enum: [...BODY] },
     style: { type: "string" }, idioms: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } }, never: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } }, greeting: { type: "string" },
   },
 };
