@@ -85,6 +85,17 @@ from now until a bar line, then lets go on the downbeat under a crash:
 To add one: a new `case` in the `/transition` OSCdef in `engine.scd` (what to do to `~djfx` as `f` goes 0→1), and
 its name in `engine.ts`.
 
+## Packages doing the work
+
+- **ink** renders the screen; **@inkjs/ui** provides the text input (tell, summon), the roster picker (**D**, arrows
+  and enter) and the spinners, themed to the active palette.
+- **asciichart** draws the trend in the ears pane: loudness and brightness per report, with a ▴ in the author's
+  colour wherever a change landed, so you can see what each take did to the mix.
+- **cfonts** sets the name-in-lights banners. Each DJ keeps one of six fonts; narrower ones are tried if it won't fit.
+- **gradient-string** colours the logo and pane titles between the palette's two accents; banners use the same
+  gradient per column.
+- **figlet** is no longer used for banners; **chokidar** watches the set folder; **osc-min** speaks OSC.
+
 ## Show moments
 
 - A DJ walking in, or a new seed, puts their name across the field in block letters that assemble out of static and

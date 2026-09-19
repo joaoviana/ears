@@ -6,7 +6,7 @@
 // so an agent chooses from a list and never writes drawing code.
 export interface Pulse { kick: number; snare: number; hat: number; stab: number; bar: number; barN: number; bands: number[] }
 import { audio } from "./audio.ts";
-export interface Banner { lines: string[]; rgb: number[]; t: number }   // t runs 0..1 over the banner's life
+export interface Banner { lines: string[]; rgb: number[]; rgb2?: number[]; t: number }   // t runs 0..1 over the banner's life
 export interface Ctx { code: string; banner?: Banner | null }
 
 const LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
@@ -304,8 +304,11 @@ export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp,
       if (g === " ") { if (present > 0.3) { ch[k] = hash(i, j) > 0.5 ? ch[k] : " "; col[k] = ((col[k] >> 17) << 16) | (((col[k] >> 9) & 127) << 8) | ((col[k] >> 1) & 127); } continue; }   // dim the field behind the letters
       if (bg) bg[k] = -1;
       if (n > present) { if (n - present < 0.15) { ch[k] = "▓▒░"[Math.floor(n * 3)]; col[k] = 0xffffff; } continue; }
-      const flick = 0.85 + 0.15 * Math.sin(t * 30 + j);
-      ch[k] = g; col[k] = (Math.min(255, bn.rgb[0] * flick + s.kick * 60) << 16) | (Math.min(255, bn.rgb[1] * flick + s.kick * 60) << 8) | Math.min(255, bn.rgb[2] * flick + s.kick * 60);
+      // colour runs left to right from one accent to the other; a font's filler glyphs sit back as texture
+      const u = i / Math.max(1, bn.lines[j].length - 1), to = bn.rgb2 ?? bn.rgb, filler = "╱░─╋".includes(g);
+      const flick = (filler ? 0.28 : 0.85 + 0.15 * Math.sin(t * 30 + j)), kick = filler ? 0 : s.kick * 60;
+      const c3 = [0, 1, 2].map((q) => Math.min(255, (bn.rgb[q] + (to[q] - bn.rgb[q]) * u) * flick + kick));
+      ch[k] = g; col[k] = (c3[0] << 16) | (c3[1] << 8) | c3[2];
     }
   }
   const rows: string[] = [];

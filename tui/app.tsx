@@ -6,7 +6,6 @@ import { render, Box, Text, useInput, useApp, useStdout } from "ink";
 import fs from "fs";
 import path from "path";
 import chokidar from "chokidar";
-import figlet from "figlet";
 import { Engine, ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, asText, type Profile, type Line } from "./report.ts";
 import { ask, summon, type Suggestion, type Past } from "./agent.ts";
@@ -15,6 +14,15 @@ import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
 import { makeBase, type Base } from "./seed.ts";
 import { spawn, execSync } from "child_process";
+import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
+import asciichart from "asciichart";
+import gradient from "gradient-string";
+import cfonts from "cfonts";
+
+// name-in-lights fonts (cfonts). Each DJ keeps one; if it doesn't fit the terminal, fall through to narrower ones.
+const FONTS = ["block", "slick", "pallet", "shade", "grid", "simple3d"] as const, NARROW = ["chrome", "tiny"] as const;
+const bigText = (text: string, font: string) => { try { return (cfonts.render(text, { font, colors: ["system"], space: false, env: "node", maxLength: 0, lineHeight: 0 }, false, 0, { width: 500, height: 50 }) as any).string.replace(/\x1b\[[0-9;]*m/g, "").split("\n").filter((l: string) => l.trim()) as string[]; } catch { return []; } };
+const hashOf = (id: string) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 // DJs can speak their greeting through macOS `say` (v toggles it). Each gets a stable voice from whatever is installed.
 const VOICES = (() => { try { const have = execSync("say -v '?'", { encoding: "utf8" }).split("\n").map((l) => l.split(/\s{2,}/)[0].trim()); return ["Daniel", "Samantha", "Fred", "Zarvox", "Trinoids", "Whisper", "Karen", "Moira", "Ralph", "Rishi", "Tessa", "Albert"].filter((v) => have.includes(v)); } catch { return []; } })();
@@ -46,7 +54,7 @@ function App() {
   const barAt = useRef({ at: Date.now(), len: 1846 }), busy = useRef(false), t0 = useRef(Date.now()).current;
   const all = useRef<DJ[]>(roster());
   const base = useRef<Base | null>(null), lanes = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)]))), amps = useRef<Record<string, number[]>>(Object.fromEntries(SLOTS.map((k) => [k, Array(16).fill(0)])));
-  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; from: number; ms: number } | null>(null), bpmRef = useRef(130), build = useRef<{ from: number; until: number; kind: string } | null>(null);
+  const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; rgb2: number[]; from: number; ms: number } | null>(null), trend = useRef<{ loud: number[]; bright: number[]; marks: (number[] | null)[] }>({ loud: [], bright: [], marks: [] }), landed = useRef<number[] | null>(null), bpmRef = useRef(130), build = useRef<{ from: number; until: number; kind: string } | null>(null);
   const st = useRef({
     slots: Object.fromEntries(SLOTS.map((s) => [s, read(s)])) as Record<string, string>, report: "", note: "", history: [] as Past[],
     options: null as Suggestion[] | null, by: "", bar: 0, booted: false, askAt: 4,
@@ -59,21 +67,24 @@ function App() {
   const [lines, setLines] = useState<Line[]>([]);
   const [ref, setRef] = useState<Profile | null>(() => { try { return JSON.parse(fs.readFileSync(REF, "utf8")); } catch { return null; } });
   const [say, setSay] = useState("waiting for the first report");
-  const [typing, setTyping] = useState<{ mode: "tell" | "summon"; text: string } | null>(null);
+  const [typing, setTyping] = useState<"tell" | "summon" | null>(null), [thinking, setThinking] = useState("");
   const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster">(null), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
 
   const voiceRef = useRef(voice); voiceRef.current = voice;
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
-  const announce = (text: string, rgb: number[], bars = 2) => {
-    const W = (stdout.columns || 120) - 4;
-    for (const font of ["ANSI Shadow", "Calvin S", "Small"] as const) {
-      try { const lines = figlet.textSync(text, { font }).split("\n").filter((l) => l.trim()); const w = Math.max(...lines.map((l) => l.length)); if (w + 6 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "   " + l.padEnd(w) + "   "), rgb, from: Date.now(), ms: barAt.current.len * bars }; return; } } catch {}
+  const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
+    const W = (stdout.columns || 120) - 4, to = hex((UI[st.current.pending?.palette ?? st.current.scene.palette] ?? UI.ember).b);
+    for (const font of [FONTS[hashOf(fontKey) % FONTS.length], "block", ...NARROW]) {
+      const lines = bigText(text, font); if (!lines.length) continue;
+      const w = Math.max(...lines.map((l) => l.length));
+      if (w + 6 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "   " + l.padEnd(w) + "   "), rgb, rgb2: to, from: Date.now(), ms: barAt.current.len * bars }; return; }
     }
   };
   const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { wipe: WIPES[Math.floor(Math.random() * WIPES.length)], look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
 
   const author = (slot: string, code: string, a: { name: string; rgb: number[] }) => {
     const before = new Set(tokens(st.current.slots[slot] || ""));
+    if (st.current.booted) landed.current = a.rgb;
     authors.current[slot] = { ...a, bar: st.current.bar, fresh: new Set(tokens(code).filter((t) => !before.has(t))) };
   };
   const ride = (kind: "build" | "wash" | "riser", bars: number, then?: () => void) => {
@@ -93,16 +104,22 @@ function App() {
   const think = () => {
     const s = st.current;
     if (busy.current || s.options || !s.report) return;
-    const dj = active(); busy.current = true; setSay(`${dj.name} is listening…`);
+    const dj = active(); busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
     ask({ dj, slots: s.slots, report: s.report, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` })
       .then((opts) => { s.options = opts; s.by = dj.id; s.note = ""; setSay(""); const g = s.booth.find((x) => x.dj.id === dj.id); if (g) g.offered++; }, (e) => { setSay(String(e.message)); s.askAt = s.bar + 4; })
-      .finally(() => (busy.current = false));
+      .finally(() => { busy.current = false; setThinking(""); });
   };
   const enter = (dj: DJ) => {
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0 }].slice(-3); s.turn = s.booth.length - 1; }
-    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
+    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
     setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
+  };
+  const submit = (raw: string) => {
+    const text = raw.trim(), mode = typing, s = st.current; setTyping(null);
+    if (!text) return;
+    if (mode === "tell") { s.note = text; s.options = null; think(); }
+    else { setThinking(`writing a DJ who ${text}`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message)).finally(() => setThinking("")); }
   };
   const take = (i: number) => {
     const s = st.current, o = s.options?.[i]; if (!o) return;
@@ -127,7 +144,7 @@ function App() {
       const s = st.current; barAt.current = { at, len }; s.bar = n; ears.current.bar();
       setTimeout(() => (pulse.current.barN = n), Math.max(0, at - Date.now()));
       if (s.pending && n - s.lastWipeBar >= 2) { s.next = s.pending; s.pending = null; s.wipeAt = at; s.lastWipeBar = n; }   // a change in the music is a change on screen, on the bar
-      if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); s.report = asText(l, "detroit"); } }
+      if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); s.report = asText(l, "detroit"); const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       if (AUTO && n >= s.askAt) think();
     };
     e.on("bar", ({ n, at, bpm }) => { bpmRef.current = Math.round(bpm); onBar(n, at, (240 / bpm) * 1000); });
@@ -161,19 +178,9 @@ function App() {
 
   useInput((input, key) => {
     const s = st.current;
-    if (typing) {
-      if (key.return || /[\r\n]/.test(input)) {
-        const text = (typing.text + input.replace(/[\r\n]/g, "")).trim(); setTyping(null);
-        if (!text) return;
-        if (typing.mode === "tell") { s.note = text; s.options = null; think(); }
-        else { setSay(`summoning “${text}”… (a new DJ is being written)`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message)); }
-      } else if (key.escape) setTyping(null);
-      else if (key.backspace || key.delete) setTyping({ ...typing, text: typing.text.slice(0, -1) });
-      else if (input && !key.ctrl && !key.meta) setTyping({ ...typing, text: typing.text + input });
-      return;
-    }
+    if (typing) { if (key.escape) setTyping(null); return; }   // the TextInput owns the keyboard
     if (overlay) {
-      if (overlay === "roster" && /^[1-9]$/.test(input)) { const dj = all.current[Number(input) - 1]; if (dj) enter(dj); }
+      if (overlay === "roster") { if (key.escape || input === "q") setOverlay(null); return; }   // the Select owns the arrows and enter
       setOverlay(null); return;
     }
     if (input === "?") { setOverlay("help"); return; }
@@ -186,8 +193,8 @@ function App() {
     if (input === "3") take(2);
     if (input === "n" && s.options) { s.options.forEach((o) => s.history.push({ slot: o.slot, why: o.why, verdict: "n" })); s.options = null; s.turn++; s.askAt = s.bar + 2; setSay("skipped. next DJ up"); }
     if (input === "a") think();
-    if (input === "t") setTyping({ mode: "tell", text: "" });
-    if (input === "s") setTyping({ mode: "summon", text: "" });
+    if (input === "t") setTyping("tell");
+    if (input === "s") setTyping("summon");
     if (input === "d") { const out = all.current.filter((d) => !s.booth.some((g) => g.dj.id === d.id)); if (out.length) enter(out[Math.floor(Math.random() * out.length)]); else setSay("everyone on the roster is already in the booth. [s] summons someone new"); }
     if (input === "x" && s.booth.length > 1) { const g = s.booth.splice(s.turn % s.booth.length, 1)[0]; s.options = null; setSay(`${g.dj.name} leaves the booth`); }
     if (input === "l" || input === "L") s.scene = { ...s.scene, look: LOOKS[(LOOKS.indexOf(s.scene.look) + (input === "l" ? 1 : LOOKS.length - 1)) % LOOKS.length] };
@@ -229,13 +236,24 @@ function App() {
     }
     return { laneStr, code: out.map((l) => l + RESET), by: a ? `${a.name} · bar ${a.bar}` : "", rgb };
   };
+  const grad = gradient([A, B]);
+  const uiTheme = extendTheme(defaultTheme, { components: {
+    Spinner: { styles: { frame: () => ({ color: A }), label: () => ({ color: DIM }) } },
+    Select: { styles: { focusIndicator: () => ({ color: A }), selectedIndicator: () => ({ color: B }), label: ({ isFocused }: any) => ({ color: isFocused ? TEXT : DIM, bold: isFocused }) } },
+  } });
   const Pane = (props: { title: string; note?: string; width: number; height: number; children?: any; row?: boolean }) => (
     <Box flexDirection="column" width={props.width} height={props.height} borderStyle="round" borderColor={FAINT} paddingX={1} overflow="hidden">
-      <Text wrap="truncate"><Text color={A} bold>{props.title}</Text>{props.note ? <Text color={DIM}>  {props.note}</Text> : null}</Text>
+      <Text wrap="truncate"><Text bold>{grad(props.title)}</Text>{props.note ? <Text color={DIM}>  {props.note}</Text> : null}</Text>
       <Box flexDirection={props.row ? "row" : "column"} flexGrow={1}>{props.children}</Box>
     </Box>
   );
   const meter = (v: number, n = 12) => { const k = Math.max(0, Math.min(1, v)) * n, fullN = Math.floor(k); return fgc(Brgb) + "━".repeat(fullN) + (k - fullN > 0.5 ? "╸" : "") + fgc(Frgb) + "─".repeat(Math.max(0, n - fullN - (k - fullN > 0.5 ? 1 : 0))) + RESET; };
+  const chartW = W - leftW - 4 - 42 - 3, tr = trend.current;
+  const chart = chartW >= 16 && tr.loud.length >= 2 ? (() => {
+    const n = Math.min(tr.loud.length, chartW), cut = <T,>(xs: T[]) => xs.slice(-n);
+    const plot = asciichart.plot([[0, 1], cut(tr.loud), cut(tr.bright)], { height: 8, colors: ["\x1b[30m", fgc(Argb), fgc(Brgb)] as any, format: () => "", padding: "" }) as string;   // the invisible [0,1] series pins the axis
+    return { rows: plot.split("\n").map((r) => fgc(Frgb) + r + RESET), marks: " " + cut(tr.marks).map((m) => (m ? fgc(m) + "▴" : fgc(Frgb) + "·")).join("") + RESET };
+  })() : null;
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
@@ -245,9 +263,10 @@ function App() {
   ];
 
   return (
+    <ThemeProvider theme={uiTheme}>
     <Box flexDirection="column" width={W}>
       <Box justifyContent="space-between" paddingX={1}>
-        <Text wrap="truncate"><Text color={A} bold>EARS</Text>  {[0, 1, 2, 3].map((i) => <Text key={i} color={i === beat ? (i === 0 ? A : TEXT) : FAINT}>{i === beat ? "● " : "○ "}</Text>)} <Text color={TEXT}>bar {s.bar}</Text><Text color={DIM}> · {bpmRef.current} bpm{base.current ? ` · seed ${base.current.seed} · ${base.current.key} · ${base.current.about}` : " · set from disk"}</Text></Text>
+        <Text wrap="truncate"><Text bold>{grad("E A R S")}</Text>  {[0, 1, 2, 3].map((i) => <Text key={i} color={i === beat ? (i === 0 ? A : TEXT) : FAINT}>{i === beat ? "● " : "○ "}</Text>)} <Text color={TEXT}>bar {s.bar}</Text><Text color={DIM}> · {bpmRef.current} bpm{base.current ? ` · seed ${base.current.seed} · ${base.current.key} · ${base.current.about}` : " · set from disk"}</Text></Text>
         <Text wrap="truncate">{riding ? <Text color={B} bold>{riding.kind} {"▁▂▃▄▅▆▇█".slice(0, 1 + Math.floor(((now - riding.from) / (riding.until - riding.from)) * 7.99)).padEnd(8, " ")} </Text> : null}{muted ? <Text color={B}>muted  </Text> : null}<Text color={DIM}>{log === "engine ready" ? "" : log.slice(0, 50)}</Text></Text>
       </Box>
       {!full && <Box>
@@ -263,13 +282,20 @@ function App() {
             );
           })}
         </Pane>
-        <Pane title="ears" note={ref ? "every 2 bars, against the reference" : "no reference yet · r saves what's playing"} width={W - leftW} height={paneH}>
-          {lines.length === 0 ? <Text color={DIM}>listening…</Text> : lines.map((l, li) => {
-            const off = l.word && l.word !== "ok", d = l.delta ?? 0;
-            return (
-              <Text key={l.label} wrap="truncate"><Text color={off ? TEXT : DIM}>{l.label.replace(/\s+.*$/, "").padEnd(9)}</Text>{li < 5 ? meter((20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56) : li === 7 ? meter((20 * Math.log10(Math.max(p.bands.reduce((x, y) => x + y, 0), 1e-5)) + 40) / 40) : fgc(Frgb) + "            " + RESET}  <Text color={DIM}>{l.value.padStart(9)}</Text>  <Text color={off ? B : FAINT}>{Math.abs(d) < 0.05 ? "  " : d > 0 ? "▲ " : "▼ "}{Math.abs(d).toFixed(1).padStart(4)}{l.label === "centroid" ? "%" : " "}</Text>  {off ? <Text color={B} bold>{l.word}</Text> : <Text color={FAINT}>·</Text>}</Text>
-            );
-          })}
+        <Pane title="ears" note={ref ? "every 2 bars, against the reference" : "no reference yet · r saves what's playing"} width={W - leftW} height={paneH} row>
+          <Box flexDirection="column" width={41}>
+            {lines.length === 0 ? <Spinner label="listening" /> : lines.map((l, li) => {
+              const off = l.word && l.word !== "ok", d = l.delta ?? 0;
+              return (
+                <Text key={l.label} wrap="truncate"><Text color={off ? TEXT : DIM}>{(({ "onsets/beat": "onsets", centroid: "bright", loudness: "loud" } as Record<string, string>)[l.label] ?? l.label.replace(/\s+.*$/, "")).padEnd(9)}</Text>{li < 5 ? meter((20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56) : li === 7 ? meter((20 * Math.log10(Math.max(p.bands.reduce((x, y) => x + y, 0), 1e-5)) + 40) / 40) : " ".repeat(12)} <Text color={off ? B : FAINT}>{Math.abs(d) < 0.05 ? "  " : d > 0 ? "▲ " : "▼ "}{Math.abs(d).toFixed(1).padStart(4)}</Text> {off ? <Text color={B} bold>{l.word}</Text> : <Text color={FAINT}>·</Text>}</Text>
+              );
+            })}
+          </Box>
+          {chart && <Box flexDirection="column" marginLeft={1}>
+            {chart.rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
+            <Text wrap="truncate">{chart.marks}</Text>
+            <Text wrap="truncate"><Text color={A}>━ loudness</Text>  <Text color={B}>━ brightness</Text>  <Text color={DIM}>▴ change</Text></Text>
+          </Box>}
         </Pane>
       </Box>}
       {!full && <Box>
@@ -286,8 +312,9 @@ function App() {
             );
           })}
         </Pane>
-        <Pane title={typing ? (typing.mode === "tell" ? `you → ${who.name.toLowerCase()}` : "summon") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options ? "1 2 3 take · ⇧ with a build · n skip · t tell" : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
-          {typing ? <Text color={TEXT}>{typing.mode === "summon" ? <Text color={DIM}>a DJ who </Text> : null}{typing.text}<Text color={A}>▌</Text></Text>
+        <Pane title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options ? "1 2 3 take · ⇧ with a build · n skip · t tell" : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+          {typing ? <Box><Text color={A}>{typing === "summon" ? "a DJ who " : "› "}</Text><TextInput key={typing} placeholder={typing === "summon" ? "plays acid, a bit unhinged…" : "more dub, less bright…"} onSubmit={submit} /></Box>
+            : thinking ? <Spinner label={thinking} />
             : s.options ? s.options.map((o, i) => (
               <Box key={i} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
                 <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text></Text>
@@ -309,8 +336,8 @@ function App() {
         ))}
       </Box>}
       {overlay === "roster" && <Box flexDirection="column" paddingX={2} paddingY={1} height={fieldH} overflow="hidden">
-        <Text color={A} bold>who walks in?  <Text color={DIM}>press a number · any other key closes</Text></Text>
-        {all.current.slice(0, 9).map((d, i) => <Text key={d.id} wrap="truncate"><Text color={B}> {i + 1} </Text>{fgc(accent(d.palette))}{d.name.padEnd(18)}{RESET}<Text color={DIM}>{s.booth.some((g) => g.dj.id === d.id) ? "in the booth · " : ""}{d.tagline}</Text></Text>)}
+        <Text bold>{grad("who walks in?")}<Text color={DIM}>   ↑↓ choose · enter · esc closes</Text></Text>
+        <Select visibleOptionCount={Math.max(3, fieldH - 4)} options={all.current.map((d) => ({ value: d.id, label: `${d.name.padEnd(18)} ${s.booth.some((g) => g.dj.id === d.id) ? "(in the booth) " : ""}${d.tagline}`.slice(0, W - 10) }))} onChange={(id) => { const dj = all.current.find((d) => d.id === id); setOverlay(null); if (dj) enter(dj); }} />
       </Box>}
       {!overlay && <Box flexDirection="column">{rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}</Box>}
 
@@ -323,6 +350,7 @@ function App() {
         <Text color={DIM} wrap="truncate">{s.scene.look} · {s.scene.palette} · {RAMP_NAMES[ramp]}</Text>
       </Box>
     </Box>
+    </ThemeProvider>
   );
 }
 
