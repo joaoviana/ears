@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "postinstall": "node scripts/copy-faust.mjs",
-    "check:faust": "node scripts/faust-check.mjs"
+    "check:faust": "node scripts/faust-check.mjs",
+    "render": "sh scripts/render.sh"
   },
   "keywords": [],
   "author": "",

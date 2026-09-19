@@ -5,8 +5,9 @@ const ENGINES = [
   { id: "tone",    load: () => import("./engines/tone.js"),    score: { sound: 4, "llm-writable": 3, "sync hooks": 4, "venue safety": 5 } },
   { id: "faust",   load: () => import("./engines/faust.js"),   score: { sound: 5, "llm-writable": 2, "sync hooks": 2, "venue safety": 4 } },
   { id: "glicol",  load: () => import("./engines/glicol.js"),  score: { sound: 2, "llm-writable": 5, "sync hooks": 1, "venue safety": 3 } },
+  { id: "rendered", load: () => import("./engines/rendered.js"), score: { sound: 5, "llm-writable": 3, "sync hooks": 2, "venue safety": 1 } },
 ];
-const NAMES = { strudel: "Strudel", tone: "Tone.js", faust: "Faust", glicol: "Glicol" };
+const NAMES = { strudel: "Strudel", tone: "Tone.js", faust: "Faust", glicol: "Glicol", rendered: "SuperCollider" };
 const OFFLINE = [
   { name: "TidalCycles + SuperDirt", body: "Strudel's parent. Same mini-notation, SuperCollider doing the audio: the biggest jump in sound for the least new syntax.", file: "offline/tidal/detroit.tidal" },
   { name: "SuperCollider", body: "The ceiling. Every synthesis technique, proper dynamics, renders to WAV headless so it can be A/B'd here later.", file: "offline/supercollider/detroit.scd" },

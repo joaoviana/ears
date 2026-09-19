@@ -8,7 +8,7 @@ npm install
 npm run dev        # http://localhost:5188
 ```
 
-Press **1–4** to switch engine on the same reference track (Detroit techno, 130 BPM, F minor), **space** to stop.
+Press **1–5** to switch engine on the same reference track (Detroit techno, 130 BPM, F minor), **space** to stop.
 Every pane is editable; **⌘/ctrl + enter** re-runs it. Reference tracks are level-matched to within a few dB so louder
 doesn't win by default.
 
@@ -18,9 +18,18 @@ doesn't win by default.
 | 2 | **Tone.js** | The same track built from synth objects. Then *FM bells + pad*: sound design Strudel's oscillators can't do. |
 | 3 | **Faust** | The same track as one DSP expression, with a Moog ladder model and zita reverb. Then *Physical models*: simulated djembe, marimba and nylon string. |
 | 4 | **Glicol** | The same track in a graph language that runs entirely inside one AudioWorklet. |
+| 5 | **SuperCollider** | The same track rendered to WAV by the native engine and looped. Read-only in the page: edit `offline/supercollider/render.scd`, then `npm run render`. |
 
-`offline/` has the brief in TidalCycles, SuperCollider and Sonic Pi, plus notes on Orca. Those need installs and
-have **not been run**.
+## Hearing native engines in the browser
+
+Anything that can't run in a browser gets rendered to a file instead. `npm run render` runs `sclang` headless, which
+turns the patterns into an OSC score and has `scsynth` write a WAV faster than realtime (no audio device, no window).
+`scripts/loop-wav.mjs` then cuts bars 17–32 out of it, so the reverb tail from the previous bars is already ringing
+at the loop point, and level-matches it. SuperCollider doesn't need installing: a copy unpacked into `.tools/`
+(gitignored) works, which is how it was done here because Homebrew wanted `sudo xcodebuild -license accept`.
+
+TidalCycles and Sonic Pi are both front-ends that drive SuperCollider, so engine 5 is what they sound like
+underneath. Their files in `offline/` have still **not been run**.
 
 **Read `DECISION.md` after listening**, not before.
 

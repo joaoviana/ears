@@ -34,12 +34,11 @@ C is the long-term answer if this becomes a real set after the event. It isn't a
 
 - **Whether any of it sounds nice.** Everything was verified for signal, levels and errors by a headless browser. I
   have not heard a note. Glicol and the Faust physical models in particular were written blind.
-- **The offline engines.** Not installed here, so that code has never run.
+- **Tidal and Sonic Pi.** Not installed, never run. The SuperCollider render has run, and is verified for signal and level only.
 - **Option B's latency.** Faust and Strudel would share an AudioContext, so it should be sample-tight, but it isn't
   built yet.
 
-## If you want the ceiling in this A/B
+## The ceiling is in the A/B now
 
-`brew install --cask supercollider`, then `sclang` can render `offline/supercollider/detroit.scd` to a WAV without
-opening the app. Drop that in as a fifth "engine" that just plays the file, and you can compare the browser options
-against SuperCollider on the same brief.
+Engine 5 is the brief rendered by SuperCollider (`npm run render`). If it doesn't sound clearly better to you than
+Strudel or Glicol on the same track, options C and G are off the table for good and that's a useful result.
