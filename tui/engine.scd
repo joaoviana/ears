@@ -74,6 +74,14 @@ s.waitForBoot {
     var wet = FreeVerb2.ar(dry[0] + echo[0], dry[1] + echo[1], 1, 0.86, 0.35);
     Out.ar(out, (wet * 0.4) + (echo * 0.45));
   }).add;
+  // vocals: a phrase rendered by the host (macOS `say`) and loaded as a buffer. chop = where in the phrase to start
+  // (0..1), len = how long to let it speak, rate = pitch/speed. Short len + a pattern of chops = a vocal hook.
+  SynthDef(\vox, { |out = 0, buf = 0, rate = 1, chop = 0, len = 0.4, amp = 0.5, pan = 0, send = 0.4, hp = 180|
+    var env = EnvGen.kr(Env.linen(0.004, len, 0.03), doneAction: 2);
+    var sig = PlayBuf.ar(1, buf, BufRateScale.kr(buf) * rate, 1, chop.clip(0, 0.98) * BufFrames.kr(buf), 0) * env;
+    sig = HPF.ar(sig, hp);
+    Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
+  }).add;
   // the DJ mixer: a filter and an echo across the whole mix, for transitions
   SynthDef(\djfx, { |hp = 20, lp = 20000, echo = 0, dt = 0.346|
     var sig = In.ar(0, 2);
@@ -126,7 +134,10 @@ s.waitForBoot {
   Synth.tail(s, \ears);
   Synth.tail(s, \scope, [\buf, ~scopeBuf]);
   Routine { loop { ~scopeBuf.getn(0, 1024, { |d| tui.sendMsg(*(['/scope'] ++ d)) }); 0.05.wait } }.play(SystemClock);
-  ~master = Synth.tail(s, \vol, [\vol, if(mute, 0, 1)]);
+  // the first moments after the master chain is created can contain garbage (uninitialised delay/lookahead memory):
+  // keep the output shut until it has flushed, then open it
+  ~master = Synth.tail(s, \vol, [\vol, 0]);
+  fork { 1.wait; ~master.set(\vol, if(mute, 0, 1)) };
 
   OSCdef(\ears, { |msg| tui.sendMsg(*(['/ears'] ++ msg[3..])) }, '/ears');
   OSCdef(\onset, { tui.sendMsg('/onset') }, '/onset');
@@ -142,6 +153,14 @@ s.waitForBoot {
   };
   // ~x.("X---x---X---x-x-") : a step row you can read from the back of the room. X = hit, x = ghost, anything else = rest
   ~x = { |str, amp = 0.9| Pseq(str.as(Array).collect { |c| case { c == $X } { amp } { c == $x } { amp * 0.55 } { Rest(0) } }, inf) };
+  // ~v.("work it") : the buffer holding that phrase. The host renders and loads phrases before it evals the slot.
+  ~voxBufs = IdentityDictionary.new;
+  ~silence = Buffer.alloc(s, 64, 1);
+  ~v = { |text| ~voxBufs[text.asString.asSymbol] ? ~silence };
+  OSCdef(\voxload, { |msg|
+    var key = msg[1].asString.asSymbol, path = msg[2].asString;
+    Buffer.read(s, path, action: { |b| ~voxBufs[key] = b; tui.sendMsg('/voxd', key, b.numFrames) });
+  }, '/vox');
   ~hush = { |name| if(name.isNil) { Pdef.all.do(_.stop) } { Pdef(name).stop } };
 
   OSCdef(\eval, { |msg|

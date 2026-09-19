@@ -5,8 +5,9 @@ import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, type DJ } from "./djs.ts";
 import { applyPatch, describe, type Patch } from "./patch.ts";
+import { SKILLS, missing } from "./skills.ts";
 
-export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number }
+export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash" }
 export interface Past { slot: string; why: string; verdict: "y" | "n" }
 
 const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE idea as a small patch. Two other DJs' brains are offering a different angle at the same moment, so commit to yours. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
@@ -96,13 +97,16 @@ function claudeText(prompt: string, system: string, timeout = 40000): Promise<st
 }
 
 /** Lenient on purpose: models add blank lines, code fences and stray backslashes. */
-export function parsePatch(text: string): (Patch & { why: string; evidence: string }) | null {
-  const p: Patch & { why: string; evidence: string } = { slot: "", set: [], remove: [], why: "", evidence: "" };
+export type Parsed = Patch & { why: string; evidence: string; forBars?: number; transition?: "build" | "wash" };
+export function parsePatch(text: string): Parsed | null {
+  const p: Parsed = { slot: "", set: [], remove: [], why: "", evidence: "" };
   for (const raw of text.split("\n")) {
     const line = raw.replace(/^[`>*\s-]+/, "").trim(); let m: RegExpMatchArray | null;
     if ((m = line.match(/^SLOT\s+\\?(d[1-4])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
     else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) p.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
     else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) p.remove!.push(m[1]);
+    else if ((m = line.match(/^FOR\s+([12])\b/i))) p.forBars = Number(m[1]);
+    else if ((m = line.match(/^WITH\s+(build|wash)\b/i))) p.transition = m[1].toLowerCase() as "build" | "wash";
     else if ((m = line.match(/^WHY\s*:?\s*(.+)$/i))) p.why = m[1];
     else if ((m = line.match(/^EVIDENCE\s*:?\s*(.+)$/i))) p.evidence = m[1];
   }
@@ -111,7 +115,7 @@ export function parsePatch(text: string): (Patch & { why: string; evidence: stri
 
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
-export interface AskInput { dj: DJ; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
 
 /** Fires every angle at once and hands each idea over the moment it validates. Resolves when all are in. */
 export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent: (kind: string, detail: Record<string, unknown>) => void = () => {}): Promise<Suggestion[]> {
@@ -126,11 +130,12 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
   return Promise.all(Object.entries(ANGLES).slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
-      const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + "\n\n" + brief));
+      const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach).join("\n");
+      const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
-      const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
+      const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (missing(code, p, active) ? `uses ${missing(code, p, active)}, which this DJ hasn't been granted` : null) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
       if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: bad, ms: Date.now() - t0 }); return; }
-      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p), angle, ms: Date.now() - t0 };
+      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition };
       got.push(o); onOption(o);
     } catch (e: any) { onEvent("rejected", { agent: input.dj.id, angle, reason: String(e.message).slice(0, 80), ms: Date.now() - t0 }); }
   })).then(() => { if (!got.length) throw new Error("no angle produced a usable idea"); return got; });
@@ -150,5 +155,5 @@ const DJ_SCHEMA = {
 export function summon(description: string, taken: string[]): Promise<DJ> {
   const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns built from these instruments: \\kick (amp, tune, dec, drive), \\hat (amp, dec 0.03-0.16, hp, pan), \\clap (amp, send), \\bass (midinote, cutoff 200-4000 Hz, res 0-3.5, dec), \\acid (midinote, cutoff, env 500-5000, res 0-1, dec, wave), \\stab (chords, cutoff, dec, send), \\fm (midinote, ratio, index, dec, pan), \\pad (chords, cutoff, att, sus, rel), \\perc (freq Hz, dec, pan). Tempo and key vary per set, so describe notes as scale degrees or intervals from the root, not fixed pitches. Randomness (Prand, Pwhite, Pbrown, Pwrand) is available. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
 name: 1-3 words, uppercase stage name. tagline: one line, when to summon them. style: 2-3 sentences. greeting: what they say walking into the booth, under 12 words, in character. Pick the face parts, palette and visual look that suit them. id: kebab-case, not one of: ${taken.join(", ") || "(none)"}.`;
-  return claude<DJ>(`Create a guest DJ: ${description}`, system, DJ_SCHEMA);
+  return claude<DJ>(`Create a guest DJ: ${description}`, system, DJ_SCHEMA).then((d) => ({ ...d, skills: [] }));
 }

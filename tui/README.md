@@ -70,6 +70,22 @@ When any change lands, the visuals wipe to a new look and palette on that bar.
 - Nothing calls `eval` on a suggestion. The only path to the engine is a file write, and the only thing that writes
   the file is the **y** key.
 
+## Skills: earned by the DJ, activated by you
+
+A DJ starts with the basic vocabulary. As you take its ideas it **unlocks** skills (fills after 1 take, vocals
+after 2, drops after 3); the glyph under its face blinks `k!`, and **k** activates it. Until then the DJ isn't told
+the skill exists, and the host refuses any proposal that reaches for it. Activated skills are saved in the DJ's
+markdown file (`skills: fills, vocals`), so they keep them next set.
+
+- **⟲ fills**: the patch carries `FOR 1` (or 2): the host keeps it for that many bars, then restores the slot.
+- **♪ vocals**: a new instrument, `\vox`. The DJ writes `~v.("machine soul")`; the host renders the phrase with
+  macOS `say` in that DJ's voice, loads it into SuperCollider, and only then evaluates the slot. `chop`, `len` and
+  `rate` patterns turn a phrase into a hook.
+- **▲ drops**: the patch carries `WITH build` or `WITH wash`, and the change lands on the drop.
+
+Same idea as takeover: a capability is a grant, it's on the wire (`unlock`, `grant`), and it's revocable by editing
+one line of a markdown file.
+
 ## Takeover
 
 Autonomy is something you grant, per DJ, mid-set. **o** gives the active DJ `auto`: when it offers ideas you get a

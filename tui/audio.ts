@@ -12,7 +12,8 @@ const re = new Float32Array(N), im = new Float32Array(N);
 
 export function feed(interleaved: number[]) {
   const a = audio; let sum = 0;
-  for (let i = 0; i < N; i++) { a.l[i] = interleaved[2 * i] || 0; a.r[i] = interleaved[2 * i + 1] || 0; a.mono[i] = (a.l[i] + a.r[i]) * 0.5; sum += a.mono[i] * a.mono[i]; }
+  const sane = (v: number) => (Number.isFinite(v) ? Math.max(-4, Math.min(4, v)) : 0);
+  for (let i = 0; i < N; i++) { a.l[i] = sane(interleaved[2 * i]); a.r[i] = sane(interleaved[2 * i + 1]); a.mono[i] = (a.l[i] + a.r[i]) * 0.5; sum += a.mono[i] * a.mono[i]; }
   a.level = Math.sqrt(sum / N); a.live = true;
   for (let i = 0; i < N; i++) { re[rev[i]] = a.mono[i] * hann[i]; im[rev[i]] = 0; }
   for (let size = 2; size <= N; size <<= 1) {

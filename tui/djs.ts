@@ -6,7 +6,7 @@ import path from "path";
 import { ROOT } from "./engine.ts";
 import { LOOKS, PALETTE_NAMES, type Pulse } from "./ascii.ts";
 
-export const DIR = path.join(ROOT, "tui/djs");
+export const DIR = process.env.EARS_DJS || path.join(ROOT, "tui/djs");   // EARS_DJS: a test roster that can be granted skills without touching the real one
 export const HAIR = ["bald", "mohawk", "cap", "afro", "long", "beanie", "antenna"] as const;
 export const EYES = ["dots", "shades", "visor", "closed", "stars", "wide"] as const;
 export const CANS = ["big", "small", "none"] as const;
@@ -16,7 +16,7 @@ export const HEAD = ["square", "round", "robot"] as const;
 export interface DJ {
   id: string; name: string; tagline: string; palette: string; look: string;
   hair: (typeof HAIR)[number]; eyes: (typeof EYES)[number]; cans: (typeof CANS)[number]; body: (typeof BODY)[number]; head: (typeof HEAD)[number];
-  style: string; idioms: string[]; never: string[]; greeting: string;
+  style: string; idioms: string[]; never: string[]; greeting: string; skills: string[];
 }
 
 const ACCENT: Record<string, [number, number, number]> = { ember: [255, 184, 107], neon: [255, 95, 210], ice: [143, 211, 255], acid: [198, 242, 78], sunset: [255, 138, 92], mono: [230, 230, 230] };
@@ -80,7 +80,7 @@ export function parse(md: string, id: string): DJ | null {
   return {
     id, name: f.name || id, tagline: f.description || "", palette: pick(f.palette, PALETTE_NAMES as any, "ember"), look: pick(f.look, LOOKS as any, "orbit"),
     head: pick(f.head, HEAD, "square"), hair: pick(f.hair, HAIR, "bald"), eyes: pick(f.eyes, EYES, "dots"), cans: pick(f.cans, CANS, "big"), body: pick(f.body, BODY, "decks"),
-    style: sec("Style") || "", idioms: list(sec("Idioms")), never: list(sec("Never")), greeting: sec("Greeting") || "",
+    skills: (f.skills || "").split(",").map((x) => x.trim()).filter(Boolean), style: sec("Style") || "", idioms: list(sec("Idioms")), never: list(sec("Never")), greeting: sec("Greeting") || "",
   };
 }
 
@@ -94,6 +94,7 @@ hair: ${d.hair}
 eyes: ${d.eyes}
 cans: ${d.cans}
 body: ${d.body}
+skills: ${(d.skills || []).join(", ")}
 ---
 # Style
 ${d.style}

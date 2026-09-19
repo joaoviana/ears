@@ -16,6 +16,7 @@ import { makeBase, type Base } from "./seed.ts";
 import { Bus, pretty, type Msg } from "./bus.ts";
 import { applyPatch, describe } from "./patch.ts";
 import { validate } from "./agent.ts";
+import { SKILLS, skill, earned, missing, ensureVox, phrasesIn } from "./skills.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -46,7 +47,7 @@ const TAU: Record<string, number> = { kick: 0.22, snare: 0.16, hat: 0.07, stab: 
 const KIND: Record<string, string> = { kick: "kick", clap: "snare", hat: "hat", stab: "stab", bass: "stab" };
 const read = (s: string) => { try { return fs.readFileSync(path.join(SET, s + ".scd"), "utf8"); } catch { return ""; } };
 
-interface Guest { dj: DJ; since: number; offered: number; taken: number; level: "suggest" | "auto"; remote?: boolean }
+interface Guest { dj: DJ; since: number; offered: number; taken: number; level: "suggest" | "auto"; remote?: boolean; pending: string[] }
 type Option = Suggestion & { id: number; agent: string };
 const LOGC: Record<string, number[]> = { observation: [110, 231, 255], proposal: [255, 184, 107], rejected: [255, 111, 97], error: [255, 111, 97], verdict: [198, 242, 78], applied: [232, 230, 240], landed: [143, 211, 255], grant: [255, 95, 210], enter: [255, 95, 210], transition: [199, 184, 255], note: [255, 255, 255] };
 interface Author { name: string; rgb: number[]; bar: number; fresh: Set<string> }
@@ -71,8 +72,9 @@ function App() {
   const authors = useRef<Record<string, Author>>({}), archived = useRef(false), banner = useRef<{ lines: string[]; rgb: number[]; rgb2: number[]; from: number; ms: number } | null>(null), trend = useRef<{ loud: number[]; bright: number[]; marks: (number[] | null)[] }>({ loud: [], bright: [], marks: [] }), landed = useRef<number[] | null>(null), bpmRef = useRef(130), bus = useRef(new Bus()), lastSummary = useRef(""), build = useRef<{ from: number; until: number; kind: string } | null>(null);
   const st = useRef({
     slots: Object.fromEntries(SLOTS.map((s) => [s, read(s)])) as Record<string, string>, report: "", note: "", history: [] as Past[],
+    reverts: [] as { slot: string; code: string; atBar: number }[],
     options: null as Option[] | null, by: "", round: 0, seq: 0, autoAt: 0, autoN: 0, bar: 0, booted: false, askAt: 4,
-    booth: [{ dj: all.current.find((d) => d.id === "resident") ?? all.current[0], since: 0, offered: 0, taken: 0, level: "suggest" }] as Guest[], turn: 0,
+    booth: [{ dj: all.current.find((d) => d.id === "resident") ?? all.current[0], since: 0, offered: 0, taken: 0, level: "suggest", pending: [] }] as Guest[], turn: 0,
     scene: { look: "orbit", palette: "ember" } as Scene, next: null as Scene | null, wipeAt: 0, pending: null as Scene | null, lastWipeBar: -9,
   });
 
@@ -129,7 +131,7 @@ function App() {
     const g = s.booth[s.turn % s.booth.length], dj = g.dj, round = ++s.round;
     if (g.remote) { setSay(`waiting for ${dj.name.toLowerCase()} to propose over the wire`); return; }   // outside agents speak when they like
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, slots: s.slots, report: s.report, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+    ask({ dj, skills: dj.skills, slots: s.slots, report: s.report, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; offer(o, dj.id); setThinking(""); setSay(""); },
       (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
       .then(() => { s.note = ""; g.offered++; }, (e) => { setSay(String(e.message)); s.askAt = s.bar + 4; })
@@ -138,7 +140,7 @@ function App() {
   const enter = (dj: DJ, remote = false) => {
     bus.current.send("enter", "host", { agent: dj.id, name: dj.name, remote });
     const s = st.current;
-    if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote }].slice(-3); s.turn = s.booth.length - 1; }
+    if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote, pending: [] as string[] }].slice(-3); s.turn = s.booth.length - 1; }
     s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); greet.current = { who: dj.name, rgb: accent(dj.palette), text: dj.greeting, until: st.current.bar + 8 }; if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
     setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
   };
@@ -149,8 +151,11 @@ function App() {
     else { setThinking(`writing a DJ who ${text}`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message)).finally(() => setThinking("")); }
   };
   const take = (i: number, by = "human") => {
-    const s = st.current, o = s.options?.[i]; if (!o) return;
+    const s = st.current, o = s.options?.[i] as (Option & { riding?: boolean }) | undefined; if (!o) return;
+    if (o.transition && !o.riding) { o.riding = true; setSay(`${o.transition} into it…`); ride(o.transition, 2, () => take(s.options?.indexOf(o) ?? -1, by)); return; }   // DROPS: the change arrives on the drop
     const g = s.booth.find((x) => x.dj.id === o.agent), who = g?.dj ?? active(); if (g) g.taken++;
+    if (o.forBars) s.reverts.push({ slot: o.slot, code: s.slots[o.slot] || "", atBar: s.bar + o.forBars });   // FILLS: put it back afterwards
+    if (g && !g.remote) for (const k of earned(g.taken, g.dj.skills || [], g.pending)) { g.pending.push(k.id); bus.current.send("unlock", "host", { agent: g.dj.id, skill: k.id }); setTimeout(() => setSay(`${g.dj.name} unlocked ${k.name}: ${k.blurb}.  k activates it`), 1500); }
     author(o.slot, o.code, { name: who.name, rgb: accent(who.palette) }); s.slots[o.slot] = o.code;   // set before writing, so the file watcher doesn't credit the change to you
     fs.writeFileSync(path.join(SET, o.slot + ".scd"), o.code + "\n");
     bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, decision: "take", by });
@@ -174,7 +179,7 @@ function App() {
       if (m.type === "note") setSay(`${id}: ${String(m.text).slice(0, 200)}`);
       if (m.type !== "proposal") return;
       const slot = String(m.slot), before = s.slots[slot] || "", patch = { slot, set: (m.set as any) || [], remove: (m.remove as any) || [], replace: !!m.replace };
-      const code = typeof m.code === "string" ? m.code.trim() : applyPatch(before, patch), bad = !SLOTS.includes(slot) ? "unknown slot" : validate({ slot, code });
+      const code = typeof m.code === "string" ? m.code.trim() : applyPatch(before, patch), bad = !SLOTS.includes(slot) ? "unknown slot" : validate({ slot, code }) || (missing(code, {}, []) ? `uses ${missing(code, {}, [])}, which this agent hasn't been granted` : null);
       if (bad) { b.send("rejected", id, { reason: bad, angle: "wire" }); return; }
       offer({ slot, code, why: String(m.why || "").slice(0, 140), evidence: String(m.evidence || "").slice(0, 140), diff: typeof m.code === "string" ? "rewrite" : describe(before, patch), angle: "wire", ms: 0 }, id);
     });
@@ -192,6 +197,8 @@ function App() {
       if (s.pending && n - s.lastWipeBar >= 2) { s.next = s.pending; s.pending = null; s.wipeAt = at; s.lastWipeBar = n; }   // a change in the music is a change on screen, on the bar
       if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); s.report = asText(l, "detroit"); { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; bus.current.send("observation", "ears", { kind: "listening-report", same: summary === lastSummary.current, summary, text: s.report, metrics: p }); lastSummary.current = summary; } if (false) bus.current.send("observation", "ears", { kind: "listening-report", summary: l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced", text: s.report, metrics: p }); const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       bus.current.bar = n;
+      for (const r of s.reverts.filter((r) => n >= r.atBar)) { s.slots[r.slot] = r.code; fs.writeFileSync(path.join(SET, r.slot + ".scd"), r.code + "\n"); bus.current.send("applied", "host", { slot: r.slot, author: "fill over", lands: n + 1 }); }
+      s.reverts = s.reverts.filter((r) => n < r.atBar);
       // takeover: a DJ you've granted `auto` takes its own idea once the veto window closes. n still vetoes.
       const owner = s.options?.length ? s.booth.find((g) => g.dj.id === s.options![0].agent) : null;
       if (owner?.level === "auto" && n >= s.autoAt && !busy.current) {
@@ -213,7 +220,7 @@ function App() {
       const code = read(s);
       if (code.trim() !== (st.current.slots[s] || "").trim()) { author(s, code, { name: "you", rgb: YOU }); bus.current.send("applied", "human", { slot: s, author: "human", lands: st.current.bar + 1 }); }
       st.current.slots[s] = code;
-      e.eval(st.current.slots[s].trim() || `~hush.(\\${s})`, s);
+      { const src = st.current.slots[s].trim(), by = st.current.booth.find((g) => g.dj.name === authors.current[s]?.name)?.dj.id; if (phrasesIn(src).length) ensureVox(e, src, by ? voiceOf(by) : VOICES[0]).then(() => e.eval(src, s)); else e.eval(src || `~hush.(\\${s})`, s); }
       bus.current.send("state", "host", { tempo: bpmRef.current, key: base.current?.key, slots: { ...st.current.slots } });
     });
     const timer = setInterval(() => {
@@ -257,6 +264,11 @@ function App() {
     if (input === "f") setFull((x) => !x);
     if (input === "v") { setVoice((x) => !x); setSay(voice ? "DJs go quiet" : VOICES.length ? "DJs will speak their greeting when they walk in" : "no `say` voices found on this machine"); }
     if (input === "o" || input === "O") { const gs = input === "O" ? s.booth : [s.booth[s.turn % s.booth.length]], level = gs[0].level === "auto" ? "suggest" : "auto"; gs.forEach((g) => { g.level = level; bus.current.send("grant", "human", { agent: g.dj.id, level }); }); setSay(level === "auto" ? `${gs.map((g) => g.dj.name).join(" + ")} can take their own ideas after a 2-bar veto window. n vetoes, o takes it back` : "back to suggestions only"); if (level === "auto") s.autoAt = s.bar + 2; }
+    if (input === "k") {
+      const g = [s.booth[s.turn % s.booth.length], ...s.booth].find((x) => x.pending.length);
+      if (!g) setSay("nothing to activate yet. DJs unlock skills as you take their ideas: fills after 1, vocals after 2, drops after 3");
+      else { const id = g.pending.shift()!, k = skill(id); g.dj.skills = [...(g.dj.skills || []), id]; save(g.dj); bus.current.send("grant", "human", { agent: g.dj.id, skill: id }); announce(k.name, accent(g.dj.palette), 2, g.dj.id); setSay(`${g.dj.name} can now use ${k.name}: ${k.blurb}`); s.options = null; s.round++; s.askAt = s.bar + 1; }
+    }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
     if (input === "u") ride("build", 2);
@@ -268,7 +280,7 @@ function App() {
   const W = Math.max(90, stdout.columns || 120), H = stdout.rows || 48, s = st.current, p = pulse.current, now = Date.now();
   const wipe = s.next ? Math.min(1, Math.max(0, (now - s.wipeAt) / barAt.current.len)) : 0;
   const th = UI[(s.next && wipe > 0.5 ? s.next : s.scene).palette] ?? UI.ember, A = th.a, B = th.b, Argb = hex(A), Brgb = hex(B), Trgb = hex(TEXT), Drgb = hex(DIM), Frgb = hex(FAINT);
-  const tight = H < 42, paneH = 15, boothH = tight ? 6 : 15, leftW = Math.floor(W * 0.56), boothW = tight ? Math.min(44, Math.floor(W * 0.4)) : Math.min(s.booth.length, 3) * 21 + 4;
+  const tight = H < 42, paneH = 15, boothH = tight ? 6 : 16, leftW = Math.floor(W * 0.56), boothW = tight ? Math.min(44, Math.floor(W * 0.4)) : Math.min(s.booth.length, 3) * 21 + 4;
   const fieldH = full ? Math.max(6, H - 8) : Math.max(4, H - 2 - paneH - boothH);
   const bn = banner.current && now - banner.current.from < banner.current.ms ? ({ lines: banner.current.lines, rgb: banner.current.rgb, t: (now - banner.current.from) / banner.current.ms } as Banner) : null;
   const logW = logs ? Math.min(96, Math.floor(W * 0.5)) : 0;
@@ -308,7 +320,7 @@ function App() {
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
-    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"]]],
+    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"]]],
     ["the set", [["g", "new random base, through a build"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];
@@ -359,6 +371,7 @@ function App() {
                 {shown.map((r, i) => <Text key={i} wrap="truncate">{r || " "}</Text>)}
                 <Text wrap="truncate">{fgc(accent(g.dj.palette), on ? 1 : 0.55)}{on ? "▸ " : "  "}{on ? "\x1b[1m" : ""}{g.dj.name}{"\x1b[22m"}{RESET}{g.level === "auto" ? <Text color={B} bold> AUTO</Text> : null}{g.remote ? <Text color={DIM}> wire</Text> : null}</Text>
                 <Text color={DIM} wrap="truncate">  {g.taken}/{g.offered} taken{mine.length ? " · " + mine.join(" ") : ""}</Text>
+                {!tight && <Text wrap="truncate">  {SKILLS.map((k) => { const has = (g.dj.skills || []).includes(k.id), wait = g.pending.includes(k.id); return <Text key={k.id} color={has ? TEXT : wait ? B : FAINT} bold={wait && Math.floor(now / 400) % 2 === 0}>{k.glyph}{wait ? " k! " : " "}</Text>; })}</Text>}
               </Box>
             );
           })}

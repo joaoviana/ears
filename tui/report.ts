@@ -12,7 +12,8 @@ export class Listener {
   private frames: Ears[] = [];
   private onsets = 0;
   private beats = 0;
-  push(e: Ears) { this.frames.push(e); if (this.frames.length > 600) this.frames.shift(); }
+  push(e: Ears) { if (!Number.isFinite(e.peak) || e.peak > 8 || !Number.isFinite(e.rms)) return;   // not sound: a glitch frame would poison two bars of report
+    this.frames.push(e); if (this.frames.length > 600) this.frames.shift(); }
   onset() { this.onsets++; }
   bar() { this.beats += 4; }
 
