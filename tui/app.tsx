@@ -128,14 +128,14 @@ function App() {
   const think = () => {
     const s = st.current;
     if (busy.current || s.options?.length || !s.report) return;
-    const g = s.booth[s.turn % s.booth.length], dj = g.dj, round = ++s.round;
+    const g = s.booth[s.turn % s.booth.length], dj = g.dj, round = ++s.round, noteSent = s.note;
     if (g.remote) { setSay(`waiting for ${dj.name.toLowerCase()} to propose over the wire`); return; }   // outside agents speak when they like
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
     ask({ dj, skills: dj.skills, slots: s.slots, report: s.report, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; offer(o, dj.id); setThinking(""); setSay(""); },
       (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
-      .then(() => { s.note = ""; g.offered++; }, (e) => { setSay(String(e.message)); s.askAt = s.bar + 4; })
-      .finally(() => { busy.current = false; setThinking(""); });
+      .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })
+      .finally(() => { busy.current = false; setThinking(""); if (st.current.round !== round && !st.current.options?.length) think(); });   // something changed mid-round (a note, a grant): go again now, with it
   };
   const enter = (dj: DJ, remote = false) => {
     bus.current.send("enter", "host", { agent: dj.id, name: dj.name, remote });

@@ -43,7 +43,8 @@ To fill an empty slot or rewrite a voice from scratch, write "SLOT d4 REPLACE" a
 Patch as few keys as the idea needs: usually one to three.
 
 Rules:
-- Do not repeat an idea the performer already skipped. If they wrote a note, the note outranks everything.
+- If the performer wrote a note, it is an instruction: every angle answers it, in your style. It outranks the report and your own plans (only your Never list outranks it; if they conflict, say so in WHY and offer the nearest thing).
+- Do not repeat an idea the performer already skipped.
 - "why" is one sentence, under 14 words, in your own voice. "evidence" quotes the report line you acted on, or names your style rule.
 - Stay in character: your Never list is absolute.`;
 
