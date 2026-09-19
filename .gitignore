@@ -4,3 +4,4 @@ public/faust
 .env
 .tools
 tui/sets
+tui/logs

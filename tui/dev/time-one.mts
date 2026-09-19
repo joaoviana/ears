@@ -1,0 +1,6 @@
+import { spawn } from "child_process";
+const schema = JSON.stringify({ type: "object", additionalProperties: false, required: ["slot", "why"], properties: { slot: { enum: ["d1", "d2"] }, why: { type: "string" } } });
+const run = (model: string) => new Promise<string>((res) => { const t = Date.now(); const p = spawn("claude", ["-p", "Pick a slot and say why in five words.", "--system-prompt", "You pick slots.", "--json-schema", schema, "--output-format", "json", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] }); let o = "", e = ""; p.stdout.on("data", (d) => (o += d)); p.stderr.on("data", (d) => (e += d)); const k = setTimeout(() => { p.kill(); res("TIMEOUT 40s " + e.slice(0, 200)); }, 40000); p.on("close", () => { clearTimeout(k); let so = ""; try { so = JSON.stringify(JSON.parse(o).structured_output); } catch {} res(`${((Date.now() - t) / 1000).toFixed(1)}s ${so} ${e.slice(0, 120)}`); }); });
+console.log("haiku ", await run("haiku"));
+console.log("sonnet", await run("sonnet"));
+const t = Date.now(); const r = await Promise.all([run("sonnet"), run("sonnet"), run("sonnet")]); console.log("3x sonnet parallel", ((Date.now() - t) / 1000).toFixed(1) + "s", r.map((x) => x.split(" ")[0]).join(" "));

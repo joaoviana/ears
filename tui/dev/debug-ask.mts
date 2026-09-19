@@ -1,0 +1,6 @@
+import { spawn } from "child_process";
+const big = "You are a DJ. ".repeat(400);   // ~5.6k chars, like the real system prompt
+const run = (model: string, system: string, prompt: string) => new Promise<string>((res) => { const t = Date.now(); const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] }); let o = "", e = ""; p.stdout.on("data", (d) => (o += d)); p.stderr.on("data", (d) => (e += d)); const k = setTimeout(() => { p.kill(); res(`TIMEOUT  out=${o.slice(0, 80)} err=${e.slice(0, 200)}`); }, 25000); p.on("close", (c) => { clearTimeout(k); res(`${((Date.now() - t) / 1000).toFixed(1)}s code=${c} ${o.slice(0, 60).replace(/\n/g, " ")} ${e.slice(0, 120)}`); }); });
+console.log("haiku  long system      :", await run("haiku", big, "Say ok."));
+console.log("haiku  prompt starts '-':", await run("haiku", "Be brief.", "-- d1\nhello\nSay ok."));
+console.log("haiku  prompt 'TEMPO'   :", await run("haiku", "Be brief.", "TEMPO AND KEY\n128 BPM\n\nCURRENT CODE\n-- d1\n~d.(\\d1, \\instrument, \\kick)\nSay ok."));

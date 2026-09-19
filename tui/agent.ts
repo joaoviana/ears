@@ -4,11 +4,12 @@
 import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, type DJ } from "./djs.ts";
+import { applyPatch, describe, type Patch } from "./patch.ts";
 
-export interface Suggestion { slot: string; code: string; why: string; evidence: string }
+export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number }
 export interface Past { slot: string; why: string; verdict: "y" | "n" }
 
-const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer up to THREE different options. The performer takes one or none. Your options are projected in front of an audience, so they must be short and legible.
+const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE idea as a small patch. Two other DJs' brains are offering a different angle at the same moment, so commit to yours. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
 
 The code is SuperCollider. Each slot is exactly one expression:
   ~d.(\\dN, \\instrument, \\NAME, \\dur, ..., key, value, ...)
@@ -28,23 +29,33 @@ Instruments and their arguments:
   \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
 Nothing else exists. No new SynthDefs, no other functions, no semicolons, one expression.
 
+You answer with a PATCH to one slot, never whole code, in exactly this plain-text form and nothing else:
+SLOT d3
+SET cutoff = 600
+SET res = 2.8
+REMOVE pan
+WHY one sentence
+EVIDENCE the report line or style rule
+Keys have no backslash. The value after "=" is SuperCollider source for that key, on one line. REMOVE lines are optional.
+To fill an empty slot or rewrite a voice from scratch, write "SLOT d4 REPLACE" and SET every key it needs, starting with instrument (e.g. SET instrument = \\clap) and dur.
+Patch as few keys as the idea needs: usually one to three.
+
 Rules:
-- Offer 2 or 3 genuinely different options, each for ONE slot: typically one that fixes the biggest problem in the report, one that pushes the track toward your style, and one bolder move (a new voice in an empty slot, or a rewritten rhythm).
-- Each option changes as little as it can to do its job.
 - Do not repeat an idea the performer already skipped. If they wrote a note, the note outranks everything.
-- "why" is one sentence, under 14 words, in your own voice. "evidence" quotes the report line you acted on, or names the style rule.
+- "why" is one sentence, under 14 words, in your own voice. "evidence" quotes the report line you acted on, or names your style rule.
 - Stay in character: your Never list is absolute.`;
 
-const OPTION = {
-  type: "object", additionalProperties: false, required: ["slot", "code", "why", "evidence"],
-  properties: { slot: { enum: ["d1", "d2", "d3", "d4"] }, code: { type: "string" }, why: { type: "string" }, evidence: { type: "string" } },
+// Three angles asked in parallel. Each call writes a few dozen tokens, so the first idea is on screen in seconds.
+export const ANGLES: Record<string, string> = {
+  fix: "YOUR ANGLE: fix. Find the single biggest problem in the listening report and correct it with the smallest patch.",
+  style: "YOUR ANGLE: style. Ignore small mix problems. Push one slot further toward your own sound, using your idioms.",
+  bold: "YOUR ANGLE: bold. Make the move the room will notice: a new voice in an empty or weak slot, or a rewritten rhythm. replace: true is fine.",
 };
-const SCHEMA = { type: "object", additionalProperties: false, required: ["options"], properties: { options: { type: "array", minItems: 1, maxItems: 3, items: OPTION } } };
 
 const FORBIDDEN = /unixCmd|systemCmd|\bFile\b|\bPipe\b|interpret|compile|thisProcess|\.load|Quarks|NetAddr|Server|\bs\.|SynthDef|;|\bexit\b/;
 
 /** The agent's text never reaches the engine without passing this. */
-export function validate(s: Suggestion): string | null {
+export function validate(s: { slot: string; code: string }): string | null {
   const code = s.code.trim();
   if (!new RegExp(`^~d\\.\\(\\\\${s.slot}\\b`).test(code)) return `must start with ~d.(\\${s.slot}, ...`;
   if (FORBIDDEN.test(code)) return "uses something outside the instrument vocabulary";
@@ -55,10 +66,12 @@ export function validate(s: Suggestion): string | null {
   return null;
 }
 
+const MODEL = process.env.EARS_MODEL || "sonnet";   // at low effort: a patch needs taste, not deliberation (haiku hangs on this prompt)
+
 function claude<T>(prompt: string, system: string, schema: object, timeout = 70000): Promise<T> {
   return new Promise((resolve, reject) => {
     const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--json-schema", JSON.stringify(schema), "--output-format", "json",
-      "--model", process.env.EARS_MODEL || "sonnet", "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
+      "--model", MODEL, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));
@@ -71,9 +84,37 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
   });
 }
 
+function claudeText(prompt: string, system: string, timeout = 40000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", MODEL, ...(process.env.EARS_EFFORT === "default" ? [] : ["--effort", process.env.EARS_EFFORT || "low"]), "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "", err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    const timer = setTimeout(() => { p.kill(); if (process.env.EARS_DEBUG_AGENT) console.error("TIMEOUT sys=" + system.length + " prompt=" + prompt.length + " out=[" + out.slice(0, 300) + "] err=[" + err.slice(0, 300) + "]"); reject(new Error("agent timed out")); }, timeout);
+    p.on("close", () => { clearTimeout(timer); out.trim() ? resolve(out) : reject(new Error(err.slice(0, 120) || "agent returned nothing")); });
+  });
+}
+
+/** Lenient on purpose: models add blank lines, code fences and stray backslashes. */
+export function parsePatch(text: string): (Patch & { why: string; evidence: string }) | null {
+  const p: Patch & { why: string; evidence: string } = { slot: "", set: [], remove: [], why: "", evidence: "" };
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/^[`>*\s-]+/, "").trim(); let m: RegExpMatchArray | null;
+    if ((m = line.match(/^SLOT\s+\\?(d[1-4])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
+    else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) p.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
+    else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) p.remove!.push(m[1]);
+    else if ((m = line.match(/^WHY\s*:?\s*(.+)$/i))) p.why = m[1];
+    else if ((m = line.match(/^EVIDENCE\s*:?\s*(.+)$/i))) p.evidence = m[1];
+  }
+  return p.slot && p.set.length && p.why ? p : null;
+}
+
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
-export async function ask(input: { dj: DJ; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }): Promise<Suggestion[]> {
+export interface AskInput { dj: DJ; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
+
+/** Fires every angle at once and hands each idea over the moment it validates. Resolves when all are in. */
+export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent: (kind: string, detail: Record<string, unknown>) => void = () => {}): Promise<Suggestion[]> {
   const prompt = [
     "TEMPO AND KEY", input.context, "",
     "CURRENT CODE", ...Object.entries(input.slots).map(([k, v]) => `-- ${k}\n${v.trim() || "(empty)"}`),
@@ -81,10 +122,18 @@ export async function ask(input: { dj: DJ; context: string; slots: Record<string
     "", "PERFORMER NOTE", input.note || "(none)",
     "", "WHAT HAPPENED TO EARLIER IDEAS", input.history.length ? input.history.slice(-8).map((h) => `${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}`).join("\n") : "(none)",
   ].join("\n");
-  const res = await claude<{ options: Suggestion[] }>(prompt, SYSTEM + persona(input.dj), SCHEMA);
-  const good = (res.options || []).map((o) => ({ ...o, code: o.code.trim() })).filter((o) => !validate(o));
-  if (!good.length) throw new Error("every option was rejected by the validator");
-  return good;
+  const got: Suggestion[] = [], t0 = Date.now();
+  return Promise.all(Object.entries(ANGLES).slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
+    onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
+    try {
+      const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + "\n\n" + brief));
+      if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
+      const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
+      if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: bad, ms: Date.now() - t0 }); return; }
+      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p), angle, ms: Date.now() - t0 };
+      got.push(o); onOption(o);
+    } catch (e: any) { onEvent("rejected", { agent: input.dj.id, angle, reason: String(e.message).slice(0, 80), ms: Date.now() - t0 }); }
+  })).then(() => { if (!got.length) throw new Error("no angle produced a usable idea"); return got; });
 }
 
 const DJ_SCHEMA = {
