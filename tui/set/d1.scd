@@ -1,1 +1,1 @@
-~d.(\d1, \instrument, \kick, \dur, 1/4, \amp, ~x.("X---------X-----", 0.9), \tune, 48, \dec, 0.3, \drive, 2.4)
+~d.(\d1, \instrument, \kick, \dur, 1/4, \amp, ~x.("X---X--X--X--X--", 0.9), \tune, 43.6, \dec, 0.42, \drive, 1.6)

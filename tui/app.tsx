@@ -51,6 +51,15 @@ type Option = Suggestion & { id: number; agent: string };
 const LOGC: Record<string, number[]> = { observation: [110, 231, 255], proposal: [255, 184, 107], rejected: [255, 111, 97], error: [255, 111, 97], verdict: [198, 242, 78], applied: [232, 230, 240], landed: [143, 211, 255], grant: [255, 95, 210], enter: [255, 95, 210], transition: [199, 184, 255], note: [255, 255, 255] };
 interface Author { name: string; rgb: number[]; bar: number; fresh: Set<string> }
 
+// Defined at module level on purpose: a component created inside App would be a new type on every frame (the screen
+// redraws 15 times a second), and React would remount everything inside it, including the text input mid-keystroke.
+const Pane = (props: { title: string; note?: string; width: number; height: number; children?: any; row?: boolean; grad: (s: string) => string }) => (
+  <Box flexDirection="column" width={props.width} height={props.height} borderStyle="round" borderColor={FAINT} paddingX={1} overflow="hidden">
+    <Text wrap="truncate"><Text bold>{props.grad(props.title)}</Text>{props.note ? <Text color={DIM}>  {props.note}</Text> : null}</Text>
+    <Box flexDirection={props.row ? "row" : "column"} flexGrow={1}>{props.children}</Box>
+  </Box>
+);
+
 function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -76,13 +85,15 @@ function App() {
   const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster">(null), [logs, setLogs] = useState(arg("--logs")), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
 
   const voiceRef = useRef(voice); voiceRef.current = voice;
+  const logsRef = useRef(logs); logsRef.current = logs;
+  const greet = useRef<{ who: string; rgb: number[]; text: string; until: number } | null>(null);
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
-    const W = (stdout.columns || 120) - 4, to = hex((UI[st.current.pending?.palette ?? st.current.scene.palette] ?? UI.ember).b);
+    const cols = stdout.columns || 120, W = cols - (logsRef.current ? Math.min(96, Math.floor(cols * 0.5)) : 0) - 2, to = hex((UI[st.current.pending?.palette ?? st.current.scene.palette] ?? UI.ember).b);
     for (const font of [FONTS[hashOf(fontKey) % FONTS.length], "block", ...NARROW]) {
       const lines = bigText(text, font); if (!lines.length) continue;
       const w = Math.max(...lines.map((l) => l.length));
-      if (w + 6 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "   " + l.padEnd(w) + "   "), rgb, rgb2: to, from: Date.now(), ms: barAt.current.len * bars }; return; }
+      if (w + 4 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "  " + l.padEnd(w) + "  "), rgb, rgb2: to, from: Date.now(), ms: barAt.current.len * bars }; return; }
     }
   };
   const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { wipe: WIPES[Math.floor(Math.random() * WIPES.length)], look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
@@ -128,7 +139,7 @@ function App() {
     bus.current.send("enter", "host", { agent: dj.id, name: dj.name, remote });
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote }].slice(-3); s.turn = s.booth.length - 1; }
-    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
+    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); greet.current = { who: dj.name, rgb: accent(dj.palette), text: dj.greeting, until: st.current.bar + 8 }; if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
     setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
   };
   const submit = (raw: string) => {
@@ -287,12 +298,6 @@ function App() {
     Spinner: { styles: { frame: () => ({ color: A }), label: () => ({ color: DIM }) } },
     Select: { styles: { focusIndicator: () => ({ color: A }), selectedIndicator: () => ({ color: B }), label: ({ isFocused }: any) => ({ color: isFocused ? TEXT : DIM, bold: isFocused }) } },
   } });
-  const Pane = (props: { title: string; note?: string; width: number; height: number; children?: any; row?: boolean }) => (
-    <Box flexDirection="column" width={props.width} height={props.height} borderStyle="round" borderColor={FAINT} paddingX={1} overflow="hidden">
-      <Text wrap="truncate"><Text bold>{grad(props.title)}</Text>{props.note ? <Text color={DIM}>  {props.note}</Text> : null}</Text>
-      <Box flexDirection={props.row ? "row" : "column"} flexGrow={1}>{props.children}</Box>
-    </Box>
-  );
   const meter = (v: number, n = 12) => { const k = Math.max(0, Math.min(1, v)) * n, fullN = Math.floor(k); return fgc(Brgb) + "━".repeat(fullN) + (k - fullN > 0.5 ? "╸" : "") + fgc(Frgb) + "─".repeat(Math.max(0, n - fullN - (k - fullN > 0.5 ? 1 : 0))) + RESET; };
   const chartW = W - leftW - 4 - 42 - 3, tr = trend.current;
   const chart = chartW >= 16 && tr.loud.length >= 2 ? (() => {
@@ -316,7 +321,7 @@ function App() {
         <Text wrap="truncate">{riding ? <Text color={B} bold>{riding.kind} {"▁▂▃▄▅▆▇█".slice(0, 1 + Math.floor(((now - riding.from) / (riding.until - riding.from)) * 7.99)).padEnd(8, " ")} </Text> : null}{muted ? <Text color={B}>muted  </Text> : null}<Text color={DIM}>{log === "engine ready" ? "" : log.slice(0, 50)}</Text></Text>
       </Box>
       {!full && <Box>
-        <Pane title="code" note="tui/set/*.scd · save to land it on the next bar" width={leftW} height={paneH}>
+        <Pane grad={grad} title="code" note="tui/set/*.scd · save to land it on the next bar" width={leftW} height={paneH}>
           {SLOTS.map((k) => {
             const v = slotView(k), bad = status[k] && status[k] !== "ok";
             return (
@@ -328,7 +333,7 @@ function App() {
             );
           })}
         </Pane>
-        <Pane title="ears" note={ref ? "every 2 bars, against the reference" : "no reference yet · r saves what's playing"} width={W - leftW} height={paneH} row>
+        <Pane grad={grad} title="ears" note={ref ? "every 2 bars, against the reference" : "no reference yet · r saves what's playing"} width={W - leftW} height={paneH} row>
           <Box flexDirection="column" width={41}>
             {lines.length === 0 ? <Spinner label="listening" /> : lines.map((l, li) => {
               const off = l.word && l.word !== "ok", d = l.delta ?? 0;
@@ -345,7 +350,7 @@ function App() {
         </Pane>
       </Box>}
       {!full && <Box>
-        <Pane title="booth" note={tight ? undefined : `${s.booth.length}/3`} width={boothW} height={boothH} row>
+        <Pane grad={grad} title="booth" note={tight ? undefined : `${s.booth.length}/3`} width={boothW} height={boothH} row>
           {s.booth.map((g) => {
             const on = g.dj.id === who.id, rise = Math.min(10, Math.floor((now - g.since) / 90)), art = tight ? [] : avatar(g.dj, p, on);
             const shown = g.since && !tight ? [...Array(10 - rise).fill(""), ...art.slice(0, rise)] : art, mine = SLOTS.filter((k) => authors.current[k]?.name === g.dj.name);
@@ -358,7 +363,8 @@ function App() {
             );
           })}
         </Pane>
-        <Pane title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options?.length ? (s.booth.find((g) => g.dj.id === s.options![0].agent)?.level === "auto" ? `takes its own in ${Math.max(0, s.autoAt - s.bar)} bar${s.autoAt - s.bar === 1 ? "" : "s"} · n vetoes · o takes control back` : "1 2 3 take · ⇧ with a build · n skip · t tell") : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+        <Pane grad={grad} title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options?.length ? (s.booth.find((g) => g.dj.id === s.options![0].agent)?.level === "auto" ? `takes its own in ${Math.max(0, s.autoAt - s.bar)} bar${s.autoAt - s.bar === 1 ? "" : "s"} · n vetoes · o takes control back` : "1 2 3 take · ⇧ with a build · n skip · t tell") : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+          {greet.current && s.bar < greet.current.until && !typing ? <Text wrap="truncate">{fgc(greet.current.rgb)}{"\x1b[1m"}{greet.current.who}{"\x1b[22m"}{RESET} <Text color={TEXT}>“{greet.current.text}”</Text></Text> : null}
           {typing ? <Box><Text color={A}>{typing === "summon" ? "a DJ who " : "› "}</Text><TextInput key={typing} placeholder={typing === "summon" ? "plays acid, a bit unhinged…" : "more dub, less bright…"} onSubmit={submit} /></Box>
             : s.options?.length ? <>
               {s.options.map((o, i) => (
