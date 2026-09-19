@@ -19,7 +19,7 @@ export interface DJ {
   style: string; idioms: string[]; never: string[]; greeting: string;
 }
 
-const ACCENT: Record<string, [number, number, number]> = { ember: [242, 169, 59], neon: [255, 106, 200], ice: [140, 210, 245], acid: [190, 240, 80], sunset: [255, 130, 120], mono: [220, 220, 220] };
+const ACCENT: Record<string, [number, number, number]> = { ember: [255, 184, 107], neon: [255, 95, 210], ice: [143, 211, 255], acid: [198, 242, 78], sunset: [255, 138, 92], mono: [230, 230, 230] };
 export const accent = (palette: string) => ACCENT[palette] ?? ACCENT.ember;
 const fg = ([r, g, b]: number[], k = 1) => `\x1b[38;2;${Math.round(r * k)};${Math.round(g * k)};${Math.round(b * k)}m`;
 

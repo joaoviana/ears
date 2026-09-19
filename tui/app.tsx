@@ -10,20 +10,26 @@ import figlet from "figlet";
 import { Engine, ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, asText, type Profile, type Line } from "./report.ts";
 import { ask, summon, type Suggestion, type Past } from "./agent.ts";
-import { render as field, LOOKS, PALETTE_NAMES, WIPES, type Pulse, type Ramp, type Scene, type Banner } from "./ascii.ts";
+import { render as field, LOOKS, PALETTE_NAMES, WIPES, UI, NEUTRAL, type Pulse, type Ramp, type Scene, type Banner } from "./ascii.ts";
 import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
 import { makeBase, type Base } from "./seed.ts";
+import { spawn, execSync } from "child_process";
+
+// DJs can speak their greeting through macOS `say` (v toggles it). Each gets a stable voice from whatever is installed.
+const VOICES = (() => { try { const have = execSync("say -v '?'", { encoding: "utf8" }).split("\n").map((l) => l.split(/\s{2,}/)[0].trim()); return ["Daniel", "Samantha", "Fred", "Zarvox", "Trinoids", "Whisper", "Karen", "Moira", "Ralph", "Rishi", "Tessa", "Albert"].filter((v) => have.includes(v)); } catch { return []; } })();
+const voiceOf = (id: string) => VOICES[[...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % Math.max(1, VOICES.length)];
 
 const SET = process.env.EARS_SET || path.join(ROOT, "tui/set");   // EARS_SET lets a test instance play from its own folder
 const REF = path.join(ROOT, "tui/refs/detroit.json");
-const SLOTS = ["d1", "d2", "d3", "d4"], RAMP_NAMES: Ramp[] = ["ascii", "blocks", "dots", "code"];
-const AMBER = "#f2a93b", CYAN = "#6fc3d6", DIM = "#8d8474";
+const SLOTS = ["d1", "d2", "d3", "d4"], RAMP_NAMES: Ramp[] = ["pixels", "ascii", "blocks", "dots", "code"];
+const { text: TEXT, dim: DIM, faint: FAINT } = NEUTRAL;
+const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const arg = (f: string) => process.argv.includes(f);
 const MUTE = arg("--mute"), AUTO = !arg("--manual"), DEMO = arg("--demo"), KEEP = arg("--keep");
 const SEED = (() => { const i = process.argv.indexOf("--seed"); return i > 0 ? Number(process.argv[i + 1]) : Math.floor(Math.random() * 9000) + 1000; })();
 const fgc = ([r, g, b]: number[], k = 1) => `\x1b[38;2;${Math.round(r * k)};${Math.round(g * k)};${Math.round(b * k)}m`, RESET = "\x1b[39m";
-const YOU = [111, 195, 214], SEEDC = [141, 132, 116];
+const YOU = [255, 255, 255], SEEDC = [138, 135, 153];   // your own edits are white; the seed's are grey; DJs bring their colour
 const tokens = (c: string) => c.replace(/\s*\n\s*/g, " ").trim().split(/(?<=,)\s+/).filter(Boolean);
 const TAU: Record<string, number> = { kick: 0.22, snare: 0.16, hat: 0.07, stab: 0.3 };
 const KIND: Record<string, string> = { kick: "kick", clap: "snare", hat: "hat", stab: "stab", bass: "stab" };
@@ -54,8 +60,9 @@ function App() {
   const [ref, setRef] = useState<Profile | null>(() => { try { return JSON.parse(fs.readFileSync(REF, "utf8")); } catch { return null; } });
   const [say, setSay] = useState("waiting for the first report");
   const [typing, setTyping] = useState<{ mode: "tell" | "summon"; text: string } | null>(null);
-  const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
+  const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster">(null), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
 
+  const voiceRef = useRef(voice); voiceRef.current = voice;
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2) => {
     const W = (stdout.columns || 120) - 4;
@@ -77,7 +84,8 @@ function App() {
   const newBase = (seed: number) => {
     const b = (base.current = makeBase(seed)), sd = { name: `seed ${seed}`, rgb: SEEDC };
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
-    for (const k of SLOTS) { author(k, b.slots[k], sd); fs.writeFileSync(path.join(SET, k + ".scd"), b.slots[k] + "\n"); st.current.slots[k] = b.slots[k]; }
+    for (const k of SLOTS) { author(k, b.slots[k], sd); authors.current[k].fresh = new Set();   // a whole new base isn't a 'change' to highlight
+      fs.writeFileSync(path.join(SET, k + ".scd"), b.slots[k] + "\n"); st.current.slots[k] = b.slots[k]; }
     bpmRef.current = b.bpm; eng.current?.tempo(b.bpm); st.current.options = null; st.current.askAt = st.current.bar + 4;
     setSay(`new base · seed ${seed} · ${b.bpm} bpm · ${b.key} · ${b.about}`); if (st.current.booted) { announce(`SEED ${seed}`, [237, 230, 216]); queueScene({}); }
   };
@@ -93,7 +101,8 @@ function App() {
   const enter = (dj: DJ) => {
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0 }].slice(-3); s.turn = s.booth.length - 1; }
-    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
+    s.options = null; ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3); if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
+    setSay(`${dj.name}: “${dj.greeting}”`); s.askAt = s.bar + 2;
   };
   const take = (i: number) => {
     const s = st.current, o = s.options?.[i]; if (!o) return;
@@ -163,6 +172,13 @@ function App() {
       else if (input && !key.ctrl && !key.meta) setTyping({ ...typing, text: typing.text + input });
       return;
     }
+    if (overlay) {
+      if (overlay === "roster" && /^[1-9]$/.test(input)) { const dj = all.current[Number(input) - 1]; if (dj) enter(dj); }
+      setOverlay(null); return;
+    }
+    if (input === "?") { setOverlay("help"); return; }
+    if (input === "D") { all.current = roster(); setOverlay("roster"); return; }
+    if (key.tab && s.booth.length > 1) { s.turn++; s.options = null; s.askAt = s.bar + 1; setSay(`${active().name} steps up`); return; }
     if (input === "q") { eng.current.stop(); setTimeout(() => { exit(); process.exit(0); }, 600); }
     if (input === "y" || input === "1") take(0);
     if (input === "2") take(1);
@@ -178,6 +194,7 @@ function App() {
     if (input === "p") s.scene = { ...s.scene, palette: PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % PALETTE_NAMES.length] };
     if (input === "c") setRamp((r) => (r + 1) % RAMP_NAMES.length);
     if (input === "f") setFull((x) => !x);
+    if (input === "v") { setVoice((x) => !x); setSay(voice ? "DJs go quiet" : VOICES.length ? "DJs will speak their greeting when they walk in" : "no `say` voices found on this machine"); }
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
     if (input === "u") ride("build", 2);
     if (input === "w") ride("wash", 2);
@@ -186,93 +203,125 @@ function App() {
   });
 
   const W = Math.max(90, stdout.columns || 120), H = stdout.rows || 48, s = st.current, p = pulse.current, now = Date.now();
-  const compact = H < 50, leftW = Math.floor(W * 0.55), boothW = Math.min(s.booth.length, 3) * 21 + 4;
-  const fieldH = full ? Math.max(6, H - 10) : Math.max(5, H - (compact ? 1 : 4) - 15 - 16 - 3);
   const wipe = s.next ? Math.min(1, Math.max(0, (now - s.wipeAt) / barAt.current.len)) : 0;
+  const th = UI[(s.next && wipe > 0.5 ? s.next : s.scene).palette] ?? UI.ember, A = th.a, B = th.b, Argb = hex(A), Brgb = hex(B), Trgb = hex(TEXT), Drgb = hex(DIM), Frgb = hex(FAINT);
+  const tight = H < 42, paneH = 15, boothH = tight ? 6 : 15, leftW = Math.floor(W * 0.56), boothW = tight ? Math.min(44, Math.floor(W * 0.4)) : Math.min(s.booth.length, 3) * 21 + 4;
+  const fieldH = full ? Math.max(6, H - 8) : Math.max(4, H - 2 - paneH - boothH);
   const bn = banner.current && now - banner.current.from < banner.current.ms ? ({ lines: banner.current.lines, rgb: banner.current.rgb, t: (now - banner.current.from) / banner.current.ms } as Banner) : null;
-  const rows = field(s.scene, s.next, wipe, RAMP_NAMES[ramp], W - 2, fieldH, (now - t0) / 1000, p, { code: SLOTS.map((k) => s.slots[k]).join(" "), banner: bn });
+  const rows = overlay ? [] : field(s.scene, s.next, wipe, RAMP_NAMES[ramp], W, fieldH, (now - t0) / 1000, p, { code: SLOTS.map((k) => s.slots[k]).join(" "), banner: bn });
   const beat = Math.floor(p.bar * 4), who = active(), codeW = (full ? W - 24 : leftW) - 4, step = Math.floor(p.bar * 16) % 16;
-  // the code pane is the live thing: each slot has a 16-step lane lit by the hits that actually sounded,
-  // coloured by whoever wrote the slot, and the tokens a change brought in glow for 8 bars
+
+  // The code pane is the live thing. Lane: the hits that actually sounded, in the colour of whoever wrote the slot.
+  // Code: keys recede, values stand out, step rows are drawn as steps, and what a change brought in glows for 8 bars.
+  const paint = (t: string, fresh: boolean) => {
+    if (fresh) return "\x1b[1m" + fgc(Argb) + t + "\x1b[22m";
+    const row = t.match(/^(.*?")([Xx\-. ]{4,})(".*)$/);
+    if (row) return fgc(Drgb) + row[1] + [...row[2]].map((c) => (c === "X" ? fgc(Trgb) + "█" : c === "x" ? fgc(Drgb) + "▄" : fgc(Frgb) + "·")).join("") + fgc(Drgb) + row[3];
+    return (t.startsWith("\\") || t.startsWith("~d.(") ? fgc(Drgb) : fgc(Trgb)) + t;
+  };
   const slotView = (k: string) => {
-    const a = authors.current[k], rgb = a?.rgb ?? SEEDC, lane = lanes.current[k], hot = a && s.bar - a.bar < 8;
-    const laneStr = lane.map((at, i) => { const age = (now - at) / barAt.current.len, lit = at > 0 && age < 0.97; return lit ? fgc(i === step ? [255, 255, 255] : rgb, (0.4 + amps.current[k][i] * 0.6) * (1 - age * 0.55)) + (age < 0.06 ? "█" : "▆") : fgc(SEEDC, i === step ? 1.6 : i % 4 === 0 ? 0.9 : 0.5) + (i === step ? "▁" : i % 4 === 0 ? "┃" : "·"); }).join("") + RESET;
+    const a = authors.current[k], rgb = a?.rgb ?? Drgb, lane = lanes.current[k], hot = !!a && s.bar - a.bar < 8;
+    const laneStr = lane.map((at, i) => { const age = (now - at) / barAt.current.len, lit = at > 0 && age < 0.97; return lit ? fgc(i === step ? [255, 255, 255] : rgb, (0.45 + amps.current[k][i] * 0.55) * (1 - age * 0.5)) + (age < 0.06 ? "█" : "■") : fgc(i === step ? Trgb : Frgb, i % 4 === 0 && i !== step ? 1.5 : 1) + (i === step ? "▁" : i % 4 === 0 ? "╷" : "·"); }).join("") + RESET;
     const out: string[] = [""]; let len = 0;
     for (const t of tokens(s.slots[k] || "")) {
-      if (len + t.length + 1 > codeW) { if (out.length === 2) { out[1] += fgc(SEEDC) + "…"; break; } out.push(""); len = 0; }
-      out[out.length - 1] += (hot && a!.fresh.has(t) ? "\x1b[1m" + fgc([255, 255, 255]) : fgc(rgb, 0.85)) + t + "\x1b[22m "; len += t.length + 1;
+      if (len + t.length + 1 > codeW) { if (out.length === 2) { out[1] += fgc(Frgb) + "…"; break; } out.push(""); len = 0; }
+      out[out.length - 1] += paint(t, hot && a!.fresh.has(t)) + " "; len += t.length + 1;
     }
     return { laneStr, code: out.map((l) => l + RESET), by: a ? `${a.name} · bar ${a.bar}` : "", rgb };
   };
+  const Pane = (props: { title: string; note?: string; width: number; height: number; children?: any; row?: boolean }) => (
+    <Box flexDirection="column" width={props.width} height={props.height} borderStyle="round" borderColor={FAINT} paddingX={1} overflow="hidden">
+      <Text wrap="truncate"><Text color={A} bold>{props.title}</Text>{props.note ? <Text color={DIM}>  {props.note}</Text> : null}</Text>
+      <Box flexDirection={props.row ? "row" : "column"} flexGrow={1}>{props.children}</Box>
+    </Box>
+  );
+  const meter = (v: number, n = 12) => { const k = Math.max(0, Math.min(1, v)) * n, fullN = Math.floor(k); return fgc(Brgb) + "━".repeat(fullN) + (k - fullN > 0.5 ? "╸" : "") + fgc(Frgb) + "─".repeat(Math.max(0, n - fullN - (k - fullN > 0.5 ? 1 : 0))) + RESET; };
+  const riding = build.current && now < build.current.until ? build.current : null;
+  const KEYS: [string, [string, string][]][] = [
+    ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
+    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"]]],
+    ["the set", [["g", "new random base, through a build"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
+    ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["?", "this"], ["q", "quit"]]],
+  ];
 
   return (
     <Box flexDirection="column" width={W}>
-      <Box justifyContent="space-between">
-        <Text color={AMBER} bold>{full || compact ? "EARS" : figlet.textSync("EARS", { font: "Small" }).split("\n").slice(0, 4).join("\n")}</Text>
-        <Box flexDirection="column" alignItems="flex-end">
-          <Text>bar <Text bold>{String(s.bar).padStart(3)}</Text>  {[0, 1, 2, 3].map((i) => (i === beat ? "●" : "○")).join(" ")}  {bpmRef.current} bpm {build.current && now < build.current.until ? <Text color={AMBER}> {build.current.kind.toUpperCase()} {"▁▂▃▄▅▆▇█".slice(0, 1 + Math.floor(((now - build.current.from) / (build.current.until - build.current.from)) * 7.99))}</Text> : ""}{muted ? <Text color={AMBER}> MUTED</Text> : ""}</Text>
-          {!full && !compact && <Text color={DIM}>{base.current ? `seed ${base.current.seed} · ${base.current.key} · ${base.current.about}` : "continuing the set on disk (--keep)"}</Text>}
-          {!full && !compact && <Text color={DIM}>{log}</Text>}
-        </Box>
+      <Box justifyContent="space-between" paddingX={1}>
+        <Text wrap="truncate"><Text color={A} bold>EARS</Text>  {[0, 1, 2, 3].map((i) => <Text key={i} color={i === beat ? (i === 0 ? A : TEXT) : FAINT}>{i === beat ? "● " : "○ "}</Text>)} <Text color={TEXT}>bar {s.bar}</Text><Text color={DIM}> · {bpmRef.current} bpm{base.current ? ` · seed ${base.current.seed} · ${base.current.key} · ${base.current.about}` : " · set from disk"}</Text></Text>
+        <Text wrap="truncate">{riding ? <Text color={B} bold>{riding.kind} {"▁▂▃▄▅▆▇█".slice(0, 1 + Math.floor(((now - riding.from) / (riding.until - riding.from)) * 7.99)).padEnd(8, " ")} </Text> : null}{muted ? <Text color={B}>muted  </Text> : null}<Text color={DIM}>{log === "engine ready" ? "" : log.slice(0, 50)}</Text></Text>
       </Box>
       {!full && <Box>
-        <Box flexDirection="column" width={leftW} height={15} borderStyle="single" borderColor={CYAN} paddingX={1} overflow="hidden">
-          <Text color={CYAN} wrap="truncate">CODE · tui/set/*.scd · lit by what is sounding, coloured by who wrote it</Text>
+        <Pane title="code" note="tui/set/*.scd · save to land it on the next bar" width={leftW} height={paneH}>
           {SLOTS.map((k) => {
             const v = slotView(k), bad = status[k] && status[k] !== "ok";
             return (
               <Box key={k} flexDirection="column">
-                <Text wrap="truncate"><Text bold>{k}</Text> {v.laneStr}  {bad ? <Text color={AMBER}>✗ last good version still playing · {status[k]}</Text> : <Text color={DIM}>{s.slots[k].trim() ? "by " + v.by : "empty"}</Text>}</Text>
+                <Text wrap="truncate">{fgc(v.rgb)}[1m{k}[22m{RESET} {v.laneStr}  {bad ? <Text color={B}>✗ still playing the last good version · {status[k]}</Text> : <Text color={DIM}>{s.slots[k].trim() ? v.by : "empty"}</Text>}</Text>
                 <Text wrap="truncate">{v.code[0] || " "}</Text>
                 <Text wrap="truncate">{v.code[1] || " "}</Text>
               </Box>
             );
           })}
-        </Box>
-        <Box flexDirection="column" width={W - leftW} height={15} borderStyle="single" borderColor={AMBER} paddingX={1} overflow="hidden">
-          <Text color={AMBER}>LISTENING REPORT · every 2 bars{ref ? ' · vs "detroit"' : " · no reference: press r when it sounds right"}</Text>
-          {lines.length === 0 ? <Text color={DIM}>listening…</Text> : lines.map((l, li) => (
-            <Text key={l.label} wrap="truncate">{li < 5 ? <Text color={li === 0 ? AMBER : CYAN}>{"▮".repeat(Math.round(Math.max(0, Math.min(1, (20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56)) * 10)).padEnd(10, "·")} </Text> : "           "}{l.label.padEnd(12)}<Text color={DIM}>{l.value.padStart(9)}</Text>  {l.delta === null ? "" : ((l.delta >= 0 ? "+" : "") + l.delta.toFixed(1) + (l.label === "centroid" ? "%" : "")).padStart(7)}  <Text color={l.word === "ok" || !l.word ? DIM : AMBER}>{l.word}</Text></Text>
-          ))}
-        </Box>
+        </Pane>
+        <Pane title="ears" note={ref ? "every 2 bars, against the reference" : "no reference yet · r saves what's playing"} width={W - leftW} height={paneH}>
+          {lines.length === 0 ? <Text color={DIM}>listening…</Text> : lines.map((l, li) => {
+            const off = l.word && l.word !== "ok", d = l.delta ?? 0;
+            return (
+              <Text key={l.label} wrap="truncate"><Text color={off ? TEXT : DIM}>{l.label.replace(/\s+.*$/, "").padEnd(9)}</Text>{li < 5 ? meter((20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56) : li === 7 ? meter((20 * Math.log10(Math.max(p.bands.reduce((x, y) => x + y, 0), 1e-5)) + 40) / 40) : fgc(Frgb) + "            " + RESET}  <Text color={DIM}>{l.value.padStart(9)}</Text>  <Text color={off ? B : FAINT}>{Math.abs(d) < 0.05 ? "  " : d > 0 ? "▲ " : "▼ "}{Math.abs(d).toFixed(1).padStart(4)}{l.label === "centroid" ? "%" : " "}</Text>  {off ? <Text color={B} bold>{l.word}</Text> : <Text color={FAINT}>·</Text>}</Text>
+            );
+          })}
+        </Pane>
       </Box>}
       {!full && <Box>
-        <Box width={boothW} height={16} borderStyle="single" borderColor={CYAN} paddingX={1} overflow="hidden">
+        <Pane title="booth" note={tight ? undefined : `${s.booth.length}/3`} width={boothW} height={boothH} row>
           {s.booth.map((g) => {
-            const on = g.dj.id === who.id, rise = Math.min(10, Math.floor((now - g.since) / 90)), art = avatar(g.dj, p, on);
-            const shown = g.since ? [...Array(10 - rise).fill(""), ...art.slice(0, rise)] : art;
+            const on = g.dj.id === who.id, rise = Math.min(10, Math.floor((now - g.since) / 90)), art = tight ? [] : avatar(g.dj, p, on);
+            const shown = g.since && !tight ? [...Array(10 - rise).fill(""), ...art.slice(0, rise)] : art, mine = SLOTS.filter((k) => authors.current[k]?.name === g.dj.name);
             return (
-              <Box key={g.dj.id} flexDirection="column" width={21}>
-                <Text color={on ? "white" : DIM} bold={on} wrap="truncate">{on ? "▶ " : "  "}{g.dj.name}</Text>
+              <Box key={g.dj.id} flexDirection="column" width={tight ? undefined : 21} marginRight={tight ? 2 : 0}>
                 {shown.map((r, i) => <Text key={i} wrap="truncate">{r || " "}</Text>)}
-                <Text color={DIM} wrap="truncate">  took {g.taken}/{g.offered} {SLOTS.filter((k) => authors.current[k]?.name === g.dj.name).map((k) => "· " + k).join(" ")}</Text>
-                <Text color={DIM} wrap="truncate">  {g.dj.palette} · {g.dj.look}</Text>
+                <Text wrap="truncate">{fgc(accent(g.dj.palette), on ? 1 : 0.55)}{on ? "▸ " : "  "}{on ? "\x1b[1m" : ""}{g.dj.name}{"\x1b[22m"}{RESET}</Text>
+                <Text color={DIM} wrap="truncate">  {g.taken}/{g.offered} taken{mine.length ? " · " + mine.join(" ") : ""}</Text>
               </Box>
             );
           })}
-        </Box>
-        <Box flexDirection="column" width={W - boothW} height={16} borderStyle="single" borderColor={AMBER} paddingX={1} overflow="hidden">
-          <Text color={AMBER} wrap="truncate">{who.name} OFFERS · <Text color={CYAN}>[1][2][3] take  [!][@][#] take with a build  [n] skip  [t] tell  [a] ask  [s] summon  [d] next DJ  [x] dismiss</Text></Text>
-          {typing ? <Text>{typing.mode === "tell" ? `you → ${who.name}: ` : "summon a DJ who… "}{typing.text}<Text inverse> </Text></Text>
+        </Pane>
+        <Pane title={typing ? (typing.mode === "tell" ? `you → ${who.name.toLowerCase()}` : "summon") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options ? "1 2 3 take · ⇧ with a build · n skip · t tell" : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+          {typing ? <Text color={TEXT}>{typing.mode === "summon" ? <Text color={DIM}>a DJ who </Text> : null}{typing.text}<Text color={A}>▌</Text></Text>
             : s.options ? s.options.map((o, i) => (
-              <Box key={i} flexDirection="column" marginTop={i ? 1 : 0}>
-                <Text wrap="truncate"><Text color={CYAN} bold>[{i + 1}]</Text> <Text bold>{o.slot}</Text>  {o.why}  <Text color={DIM}>← {o.evidence}</Text></Text>
-                <Text color={AMBER} wrap="truncate-end">    {o.code.replace(/\s*\n\s*/g, " ")}</Text>
+              <Box key={i} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
+                <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text></Text>
+                {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.code.replace(/\s*\n\s*/g, " ")}</Text></Text>}
+                {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
               </Box>
-            )) : <Text color={DIM} wrap="wrap">{say || "…"}</Text>}
+            )) : <Text color={say.includes("“") ? TEXT : DIM} wrap="wrap">{say || "…"}</Text>}
           <Box flexGrow={1} />
-          <Text color={DIM} wrap="truncate">taken/skipped: {s.history.slice(-14).map((h) => (h.verdict === "y" ? "●" : "○")).join("") || "—"}{s.note ? `   your note: "${s.note}"` : ""}</Text>
-        </Box>
+          {!tight && <Text wrap="truncate"><Text color={FAINT}>{s.history.slice(-24).map((h) => (h.verdict === "y" ? "●" : "·")).join(" ")}</Text>{s.note ? <Text color={DIM}>   note: “{s.note}”</Text> : null}</Text>}
+        </Pane>
       </Box>}
 
-      <Box flexDirection="column" borderStyle="single" borderColor={DIM}>
-        {rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
-      </Box>
-      {full && <Box flexDirection="column" paddingX={1}>
-        {SLOTS.map((k) => { const v = slotView(k); return <Text key={k} wrap="truncate"><Text bold>{k}</Text> {v.laneStr}  {v.code[0]}</Text>; })}
-        <Text wrap="truncate"><Text color="white" bold>{s.booth.map((g) => (g.dj.id === who.id ? "▶ " : "  ") + g.dj.name).join("   ")}</Text>  {s.options ? s.options.map((o, i) => `\x1b[38;2;111;195;214m[${i + 1}]\x1b[39m ${o.slot} ${o.why}`).join("   ") : <Text color={DIM}>{say}</Text>}</Text>
+      {overlay === "help" && <Box flexDirection="row" paddingX={2} paddingY={1} height={fieldH} overflow="hidden">
+        {KEYS.map(([group, keys]) => (
+          <Box key={group} flexDirection="column" marginRight={5}>
+            <Text color={A} bold>{group}</Text>
+            {keys.map(([k, what]) => <Text key={k}><Text color={B}>{k.padEnd(7)}</Text><Text color={TEXT}>{what}</Text></Text>)}
+          </Box>
+        ))}
       </Box>}
-      <Text color={DIM} wrap="truncate"> [l/L] look: {s.scene.look}   [p] palette: {s.scene.palette}   [c] chars: {RAMP_NAMES[ramp]}   [g] new base   [u] build  [w] wash   [f] fullscreen   [m] mute   [r] save ref   [q] quit</Text>
+      {overlay === "roster" && <Box flexDirection="column" paddingX={2} paddingY={1} height={fieldH} overflow="hidden">
+        <Text color={A} bold>who walks in?  <Text color={DIM}>press a number · any other key closes</Text></Text>
+        {all.current.slice(0, 9).map((d, i) => <Text key={d.id} wrap="truncate"><Text color={B}> {i + 1} </Text>{fgc(accent(d.palette))}{d.name.padEnd(18)}{RESET}<Text color={DIM}>{s.booth.some((g) => g.dj.id === d.id) ? "in the booth · " : ""}{d.tagline}</Text></Text>)}
+      </Box>}
+      {!overlay && <Box flexDirection="column">{rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}</Box>}
+
+      {full && <Box flexDirection="column" paddingX={1}>
+        {SLOTS.map((k) => { const v = slotView(k); return <Text key={k} wrap="truncate">{fgc(v.rgb)}[1m{k}[22m{RESET} {v.laneStr}  {v.code[0]}</Text>; })}
+        <Text wrap="truncate">{s.booth.map((g) => fgc(accent(g.dj.palette), g.dj.id === who.id ? 1 : 0.5) + (g.dj.id === who.id ? "▸ " : "  ") + g.dj.name).join("   ")}{RESET}   {s.options ? s.options.map((o, i) => <Text key={i}><Text color={A} bold> {i + 1} </Text><Text color={TEXT}>{o.why}   </Text></Text>) : <Text color={DIM}>{say}</Text>}</Text>
+      </Box>}
+      <Box justifyContent="space-between" paddingX={1}>
+        <Text color={DIM} wrap="truncate"><Text color={B}>?</Text> keys   <Text color={B}>g</Text> new base   <Text color={B}>d</Text> dj   <Text color={B}>f</Text> stage</Text>
+        <Text color={DIM} wrap="truncate">{s.scene.look} · {s.scene.palette} · {RAMP_NAMES[ramp]}</Text>
+      </Box>
     </Box>
   );
 }

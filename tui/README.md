@@ -31,10 +31,13 @@ or a DJ, with the bar it landed on. The tokens a change brought in glow white fo
 how many rounds they offered, how many you took, and which slots are currently theirs. The report's band rows have
 live meters.
 
-Keys, booth: **1 2 3** take an option (**y** = 1) · **n** skip them all · **t** tell the active DJ something ·
-**a** ask now · **s** summon a new DJ from a description · **d** bring in someone from the roster · **x** dismiss.
-Keys, screen: **g** new base · **l / L** look · **p** palette · **c** characters · **f** fullscreen · **m** mute ·
-**r** save what's playing as the reference · **q** quit.
+**?** shows every key on screen. The ones you'll use most: **1 2 3** take an option (**! @ #** with a build) ·
+**n** skip · **tab** next DJ · **t** tell · **d / D / s / x** bring in, pick, summon, retire a DJ · **g** new base ·
+**f** stage mode · **l p c** look, palette, characters · **v** DJs speak · **q** quit.
+
+The interface wears the active palette: two accents per palette over shared neutrals, so a transition recolours
+the whole screen, not only the field. `pixels` (the default character mode) draws field looks with half-blocks:
+each cell is two samples, foreground over background, so it reads as a real shader at twice the vertical resolution.
 
 ## DJs
 

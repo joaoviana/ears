@@ -10,13 +10,15 @@ export interface Banner { lines: string[]; rgb: number[]; t: number }   // t run
 export interface Ctx { code: string; banner?: Banner | null }
 
 const LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
-const RAMPS = { ascii: LONG, blocks: " ░░▒▒▓▓██", dots: " ⠁⠂⠃⠇⠧⠷⡷⣷⣿", code: " .·:;=+x%#@" };
+// "pixels" isn't a ramp: each cell is a ▀ whose foreground is one sample and whose background is the one below it,
+// so field looks render at twice the vertical resolution, as colour instead of glyph density
+const RAMPS = { ascii: LONG, pixels: " ", blocks: " ░░▒▒▓▓██", dots: " ⠁⠂⠃⠇⠧⠷⡷⣷⣿", code: " .·:;=+x%#@" };
 export type Ramp = keyof typeof RAMPS;
 
 // ---- colour --------------------------------------------------------------------------------
 type V3 = [number, number, number];
 const PALETTES: Record<string, [V3, V3, V3, V3]> = {
-  ember: [[0.78, 0.6, 0.45], [0.22, 0.3, 0.4], [1, 1, 1], [0.0, 0.15, 0.42]],      // amber <-> teal, the house colours
+  ember: [[0.85, 0.55, 0.42], [0.15, 0.3, 0.3], [1, 1, 1], [0.0, 0.12, 0.3]],       // gold <-> coral, no teal
   neon:  [[0.65, 0.55, 0.7], [0.35, 0.45, 0.3], [1, 1, 1], [0.0, 0.33, 0.67]],
   ice:   [[0.55, 0.72, 0.85], [0.3, 0.25, 0.15], [1, 1, 0.8], [0.55, 0.6, 0.7]],
   acid:  [[0.6, 0.75, 0.3], [0.4, 0.25, 0.3], [1.2, 0.8, 1], [0.2, 0.0, 0.5]],
@@ -24,6 +26,12 @@ const PALETTES: Record<string, [V3, V3, V3, V3]> = {
   mono:  [[0.8, 0.8, 0.8], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
 };
 export const PALETTE_NAMES = Object.keys(PALETTES);
+/** The interface wears the same palette as the field: two accents per palette, neutrals shared. */
+export const UI: Record<string, { a: string; b: string }> = {
+  ember: { a: "#ffb86b", b: "#ff6f61" }, neon: { a: "#ff5fd2", b: "#6ee7ff" }, ice: { a: "#8fd3ff", b: "#c7b8ff" },
+  acid: { a: "#c6f24e", b: "#ff7ab8" }, sunset: { a: "#ff8a5c", b: "#ffd166" }, mono: { a: "#f0f0f0", b: "#9a9aa6" },
+};
+export const NEUTRAL = { text: "#e8e6f0", dim: "#8a8799", faint: "#3d3b4a" };
 let pal = PALETTES.ember;
 /** Inigo Quilez's cosine palette, scaled by luminance, packed to one int. */
 function colour(h: number, lum: number): number {
@@ -224,11 +232,12 @@ function waterfall(w: number, h: number, s: Pulse, chars: string[]): { ch: strin
 
 export const LOOKS = [...Object.keys(FIELDS), ...Object.keys(BRAILLE), "codefield", "waterfall"];
 
-interface Cells { ch: string[]; col: number[] }
+interface Cells { ch: string[]; col: number[]; bg?: Int32Array }
+const shade = (c: number, k: number) => (Math.min(255, ((c >> 16) & 255) * k) << 16) | (Math.min(255, ((c >> 8) & 255) * k) << 8) | Math.min(255, (c & 255) * k);
 
 function cells(look: string, ramp: Ramp, palette: string, w: number, h: number, t: number, s: Pulse, ctx: Ctx): Cells {
   pal = PALETTES[palette] ?? PALETTES.ember;
-  const chars = [...RAMPS[ramp]], n = w * h; let ch: string[] = new Array(n), col: number[] = new Array(n);
+  const chars = [...RAMPS[ramp === "pixels" ? "blocks" : ramp]], n = w * h; let ch: string[] = new Array(n), col: number[] = new Array(n);
   const aspect = w / h / 2.1;   // a terminal cell is about twice as tall as it is wide
 
   if (BRAILLE[look]) {
@@ -248,6 +257,11 @@ function cells(look: string, ramp: Ramp, palette: string, w: number, h: number, 
       const k = j * w + i, g = text[(k + Math.floor(j * 7)) % text.length];
       ch[k] = v > 0.78 ? g.toUpperCase() : v < 0.2 ? (g === " " ? " " : "·") : g; col[k] = colour(r * 0.5 + v * 0.6 + t * 0.03, v * 1.25 + s.snare * 0.2);
     }
+  } else if (ramp === "pixels") {
+    const f = FIELDS[look] ?? FIELDS.gyroid, bg = new Int32Array(n), H2 = h * 2;
+    const px = (i: number, j2: number) => { const [lum, hue] = f(((i / (w - 1)) * 2 - 1) * aspect, (j2 / (H2 - 1)) * 2 - 1, t, s), l = Math.max(0, Math.min(1, lum)); return shade(colour(hue, 1), Math.pow(l, 1.25)); };
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const k = j * w + i; ch[k] = "▀"; col[k] = px(i, j * 2); bg[k] = px(i, j * 2 + 1); }
+    return { ch, col, bg };
   } else {
     const f = FIELDS[look] ?? FIELDS.gyroid;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
@@ -266,7 +280,7 @@ export interface Scene { look: string; palette: string; wipe?: (typeof WIPES)[nu
  * `wipe` 0..1 brings `next` in over `now` as a ragged circle growing from the centre, with a bright rim.
  */
 export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp, w: number, h: number, t: number, s: Pulse, ctx: Ctx): string[] {
-  let { ch, col } = cells(now.look, ramp, now.palette, w, h, t, s, ctx);
+  let { ch, col, bg } = cells(now.look, ramp, now.palette, w, h, t, s, ctx);
   if (next && wipe > 0) {
     const b = cells(next.look, ramp, next.palette, w, h, t, s, ctx), aspect = w / h / 2.1, reach = Math.hypot(aspect, 1) * 1.1 * wipe;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
@@ -276,8 +290,8 @@ export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp,
         : kind === "sweep" ? (x / aspect + 1) / 2 * 0.8 + (y + 1) / 2 * 0.2 + (vnoise(y * 6, 3) - 0.5) * 0.15 - wipe * 1.1
         : kind === "shatter" ? hash(Math.floor(i / 6), Math.floor(j / 3)) * 0.9 + 0.05 - wipe * 1.05
         : Math.hypot(x, y) + (vnoise(x * 3 + 9, y * 3) - 0.5) * 0.5 - reach;
-      if (edge < 0) { ch[k] = b.ch[k]; col[k] = b.col[k]; }
-      if (Math.abs(edge) < (kind === "iris" ? 0.06 : 0.025)) { ch[k] = "█▓▒░"[Math.floor(hash(i, j + Math.floor(t * 20)) * 4)]; col[k] = 0xffffff; }
+      if (edge < 0) { ch[k] = b.ch[k]; col[k] = b.col[k]; if (bg) bg[k] = b.bg ? b.bg[k] : -1; else if (b.bg) { bg = new Int32Array(w * h).fill(-1); bg[k] = b.bg[k]; } }
+      if (Math.abs(edge) < (kind === "iris" ? 0.06 : 0.025)) { ch[k] = "▓▒░░"[Math.floor(hash(i, j + Math.floor(t * 20)) * 4)]; col[k] = shade(b.col[k] || 0xffffff, 1.6); if (bg) bg[k] = -1; }
     }
   }
   // a name in lights: big block letters over the field, assembled out of static and dissolving back into it
@@ -288,6 +302,7 @@ export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp,
     for (let j = 0; j < bn.lines.length && top + j < h; j++) for (let i = 0; i < bn.lines[j].length; i++) {
       const g = bn.lines[j][i], k = (top + j) * w + left + i, n = hash(i * 1.3, j * 7.7);
       if (g === " ") { if (present > 0.3) { ch[k] = hash(i, j) > 0.5 ? ch[k] : " "; col[k] = ((col[k] >> 17) << 16) | (((col[k] >> 9) & 127) << 8) | ((col[k] >> 1) & 127); } continue; }   // dim the field behind the letters
+      if (bg) bg[k] = -1;
       if (n > present) { if (n - present < 0.15) { ch[k] = "▓▒░"[Math.floor(n * 3)]; col[k] = 0xffffff; } continue; }
       const flick = 0.85 + 0.15 * Math.sin(t * 30 + j);
       ch[k] = g; col[k] = (Math.min(255, bn.rgb[0] * flick + s.kick * 60) << 16) | (Math.min(255, bn.rgb[1] * flick + s.kick * 60) << 8) | Math.min(255, bn.rgb[2] * flick + s.kick * 60);
@@ -295,13 +310,14 @@ export function render(now: Scene, next: Scene | null, wipe: number, ramp: Ramp,
   }
   const rows: string[] = [];
   for (let j = 0; j < h; j++) {
-    let row = "", last = -1;
+    let row = "", last = -1, lastBg = -1;
     for (let i = 0; i < w; i++) {
       const k = j * w + i, c = col[k] & 0xf8f8f8;   // quantise so neighbouring cells share an escape
+      if (bg) { const b = bg[k] < 0 ? -1 : bg[k] & 0xf8f8f8; if (b !== lastBg) { row += b < 0 ? "\x1b[49m" : `\x1b[48;2;${(b >> 16) & 255};${(b >> 8) & 255};${b & 255}m`; lastBg = b; } }
       if (ch[k] !== " " && c !== last) { row += `\x1b[38;2;${(c >> 16) & 255};${(c >> 8) & 255};${c & 255}m`; last = c; }
       row += ch[k];
     }
-    rows.push(row + "\x1b[39m");
+    rows.push(row + "\x1b[39m" + (bg ? "\x1b[49m" : ""));
   }
   return rows;
 }

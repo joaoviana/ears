@@ -1,1 +1,1 @@
-~d.(\d4, \instrument, \clap, \dur, 1, \amp, Pseq([Rest(0), 0.5], inf), \send, 0.52)
+~d.(\d4, \instrument, \stab, \dur, Pseq([1, 2.5, 0.5], inf), \amp, Pseq([Rest(0), 0.15, 0.15], inf), \midinote, Pseq([[62, 67, 72, 77], [65, 69, 74, 79]], inf).stutter(6), \cutoff, Pbrown(900, 2600, 200), \send, 1)
