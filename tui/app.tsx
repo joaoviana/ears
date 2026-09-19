@@ -18,6 +18,7 @@ import { Evidence, type Context } from "./evidence.ts";
 import { applyPatch, describe } from "./patch.ts";
 import { validate } from "./agent.ts";
 import { SKILLS, skill, earned, missing, ensureVox, phrasesIn } from "./skills.ts";
+import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -48,7 +49,7 @@ const TAU: Record<string, number> = { kick: 0.22, snare: 0.16, hat: 0.07, stab: 
 const KIND: Record<string, string> = { kick: "kick", clap: "snare", hat: "hat", stab: "stab", bass: "stab" };
 const read = (s: string) => { try { return fs.readFileSync(path.join(SET, s + ".scd"), "utf8"); } catch { return ""; } };
 
-interface Guest { dj: DJ; since: number; offered: number; taken: number; level: "suggest" | "auto"; remote?: boolean; pending: string[] }
+interface Guest { dj: DJ; since: number; offered: number; taken: number; level: "suggest" | "auto"; remote?: boolean; pending: string[]; calls?: Tally }
 type Option = Suggestion & Context & { id: number; agent: string };
 const LOGC: Record<string, number[]> = { observation: [110, 231, 255], proposal: [255, 184, 107], rejected: [255, 111, 97], error: [255, 111, 97], verdict: [198, 242, 78], applied: [232, 230, 240], landed: [143, 211, 255], grant: [255, 95, 210], enter: [255, 95, 210], transition: [199, 184, 255], note: [255, 255, 255] };
 interface Author { name: string; rgb: number[]; bar: number; fresh: Set<string> }
@@ -116,7 +117,10 @@ function App() {
   const voiceRef = useRef(voice); voiceRef.current = voice;
   const logsRef = useRef(logs); logsRef.current = logs;
   const greet = useRef<{ who: string; rgb: number[]; text: string; until: number } | null>(null);
-  const showcase = useRef<{ agent: string; skill: string } | null>(null);   // a skill this DJ must demonstrate in its next round
+  const showcase = useRef<{ agent: string; skill: string } | null>(null);
+  // called shots: what each taken idea predicted, the live noise floor, and the last graded call (shown for 8 bars)
+  const shots = useRef(new Map<number, { agent: string; name: string; rgb: number[]; slot: string; expect: Expect }>()), noise = useRef(new NoiseFloor());
+  const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
     const cols = stdout.columns || 120, W = cols - (logsRef.current ? Math.min(96, Math.floor(cols * 0.5)) : 0) - 2, to = hex((UI[st.current.pending?.palette ?? st.current.scene.palette] ?? UI.ember).b);
@@ -208,8 +212,9 @@ function App() {
     author(o.slot, o.code, { name: who.name, rgb: accent(who.palette) });   // set before writing, so the file watcher doesn't credit the change to you
     writeSlot(o.slot, o.code);
     bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "take", by });
-    evaluateSlot(o.slot, o.code, o.agent, { ...o, proposal: o.id });
-    s.history.push({ slot: o.slot, why: o.why, verdict: "y" });
+    if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: o.slot, expect: o.expect });
+    evaluateSlot(o.slot, o.code, o.agent, { ...o, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
+    s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n" }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
     s.options = null; s.round++; s.turn++; s.askAt = s.bar + 2; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
@@ -223,6 +228,19 @@ function App() {
     const b = bus.current.open(); b.send("hello", "host", { host: "ears-tui", protocol: 0, profile: "ears/music", capabilities: ["evidence-v1", "revision-guard", "execution-receipts", "live-comparison"], log: b.path });
     refreshState();
     b.on("fault", (error: Error) => setLog(error.message));
+    b.on("msg", (m: Msg) => {
+      if (m.type === "observation" && (m.quality as any)?.stable_state && m.metrics) {   // unchanged music still moves: learn by how much
+        const x = m.metrics as any, rms = x.envelope_dbfs, abs = Object.fromEntries(METRICS.map((k) => [k, k === "brightness" ? x.centroid_hz : k === "loudness" ? rms : k === "density" ? x.onsets_per_beat : k === "punch" ? x.peak_to_envelope_db : (x.bands_dbfs?.[k] ?? 0) - rms])) as Record<Metric, number>;
+        noise.current.push(`${m.state_revision}:${JSON.stringify(m.active_revisions)}`, abs);
+      }
+      if (m.type !== "comparison" || typeof m.proposal !== "number") return;
+      const shot = shots.current.get(m.proposal); if (!shot) return; shots.current.delete(m.proposal);
+      const out = grade(shot.expect, m.status === "measured" ? (m.differences as Differences) : null, noise.current.floor(shot.expect.metric));
+      const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
+      const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out);
+      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, basis: "live master mix; observational, not causal" });
+      shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.grade === "ungraded" ? String((m.confounds as string[])?.[0] ?? out.text) : out.text, grade: out.grade, until: st.current.bar + 8 };
+    });
     b.on("inbound", (m: Msg) => {
       if (!["note", "proposal"].includes(m.type)) return;
       const s = st.current, id = String(m.from || "guest").toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 24) || "guest";
@@ -444,19 +462,20 @@ function App() {
               <Box key={g.dj.id} flexDirection="column" width={tight ? undefined : 26} marginRight={tight ? 2 : 0}>
                 {shown.map((r, i) => <Text key={i} wrap="truncate">{r || " "}</Text>)}
                 <Text wrap="truncate">{fgc(accent(g.dj.palette), on ? 1 : 0.55)}{on ? "▸ " : "  "}{on ? "\x1b[1m" : ""}{g.dj.name}{"\x1b[22m"}{RESET}{g.level === "auto" ? <Text color={B} bold> AUTO</Text> : null}{g.remote ? <Text color={DIM}> wire</Text> : null}</Text>
-                <Text color={DIM} wrap="truncate">  {g.taken}/{g.offered} taken{mine.length ? " · " + mine.join(" ") : ""}</Text>
+                <Text color={DIM} wrap="truncate">  {g.taken}/{g.offered} taken{mine.length ? " · " + mine.join(" ") : ""}{g.calls ? <Text color={TEXT}>  calls {g.calls.hit}/{g.calls.hit + g.calls.miss + g.calls.flat}</Text> : null}</Text>
                 {!tight && <Text wrap="truncate">  {SKILLS.map((k) => { const has = (g.dj.skills || []).includes(k.id), wait = g.pending.includes(k.id); return <Text key={k.id} color={has ? TEXT : wait ? B : FAINT} bold={wait && Math.floor(now / 400) % 2 === 0}>{k.glyph}{wait ? " k! " : " "}</Text>; })}</Text>}
               </Box>
             );
           })}
         </Pane>
         <Pane grad={grad} title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options?.length ? (s.booth.find((g) => g.dj.id === s.options![0].agent)?.level === "auto" ? `takes its own in ${Math.max(0, s.autoAt - s.bar)} bar${s.autoAt - s.bar === 1 ? "" : "s"} · n vetoes · o takes control back` : "1 2 3 take · ⇧ with a build · n skip · t tell") : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+          {shotCard.current && s.bar < shotCard.current.until && !typing ? <Text wrap="truncate">{fgc(shotCard.current.rgb)}{"\x1b[1m"}{shotCard.current.who}{"\x1b[22m"}{RESET} <Text color={DIM}>called</Text> <Text color={TEXT}>{shotCard.current.call}</Text> <Text color={DIM}>· measured</Text> <Text color={TEXT}>{shotCard.current.text}</Text>  <Text bold color={shotCard.current.grade === "hit" ? A : shotCard.current.grade === "miss" ? B : DIM}>{shotCard.current.grade === "hit" ? "● HIT" : shotCard.current.grade === "miss" ? "✗ MISS" : shotCard.current.grade === "flat" ? "○ FLAT" : "· ungraded"}</Text></Text> : null}
           {greet.current && s.bar < greet.current.until && !typing ? <Text wrap="truncate">{fgc(greet.current.rgb)}{"\x1b[1m"}{greet.current.who}{"\x1b[22m"}{RESET} <Text color={TEXT}>“{greet.current.text}”</Text></Text> : null}
           {typing ? <Box><Text color={A}>{typing === "summon" ? "a DJ who " : "› "}</Text><TextInput key={typing} placeholder={typing === "summon" ? "plays acid, a bit unhinged…" : "more dub, less bright…"} onSubmit={submit} /></Box>
             : s.options?.length ? <>
               {s.options.map((o, i) => (
                 <Box key={o.id} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
-                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text>{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
+                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
                   {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.diff}</Text></Text>}
                   {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
                 </Box>

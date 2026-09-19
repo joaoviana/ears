@@ -78,6 +78,7 @@ export function pretty(m: Msg): { time: string; type: string; from: string; text
     : m.type === "landed" ? `${s(m.slot)} legacy acknowledgement`
     : m.type === "error" ? `${s(m.slot)} refused by the engine: ${s(m.reason)}`
     : m.type === "grant" ? `${s(m.agent)} → ${m.skill ? "skill " + s(m.skill) : s(m.level)}`
+    : m.type === "outcome" ? `${s(m.agent)} called ${s((m.expected as any)?.metric)} ${s((m.expected as any)?.dir)} → ${String(m.grade).toUpperCase()}${m.delta != null ? ` (${Number(m.delta) >= 0 ? "+" : ""}${Number(m.delta).toFixed(1)} ${s(m.unit)}, floor ±${Number(m.noise_floor).toFixed(1)})` : ""}`
     : m.type === "unlock" ? `${s(m.agent)} earned ${s(m.skill)} · waiting for the human to activate it`
     : m.type === "state" ? `${s(m.tempo)} bpm · ${s(m.key)} · ${Object.keys((m.slots as object) || {}).length} slots`
     : m.type === "note" ? `“${s(m.text)}”`

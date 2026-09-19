@@ -6,9 +6,10 @@ import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
 import { applyPatch, describe, parseSlot, type Patch } from "./patch.ts";
 import { SKILLS, missing } from "./skills.ts";
+import { parseExpect, METRICS, type Expect } from "./shots.ts";
 
-export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash" }
-export interface Past { slot: string; why: string; verdict: "y" | "n" }
+export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
+export interface Past { slot: string; why: string; verdict: "y" | "n"; id?: number; outcome?: string }
 
 const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE idea as a small patch. Two other DJs' brains are offering a different angle at the same moment, so commit to yours. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
 
@@ -36,11 +37,13 @@ SLOT d3
 SET cutoff = 600
 SET res = 2.8
 REMOVE pan
+EXPECT brightness down
 WHY one sentence
 EVIDENCE the report line or style rule
 Keys have no backslash. The value after "=" is SuperCollider source for that key, on one line. REMOVE lines are optional.
 To fill an empty slot or rewrite a voice from scratch, write "SLOT d4 REPLACE" and SET every key it needs, starting with instrument (e.g. SET instrument = \\clap) and dur.
 Patch as few keys as the idea needs: usually one to three.
+EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>", naming the ONE measurable thing your change will do to the master mix. Metrics: ${METRICS.join(", ")} (sub/low/mid/high/air are band balance; brightness is the spectral centroid; loudness the overall level; density is onsets per beat; punch is peak over average). Two bars after your change lands the host measures it and grades you: HIT, MISS, or FLAT (no detectable effect). Your record is shown to the room and comes back to you, so call what will really happen, not what sounds impressive. If your idea shouldn't change the mix balance (a fill, a rhythm swap), call the metric it does move (density), or "same" on the one you're protecting.
 
 Rules:
 - If the performer wrote a note, it is an instruction: every angle answers it, in your style. It outranks the report and your own plans (only your Never list outranks it; if they conflict, say so in WHY and offer the nearest thing).
@@ -100,7 +103,7 @@ function claudeText(prompt: string, system: string, timeout = 40000): Promise<st
 }
 
 /** Lenient on purpose: models add blank lines, code fences and stray backslashes. */
-export type Parsed = Patch & { why: string; evidence: string; forBars?: number; transition?: "build" | "wash" };
+export type Parsed = Patch & { why: string; evidence: string; forBars?: number; transition?: "build" | "wash"; expect?: Expect };
 export function parsePatch(text: string): Parsed | null {
   const p: Parsed = { slot: "", set: [], remove: [], why: "", evidence: "" };
   for (const raw of text.split("\n")) {
@@ -108,6 +111,7 @@ export function parsePatch(text: string): Parsed | null {
     if ((m = line.match(/^SLOT\s+\\?(d[1-6])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
     else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) p.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
     else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) p.remove!.push(m[1]);
+    else if (/^EXPECT\b/i.test(line)) p.expect = parseExpect(line) ?? p.expect;
     else if ((m = line.match(/^FOR\s+([12])\b/i))) p.forBars = Number(m[1]);
     else if ((m = line.match(/^WITH\s+(build|wash)\b/i))) p.transition = m[1].toLowerCase() as "build" | "wash";
     else if ((m = line.match(/^WHY\s*:?\s*(.+)$/i))) p.why = m[1];
@@ -137,7 +141,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     "CURRENT CODE", ...Object.entries(input.slots).map(([k, v]) => `-- ${k}\n${v.trim() || "(empty)"}`),
     "", "LISTENING REPORT", input.report,
     "", "PERFORMER NOTE", input.note || "(none)",
-    "", "WHAT HAPPENED TO EARLIER IDEAS", input.history.length ? input.history.slice(-8).map((h) => `${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}`).join("\n") : "(none)",
+    "", "WHAT HAPPENED TO EARLIER IDEAS", input.history.length ? input.history.slice(-8).map((h) => `${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}${h.outcome ? `\n        ${h.outcome}` : ""}`).join("\n") : "(none)",
   ].join("\n");
   const got: Suggestion[] = [], t0 = Date.now();
   const sk = input.showcase ? SKILLS.find((k) => k.id === input.showcase) : null;
@@ -150,15 +154,16 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach).join("\n");
       const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
+      if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }
       if (angle === "turn" && !isTurn(input.slots[p.slot] || "", p)) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
         const again = parsePatch(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", SYSTEM + persona(input.dj) + "\n\n" + brief));
         if (!again || !isTurn(input.slots[again.slot] || "", again)) return;
-        Object.assign(p, again);
+        Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
       const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (missing(code, p, active) ? `uses ${missing(code, p, active)}, which this DJ hasn't been granted` : null) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
       if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: bad, ms: Date.now() - t0 }); return; }
-      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition };
+      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition, expect: p.expect! };
       got.push(o); onOption(o);
     } catch (e: any) { onEvent("rejected", { agent: input.dj.id, angle, reason: String(e.message).slice(0, 80), ms: Date.now() - t0 }); }
   })).then(() => { if (!got.length) throw new Error("no angle produced a usable idea"); return got; });
