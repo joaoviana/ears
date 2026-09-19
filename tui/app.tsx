@@ -19,6 +19,7 @@ import { applyPatch, describe } from "./patch.ts";
 import { validate } from "./agent.ts";
 import { SKILLS, skill, earned, missing, ensureVox, phrasesIn, recordNote } from "./skills.ts";
 import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, attributable, parseExpect, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
+import { SlotEars, slotDifference, PER_SLOT_METRICS, type SlotWindow } from "./slotears.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -121,6 +122,8 @@ function App() {
   const showcase = useRef<{ agent: string; skill: string } | null>(null), recording = useRef(false), mood = useRef<Mood>(MOOD0);
   // called shots: what each taken idea predicted, the live noise floor, and the last graded call (shown for 8 bars)
   const shots = useRef(new Map<number, { agent: string; name: string; rgb: number[]; slot: string; expect: Expect }>()), noise = useRef(new NoiseFloor());
+  // per-slot hearing: judge a call about the hats on the hats, not on a master mix the kick dominates
+  const slotEars = useRef(new SlotEars()), slotNoise = useRef<Record<string, NoiseFloor>>({}), slotWins = useRef<{ key: string; from: number; to: number; w: Record<string, SlotWindow> }[]>([]);
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
@@ -233,18 +236,31 @@ function App() {
       if (m.type === "observation" && (m.quality as any)?.stable_state && m.metrics) {   // unchanged music still moves: learn by how much
         const x = m.metrics as any, rms = x.envelope_dbfs, abs = Object.fromEntries(METRICS.map((k) => [k, k === "brightness" ? x.centroid_hz : k === "loudness" ? rms : k === "density" ? x.onsets_per_beat : k === "punch" ? x.peak_to_envelope_db : (x.bands_dbfs?.[k] ?? 0) - rms])) as Record<Metric, number>;
         noise.current.push(`${m.state_revision}:${JSON.stringify(m.active_revisions)}`, abs);
+        const win = m.window as { start_ms: number; end_ms: number } | null;
+        if (win) {
+          const w = slotEars.current.all(win.start_ms, win.end_ms), prev = slotWins.current[slotWins.current.length - 1];
+          const key = `${m.state_revision}:${JSON.stringify(m.active_revisions)}`;
+          if (prev && prev.key === key) for (const k of SLOTS) { const d = slotDifference(prev.w, w, k, { onsets_per_beat: 0, peak_to_envelope_db: 0 }); if (d) (slotNoise.current[k] ??= new NoiseFloor()).sample({ ...d.relative_bands_db, brightness: d.centroid_hz, loudness: d.envelope_db } as any); }
+          slotWins.current.push({ key, from: win.start_ms, to: win.end_ms, w });
+          if (slotWins.current.length > 6) slotWins.current.shift();
+        }
       }
       if (m.type !== "comparison" || typeof m.proposal !== "number") return;
       const shot = shots.current.get(m.proposal); if (!shot) return; shots.current.delete(m.proposal);
       // A measured difference is not automatically a verdict: if another edit or a transition overlapped this one,
       // nobody can say whose change moved the sound, so the call is ungraded rather than a MISS against this DJ.
       const clean = m.status === "measured" && attributable(m.confounds as string[]);
-      const out = clean ? grade(shot.expect, m.differences as Differences, noise.current.floor(shot.expect.metric))
+      const md = m.differences as Differences | undefined;
+      // If both windows heard this slot and the metric has a per-slot meaning, grade the slot's own contribution.
+      const wins = slotWins.current, w0 = wins[wins.length - 2], w1 = wins[wins.length - 1];   // not `b`: that is the bus
+      const sd = clean && md && PER_SLOT_METRICS.has(shot.expect.metric) && w0 && w1 ? slotDifference(w0.w, w1.w, shot.slot, md) : null;
+      const scope = sd ? "slot" : "master", floor = sd ? (slotNoise.current[shot.slot] ?? noise.current).floor(shot.expect.metric) : noise.current.floor(shot.expect.metric);
+      const out = clean ? grade(shot.expect, sd ?? md!, floor)
         : { grade: "ungraded" as const, delta: null, unit: "", floor: 0, text: m.status === "measured" ? "another change overlapped this one" : String((m.confounds as string[])?.[0] ?? "no clean before/after window") };
       const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
       const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out, true);
-      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: noise.current.ready(shot.expect.metric), scope: { kind: "master", per_voice: false }, basis: "live master mix; observational, not causal", confounds: m.confounds });
-      shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text, grade: out.grade, until: st.current.bar + 8 };
+      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: (sd ? slotNoise.current[shot.slot] ?? noise.current : noise.current).ready(shot.expect.metric), scope: { kind: scope, per_voice: !!sd, estimate: sd ? "dry-slot contribution: other slots held at their before-measurement; not a controlled re-render" : undefined }, basis: "live master mix; observational, not causal", confounds: m.confounds });
+      shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text + (sd ? `  (${shot.slot} alone)` : ""), grade: out.grade, until: st.current.bar + 8 };
     });
     b.on("inbound", (m: Msg) => {
       if (!["note", "proposal"].includes(m.type)) return;
@@ -269,6 +285,7 @@ function App() {
     e.on("ready", () => { setLog(e.sampleRate && e.sampleRate < 44000 ? `audio device is at ${Math.round(e.sampleRate / 1000)} kHz: a Bluetooth headset with its mic on. It will sound dull. Set the Mac's INPUT to the built-in mic (or use speakers), then restart` : "engine ready"); if (KEEP) SLOTS.forEach((s) => evaluateSlot(s, st.current.slots[s], "startup")); else newBase(SEED); setTimeout(() => (st.current.booted = true), 3000); });
     e.on("ears", (f) => { ears.current.push(f, { revision: evidence.revision, active_revision: evidence.activeRevision }); pulse.current.bands = f.bands; });
     e.on("scope", feed);
+    e.on("slotears", (f: any) => slotEars.current.push(f));
     e.on("onset", () => ears.current.onset());
     e.on("hit", (h: Hit) => hits.current.push(h));
     e.on("evald", ({ id, ok, msg, execution_id, scheduled_at_ms }) => {
