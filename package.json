@@ -7,19 +7,30 @@
     "build": "vite build",
     "postinstall": "node scripts/copy-faust.mjs",
     "check:faust": "node scripts/faust-check.mjs",
-    "render": "sh scripts/render.sh"
+    "render": "sh scripts/render.sh",
+    "ears": "tsx tui/app.tsx",
+    "ears:stage": "sh tui/ears.sh",
+    "ears:ref": "tsx tui/make-ref.ts",
+    "ears:reset": "cp tui/set.start/*.scd tui/set/"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "tsx": "^4.23.13",
     "vite": "^6.4.3"
   },
   "dependencies": {
     "@grame/faustwasm": "^0.18.4",
     "@strudel/web": "^1.3.0",
+    "chokidar": "^5.0.0",
+    "figlet": "^1.11.4",
     "glicol": "^0.4.0",
+    "ink": "^6.8.0",
+    "osc-min": "^2.1.2",
+    "react": "^19.3.0",
     "tone": "^15.1.22"
   },
   "private": true

@@ -33,6 +33,11 @@ underneath. Their files in `offline/` have still **not been run**.
 
 **Read `DECISION.md` after listening**, not before.
 
+## EARS: the all-terminal set
+
+`npm run ears:stage` — SuperCollider live, a listening report, Claude's one suggestion at a time with y/n, and ASCII
+visuals locked to the beat, in Ink. See `tui/README.md`.
+
 ## How it was checked
 
 A headless Chromium played every track and measured the output: all ten produce signal, no console errors, every
