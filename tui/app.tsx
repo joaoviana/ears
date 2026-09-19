@@ -18,7 +18,7 @@ import { Evidence, type Context } from "./evidence.ts";
 import { applyPatch, describe } from "./patch.ts";
 import { validate } from "./agent.ts";
 import { SKILLS, skill, earned, missing, ensureVox, phrasesIn, recordNote } from "./skills.ts";
-import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
+import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, attributable, parseExpect, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -158,7 +158,7 @@ function App() {
     const opt: Option = { ...o, ...context, id: ++s.seq, agent };
     if (!s.options?.length) { s.by = agent; s.autoAt = s.bar + 2; }
     s.options = [...(s.options || []), opt].slice(0, 3);
-    bus.current.send("proposal", agent, { ...context, id: opt.id, slot: o.slot, diff: o.diff, code: o.code, why: o.why, evidence: o.evidence, angle: o.angle, ms: o.ms });
+    bus.current.send("proposal", agent, { ...context, id: opt.id, slot: o.slot, diff: o.diff, code: o.code, why: o.why, evidence: o.evidence, angle: o.angle, ms: o.ms, expect: o.expect, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });   // the prediction is on the wire when the idea is first offered, not only when it is taken
   };
   const think = () => {
     const s = st.current;
@@ -216,12 +216,12 @@ function App() {
     if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: o.slot, expect: o.expect });
     evaluateSlot(o.slot, o.code, o.agent, { ...o, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
-    s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n" }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
+    s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
     s.options = null; s.round++; s.turn++; s.askAt = s.bar + 2; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
   const skip = (by = "human") => {
     const s = st.current; if (!s.options) return;
-    s.options.forEach((o) => { s.history.push({ slot: o.slot, why: o.why, verdict: "n" }); bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "skip", by }); });
+    s.options.forEach((o) => { s.history.push({ slot: o.slot, why: o.why, verdict: "n", agent: o.agent }); bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "skip", by }); });
     s.options = null; s.round++; s.turn++; s.askAt = s.bar + 1; setSay("skipped. next DJ up");
   };
 
@@ -236,11 +236,15 @@ function App() {
       }
       if (m.type !== "comparison" || typeof m.proposal !== "number") return;
       const shot = shots.current.get(m.proposal); if (!shot) return; shots.current.delete(m.proposal);
-      const out = grade(shot.expect, m.status === "measured" ? (m.differences as Differences) : null, noise.current.floor(shot.expect.metric));
+      // A measured difference is not automatically a verdict: if another edit or a transition overlapped this one,
+      // nobody can say whose change moved the sound, so the call is ungraded rather than a MISS against this DJ.
+      const clean = m.status === "measured" && attributable(m.confounds as string[]);
+      const out = clean ? grade(shot.expect, m.differences as Differences, noise.current.floor(shot.expect.metric))
+        : { grade: "ungraded" as const, delta: null, unit: "", floor: 0, text: m.status === "measured" ? "another change overlapped this one" : String((m.confounds as string[])?.[0] ?? "no clean before/after window") };
       const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
-      const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out);
-      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, basis: "live master mix; observational, not causal" });
-      shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.grade === "ungraded" ? String((m.confounds as string[])?.[0] ?? out.text) : out.text, grade: out.grade, until: st.current.bar + 8 };
+      const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out, true);
+      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: noise.current.ready(shot.expect.metric), scope: { kind: "master", per_voice: false }, basis: "live master mix; observational, not causal", confounds: m.confounds });
+      shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text, grade: out.grade, until: st.current.bar + 8 };
     });
     b.on("inbound", (m: Msg) => {
       if (!["note", "proposal"].includes(m.type)) return;
@@ -257,7 +261,9 @@ function App() {
       const slot = String(m.slot), before = evidence.slots[slot] || "", patch = { slot, set: (m.set as any) || [], remove: (m.remove as any) || [], replace: !!m.replace };
       const code = typeof m.code === "string" ? m.code.trim() : applyPatch(before, patch), bad = !SLOTS.includes(slot) ? "unknown slot" : validate({ slot, code }) || (missing(code, {}, []) ? `uses ${missing(code, {}, [])}, which this agent hasn't been granted` : null);
       if (bad) { b.send("rejected", id, { request_id: context.request_id, reason: bad, angle: "wire" }); return; }
-      offer({ slot, code, why: String(m.why || "").slice(0, 140), evidence: String(m.evidence || "").slice(0, 140), diff: typeof m.code === "string" ? "rewrite" : describe(before, patch), angle: "wire", ms: 0 }, id, context);
+      const expect = (typeof m.expect === "object" && m.expect ? (m.expect as Expect) : null) ?? parseExpect(`EXPECT ${String(m.expected_change ?? "")}`);
+      if (!expect) { b.send("rejected", id, { request_id: context.request_id, reason: "a proposal must predict a measurable effect: expect {metric, dir} or expected_change \"<metric> <up|down|same>\"", angle: "wire" }); return; }
+      offer({ slot, code, why: String(m.why || "").slice(0, 140), evidence: String(m.evidence || "").slice(0, 140), diff: typeof m.code === "string" ? "rewrite" : describe(before, patch), angle: "wire", ms: 0, expect }, id, context);
     });
     const e = (eng.current = new Engine());
     e.on("ready", () => { setLog(e.sampleRate && e.sampleRate < 44000 ? `audio device is at ${Math.round(e.sampleRate / 1000)} kHz: a Bluetooth headset with its mic on. It will sound dull. Set the Mac's INPUT to the built-in mic (or use speakers), then restart` : "engine ready"); if (KEEP) SLOTS.forEach((s) => evaluateSlot(s, st.current.slots[s], "startup")); else newBase(SEED); setTimeout(() => (st.current.booted = true), 3000); });

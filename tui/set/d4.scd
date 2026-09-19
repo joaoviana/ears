@@ -1,1 +1,1 @@
-~d.(\d4, \instrument, \bass, \dur, 1/4, \midinote, Pseq([32, \r, \r, 44, \r, \r, 32, \r, \r, 39, \r, 32, \r, \r, 43, \r], inf), \ctranspose, Pseq([5, -5, 4, -3], inf).stutter(16), \cutoff, 420, \res, 1.5, \dec, 0.3, \duck, 0.3, \amp, 0.75)
+~d.(\d4, \instrument, \bass, \dur, 1/4, \midinote, Pseq([35, \r, \r, 47, \r, \r, 35, \r, \r, 42, \r, 35, \r, \r, 45, \r], inf), \ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \cutoff, 420, \res, 1.5, \dec, 0.3, \duck, 0.3, \amp, 0.75)

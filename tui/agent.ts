@@ -9,7 +9,7 @@ import { SKILLS, missing, sampleNames } from "./skills.ts";
 import { parseExpect, METRICS, type Expect } from "./shots.ts";
 
 export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
-export interface Past { slot: string; why: string; verdict: "y" | "n"; id?: number; outcome?: string }
+export interface Past { slot: string; why: string; verdict: "y" | "n"; id?: number; outcome?: string; agent?: string }
 
 const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE idea as a small patch. Two other DJs' brains are offering a different angle at the same moment, so commit to yours. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
 
@@ -142,7 +142,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     "CURRENT CODE", ...Object.entries(input.slots).map(([k, v]) => `-- ${k}\n${v.trim() || "(empty)"}`),
     "", "LISTENING REPORT", input.report,
     "", "PERFORMER NOTE", input.note || "(none)",
-    "", "WHAT HAPPENED TO EARLIER IDEAS", input.history.length ? input.history.slice(-8).map((h) => `${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}${h.outcome ? `\n        ${h.outcome}` : ""}`).join("\n") : "(none)",
+    "", "WHAT HAPPENED TO EARLIER IDEAS (yours; lines marked [name] are another DJ's)", input.history.length ? input.history.slice(-8).map((h) => { const mine = !h.agent || h.agent === input.dj.id; return `${mine ? "" : `[${h.agent}] `}${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}${h.outcome && mine ? `\n        ${h.outcome}` : ""}`; }).join("\n") : "(none)",
   ].join("\n");
   const got: Suggestion[] = [], t0 = Date.now();
   const sk = input.showcase ? SKILLS.find((k) => k.id === input.showcase) : null;

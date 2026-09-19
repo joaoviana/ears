@@ -7,6 +7,10 @@ export type Metric = (typeof METRICS)[number];
 export type Dir = "up" | "down" | "same";
 export interface Expect { metric: Metric; dir: Dir }
 export type Grade = "hit" | "miss" | "flat" | "ungraded";
+// Confounds the evidence layer always attaches (the general observational caveat) are fine; these mean something
+// concrete intervened between the two windows, so nobody can say whose change moved the sound.
+const AMBIGUOUS = /other state or activation changes|mixer transitions/i;
+export const attributable = (confounds: string[] = []) => !confounds.some((c) => AMBIGUOUS.test(c));
 export interface Outcome { grade: Grade; delta: number | null; unit: string; floor: number; text: string }
 export interface Differences { envelope_db: number; peak_to_envelope_db: number; centroid_hz: number; onsets_per_beat: number; relative_bands_db: Record<string, number> }
 
@@ -14,6 +18,8 @@ const UNIT: Record<Metric, string> = { sub: "dB", low: "dB", mid: "dB", high: "d
 // the smallest change worth calling a change, before any noise has been measured
 const BASE: Record<Metric, number> = { sub: 1.2, low: 1.2, mid: 1.2, high: 1.5, air: 2, brightness: 220, loudness: 0.8, density: 0.3, punch: 1.2 };
 export const ARROW: Record<Dir, string> = { up: "↑", down: "↓", same: "=" };
+/** below this many baseline samples, `floor` falls back to the fixed default and `ready` is false */
+export const MIN_SAMPLES = 4;
 
 export function parseExpect(line: string): Expect | null {
   const m = line.match(/^\s*EXPECT\s*:?\s*([a-z]+)\s+(up|down|same|higher|lower|more|less|unchanged)\b/i); if (!m) return null;
@@ -39,8 +45,11 @@ export class NoiseFloor {
   }
   /** feed a measured difference directly (e.g. a counterfactual diff between two windows of unchanged music) */
   sample(diff: Partial<Record<Metric, number>>) { for (const m of METRICS) if (diff[m] != null) { const s = this.samples[m]; s.push(Math.abs(diff[m]!)); if (s.length > 24) s.shift(); } }
+  /** how many independent baseline differences this metric has seen */
+  count(m: Metric) { return this.samples[m].length; }
+  ready(m: Metric) { return this.samples[m].length >= MIN_SAMPLES; }
   floor(m: Metric): number {
-    const s = this.samples[m]; if (s.length < 3) return BASE[m];
+    const s = this.samples[m]; if (s.length < MIN_SAMPLES) return BASE[m];   // not calibrated yet: the fixed default
     const mean = s.reduce((a, b) => a + b, 0) / s.length;
     return Math.max(BASE[m], mean * 2);
   }
@@ -59,4 +68,12 @@ export function grade(e: Expect, d: Differences | null, floor: number): Outcome 
 export interface Tally { hit: number; miss: number; flat: number; ungraded: number }
 export const emptyTally = (): Tally => ({ hit: 0, miss: 0, flat: 0, ungraded: 0 });
 /** one line for the next prompt */
-export const forPrompt = (e: Expect, o: Outcome) => `you called ${e.metric} ${e.dir}; measured ${o.text} → ${o.grade.toUpperCase()}${o.grade === "miss" ? " (you were wrong: say what you misjudged, and correct for it)" : o.grade === "flat" ? " (no detectable effect: be bolder or pick a metric your change really moves)" : ""}`;
+export const forPrompt = (e: Expect, o: Outcome, mine = true) => {
+  const who = mine ? "you called" : "it was called", head = `${who} ${e.metric} ${e.dir}; measured ${o.text} → ${o.grade.toUpperCase()}`;
+  if (!mine) return head;
+  // the honest wording: on a live master mix we know the mix moved, not that this change moved it
+  if (o.grade === "miss") return `${head} (the mix moved the other way: say what you misjudged, and correct for it)`;
+  if (o.grade === "flat") return `${head} (no detectable effect on the mix: be bolder, or pick a metric your change really moves)`;
+  if (o.grade === "ungraded") return `${head} (${o.text}: not your fault, it could not be judged)`;
+  return head;
+};

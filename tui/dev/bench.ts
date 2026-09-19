@@ -8,13 +8,14 @@
 // as the change attributable to the edited slot alone: the dry mix is rebuilt with every other slot held at its
 // "before" measurement, so other voices' randomness can't mask or fake an effect.
 //   npm run ears:bench -- [seeds=2] [rounds=6]
-import fs from "fs"; import path from "path";
+import fs from "fs"; import path from "path"; import { execSync } from "child_process";
 import { Engine, ROOT } from "../engine.ts"; import { Listener, compare, asText, metricDelta, type Profile } from "../report.ts";
 import { ask, type Past, type Suggestion } from "../agent.ts"; import { roster } from "../djs.ts"; import { makeBase } from "../seed.ts";
 import { parseSlot, applyPatch } from "../patch.ts";
-import { NoiseFloor, grade, forPrompt, type Differences, type Metric } from "../shots.ts";
+import { NoiseFloor, grade, forPrompt, MIN_SAMPLES, type Differences, type Metric } from "../shots.ts";
 process.env.EARS_ANGLES = "1";
 const N_SEEDS = Number(process.argv[2] || 2), ROUNDS = Number(process.argv[3] || 6), SEEDS = [41, 7, 77, 12, 33, 5, 21, 64].slice(0, N_SEEDS);
+const METRICS_USED: Metric[] = ["sub", "low", "mid", "high", "air", "brightness", "loudness"];   // density and punch have no per-slot measurement
 const CONDS = ["blind", "ears", "ears+shots"] as const, SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6"], BANDS = ["sub", "low", "mid", "high", "air"] as const;
 const dj = roster().find((d) => d.id === "resident")!, e = new Engine(), wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let listener = new Listener(), taps: Record<string, { rms: number; centroid: number; bands: number[] }[]> = {}, barLen = 1846, barWaiters: (() => void)[] = [];
@@ -25,7 +26,8 @@ const nextBar = () => new Promise<void>((r) => barWaiters.push(r));
 
 interface Tap { power: number; bands: number[]; centroid: number }
 interface Win { master: Profile; taps: Record<string, Tap> }
-const window2 = async (): Promise<Win> => {
+const window2 = async (): Promise<Win> => { for (let attempt = 0; attempt < 4; attempt++) { const w = await windowOnce(); if (w.master) return w; console.log("   (empty window, listening again)"); } throw new Error("no audio frames are arriving from the engine"); };
+const windowOnce = async (): Promise<Win> => {
   await nextBar(); listener = new Listener(); taps = {}; for (let i = 0; i < 4; i++) await nextBar();   // four bars: the grooves turn around every fourth bar, and the hats are random
   const t: Record<string, Tap> = {};
   for (const k of SLOTS) { const f = taps[k] || [], n = Math.max(1, f.length), pw = f.map((x) => x.rms * x.rms), tot = pw.reduce((a, b) => a + b, 0); t[k] = { power: tot / n, bands: [0, 1, 2, 3, 4].map((i) => f.reduce((a, x) => a + x.bands[i] * x.bands[i], 0) / n), centroid: tot > 0 ? f.reduce((a, x, j) => a + x.centroid * pw[j], 0) / tot : 0 }; }
@@ -45,29 +47,37 @@ const breakIt = (slots: Record<string, string>) => { const out = { ...slots }, v
   const cut = val(out.d4, "cutoff"); out.d4 = applyPatch(out.d4, { slot: "d4", set: [{ key: "cutoff", value: cut ? `(${cut}) * 3.2` : "3600" }] });
   return out; };
 
-interface Row { cond: string; seed: number; round: number; ms: number | null; refused: number; slot: string; call: string; master: string; tap: string; tapDelta: number | null; dist_before: number; dist_after: number; why: string }
+interface Row { cond: string; seed: number; round: number; calibrated?: boolean; ms: number | null; refused: number; slot: string; call: string; master: string; tap: string; tapDelta: number | null; dist_before: number; dist_after: number; why: string }
 const rows: Row[] = [], noiseOfDistance: number[] = [];
+const stamp0 = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-"), live = path.join(ROOT, "docs/bench", `${stamp0}.rounds.jsonl`); fs.mkdirSync(path.dirname(live), { recursive: true });
+const keep = (r: Row) => { rows.push(r); fs.appendFileSync(live, JSON.stringify(r) + "\n"); };
+const ONLY = (process.env.BENCH_CONDS || "").split(",").filter(Boolean), T0 = Date.now(), clock = () => `${Math.floor((Date.now() - T0) / 60000)}m${String(Math.floor(((Date.now() - T0) / 1000) % 60)).padStart(2, "0")}`;
 
 e.on("ready", async () => {
-  for (const cond of CONDS) for (const seed of SEEDS) {
+  for (const cond of CONDS.filter((c) => !ONLY.length || ONLY.includes(c))) for (const seed of SEEDS) {
     const base = makeBase(seed, "dark"), clean = base.slots;   // the dark family, so results stay comparable with earlier runs
     e.eval("Pdef.all.do(_.stop); 1", "stop"); e.tempo(base.bpm); await wait(barLen * 1.2);
     for (const k of SLOTS) if (clean[k]) e.eval(clean[k], k);
     await nextBar(); await nextBar();
-    const w1 = await window2(), w2 = await window2(), w3 = await window2();                       // the clean base: target + noise floor
-    const target = w3, masterNoise = new NoiseFloor(), tapNoise: Record<string, NoiseFloor> = Object.fromEntries(SLOTS.map((k) => [k, new NoiseFloor()]));
-    for (const [a, b] of [[w1, w2], [w2, w3]] as const) { masterNoise.sample(asMetrics(metricDelta(a.master, b.master) as any)); for (const k of SLOTS) tapNoise[k].sample(asMetrics(mixDiff(a.taps, { ...a.taps, [k]: b.taps[k] }))); }
+    // Calibration: MIN_SAMPLES+1 windows of the UNCHANGED clean base, so each consecutive pair is one independent
+    // sample of "how much this music moves on its own". With fewer, the floors silently fall back to fixed
+    // defaults and small changes look like hits.
+    const cal: Win[] = []; for (let i = 0; i <= MIN_SAMPLES; i++) cal.push(await window2());
+    const target = cal[cal.length - 1], masterNoise = new NoiseFloor(), tapNoise: Record<string, NoiseFloor> = Object.fromEntries(SLOTS.map((k) => [k, new NoiseFloor()]));
+    for (let i = 1; i < cal.length; i++) { const a = cal[i - 1], b = cal[i]; masterNoise.sample(asMetrics(metricDelta(a.master, b.master) as any)); for (const k of SLOTS) tapNoise[k].sample(asMetrics(mixDiff(a.taps, { ...a.taps, [k]: b.taps[k] }))); }
+    const calibrated = METRICS_USED.every((m) => masterNoise.ready(m) && SLOTS.every((k) => tapNoise[k].ready(m)));
     const slots = breakIt(clean); for (const k of ["d1", "d2", "d4"]) e.eval(slots[k], k);
     await nextBar(); await wait(barLen * 0.5);
     let before = await window2(); const history: Past[] = [];
-    const selfNoise = (distance(w1.taps, target.taps) + distance(w2.taps, target.taps)) / 2; noiseOfDistance.push(selfNoise);
-    console.log(`\n${cond} · seed ${seed} · ${base.style} ${base.bpm} · clean base vs itself: ${selfNoise.toFixed(2)} · after breaking it: ${distance(before.taps, target.taps).toFixed(2)}`);
+    const selfNoise = cal.slice(0, -1).reduce((a, w) => a + distance(w.taps, target.taps), 0) / (cal.length - 1); noiseOfDistance.push(selfNoise);
+    if (!calibrated) console.log("   (noise floors not fully calibrated for this seed)");
+    console.log(`\n${cond} · seed ${seed} · ${base.style} ${base.bpm} · clean base vs itself: ${selfNoise.toFixed(2)} · after breaking it: ${distance(before.taps, target.taps).toFixed(2)} · floors from ${cal.length - 1} baseline pairs`);
     for (let round = 1; round <= ROUNDS; round++) {
       const report = cond === "blind" ? "NO LISTENING REPORT IS AVAILABLE. You have the code only. Still call your shot." : asText(compare(before.master, target.master), "this track as it should sound");
       let got: Suggestion | null = null, refused = 0;
       try { await ask({ dj, skills: [], slots, report, note: "", history: cond === "ears+shots" ? history : history.map((h) => ({ ...h, outcome: undefined })), context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` }, (o) => { got ??= o; }, (kind) => { if (kind === "rejected") refused++; }); } catch {}
       const o = got as Suggestion | null, d0 = distance(before.taps, target.taps);
-      if (!o) { rows.push({ cond, seed, round, ms: null, refused, slot: "-", call: "-", master: "no idea", tap: "no idea", tapDelta: null, dist_before: d0, dist_after: d0, why: "" }); console.log(`  r${round}  no usable idea`); continue; }
+      if (!o) { keep({ cond, seed, round, calibrated, ms: null, refused, slot: "-", call: "-", master: "no idea", tap: "no idea", tapDelta: null, dist_before: d0, dist_after: d0, why: "" }); console.log(`  r${round}  no usable idea`); continue; }
       let ok = true; const onEval = (r: any) => { if (r.id === o.slot && !r.ok) ok = false; }; e.on("evald", onEval);
       e.eval(o.code, o.slot); await nextBar(); await wait(barLen * 0.5); e.off("evald", onEval);
       const after = await window2(); if (ok) slots[o.slot] = o.code;
@@ -75,18 +85,19 @@ e.on("ready", async () => {
       const gt = ok ? grade(o.expect, mixDiff(before.taps, { ...before.taps, [o.slot]: after.taps[o.slot] }, [before.master, after.master]), tapNoise[o.slot].floor(o.expect.metric)) : null;
       history.push({ slot: o.slot, why: o.why, verdict: "y", id: round, outcome: gt ? forPrompt(o.expect, gt) : "the engine refused this code" });
       const d1 = distance(after.taps, target.taps);
-      rows.push({ cond, seed, round, ms: o.ms, refused, slot: o.slot, call: `${o.expect.metric} ${o.expect.dir}`, master: gm?.grade ?? "engine refused", tap: gt?.grade ?? "engine refused", tapDelta: gt?.delta ?? null, dist_before: d0, dist_after: d1, why: o.why });
-      console.log(`  r${round}  ${(o.ms / 1000).toFixed(1)}s ${o.slot} calls ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} master ${String(gm?.grade).toUpperCase().padEnd(5)} tap ${String(gt?.grade).toUpperCase().padEnd(5)} ${(gt?.text ?? "").padEnd(34).slice(0, 34)} dist ${d0.toFixed(2)}→${d1.toFixed(2)}  ${o.why.slice(0, 52)}`);
+      keep({ cond, seed, round, calibrated, ms: o.ms, refused, slot: o.slot, call: `${o.expect.metric} ${o.expect.dir}`, master: gm?.grade ?? "engine refused", tap: gt?.grade ?? "engine refused", tapDelta: gt?.delta ?? null, dist_before: d0, dist_after: d1, why: o.why });
+      console.log(`  ${clock()} r${round}  ${(o.ms / 1000).toFixed(1)}s ${o.slot} calls ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} master ${String(gm?.grade).toUpperCase().padEnd(5)} tap ${String(gt?.grade).toUpperCase().padEnd(5)} ${(gt?.text ?? "").padEnd(34).slice(0, 34)} dist ${d0.toFixed(2)}→${d1.toFixed(2)}  ${o.why.slice(0, 52)}`);
       before = after;
     }
   }
+  const commit = (() => { try { return execSync("git rev-parse --short HEAD", { cwd: ROOT, encoding: "utf8" }).trim(); } catch { return "unknown"; } })(), rate = e.sampleRate || 0;
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN), pct = (a: number, b: number) => (b ? Math.round((100 * a) / b) + "%" : "-");
   const line = (c: string) => { const r = rows.filter((x) => x.cond === c), ideas = r.filter((x) => x.ms), g = (key: "master" | "tap", v: string) => ideas.filter((x) => x[key] === v).length;
     const start = mean(r.filter((x) => x.round === 1).map((x) => x.dist_before)), end = mean(r.filter((x) => x.round === ROUNDS).map((x) => x.dist_after)), helped = ideas.filter((x) => x.dist_after < x.dist_before - 0.02).length;
     return `| ${c} | ${ideas.length} | ${pct(g("tap", "hit"), ideas.length)} (${g("tap", "hit")}/${g("tap", "miss")}/${g("tap", "flat")}) | ${pct(g("master", "hit"), ideas.length)} (${g("master", "hit")}/${g("master", "miss")}/${g("master", "flat")}) | ${start.toFixed(2)} → ${end.toFixed(2)} | ${pct(helped, ideas.length)} | ${(mean(ideas.map((x) => x.ms!)) / 1000).toFixed(1)} | ${r.reduce((a, x) => a + x.refused, 0)} |`; };
-  const table = ["| condition | ideas | calls that came true, per-slot taps (hit/miss/flat) | same calls graded on the master | distance from the clean base: start → end | ideas that moved it closer | s / idea | refusals |", "|---|---|---|---|---|---|---|---|", ...CONDS.map(line)].join("\n");
+  const table = ["| condition | ideas | calls that came true, per-slot estimate (hit/miss/flat) | same calls graded on the master | distance from the clean base: start → end | ideas that moved it closer | s / idea | refusals |", "|---|---|---|---|---|---|---|---|", ...CONDS.map(line)].join("\n");
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-"), file = path.join(ROOT, "docs/bench", `${stamp}.md`);
-  fs.writeFileSync(file, `# EARS benchmark · ${stamp}\n\n${SEEDS.length} seeds × ${ROUNDS} rounds × ${CONDS.length} conditions · DJ: ${dj.name} · one idea per round (fix angle), auto-taken · muted second engine.\n\nEach base is measured clean (the target), then broken (kick buried, hats 2.6× too loud, low voice's filter 3.2× open). Distance is the dry mix's band balance, brightness and level against the clean base, in tolerances (1.5 dB / 0.15 oct / 1 dB, each capped at 4): 0 is "back where it was". Two windows of the UNCHANGED clean base sit ${mean(noiseOfDistance).toFixed(2)} apart on this scale, so differences smaller than that are noise. Windows are 4 bars.\nCalls are graded from per-slot taps as the change attributable to the edited slot alone, against that slot's own noise floor; the master-mix grade of the same call is shown for comparison. Observational; stochastic patterns; read small differences as noise.\n\n${table}\n\n## Every round\n\n| cond | seed | r | s | slot | call | master | tap | Δ (tap) | distance | why |\n|---|---|---|---|---|---|---|---|---|---|---|\n${rows.map((r) => `| ${r.cond} | ${r.seed} | ${r.round} | ${r.ms ? (r.ms / 1000).toFixed(1) : "-"} | ${r.slot} | ${r.call} | ${r.master} | ${r.tap} | ${r.tapDelta == null ? "-" : r.tapDelta.toFixed(1)} | ${r.dist_before.toFixed(2)}→${r.dist_after.toFixed(2)} | ${r.why.replace(/\|/g, "/")} |`).join("\n")}\n`);
+  fs.writeFileSync(file, `# EARS benchmark · ${stamp}\n\n${SEEDS.length} seeds × ${ROUNDS} rounds × ${CONDS.length} conditions · DJ: ${dj.name} · one idea per round (fix angle), auto-taken · muted second engine.\nModel ${process.env.EARS_MODEL || "sonnet"} at ${process.env.EARS_EFFORT || "low"} effort · commit ${commit} · engine sample rate ${rate} Hz · seeds ${SEEDS.join(", ")} · noise floors from ${MIN_SAMPLES} baseline pairs per metric per slot.\n\nEach base is measured clean (the target), then broken (kick buried, hats 2.6× too loud, low voice's filter 3.2× open). Distance is the dry mix's band balance, brightness and level against the clean base, in tolerances (1.5 dB / 0.15 oct / 1 dB, each capped at 4): 0 is "back where it was". Two windows of the UNCHANGED clean base sit ${mean(noiseOfDistance).toFixed(2)} apart on this scale, so differences smaller than that are noise. Windows are 4 bars.\n**What the two grading columns are.** The per-slot column is an *approximate dry-slot contribution estimate*: the dry mix is recomputed from each slot's own summary with the edited slot's after-summary substituted in, so other voices are held at their before-measurements. It is not a controlled re-render: the edited voice still varies with its own randomness, and shared effects and master processing sit outside these dry summaries. Band balance, brightness and level are genuinely per-slot; density and punch have no per-slot measurement and fall back to the master delta (marked * in the round table). The master column is what the live host grades today. Observational; stochastic patterns; read small differences as noise.\n\n${table}\n\n## Every round\n\n| cond | seed | r | s | slot | call | master | per-slot | Δ | distance | why |\n|---|---|---|---|---|---|---|---|---|---|---|\n${rows.map((r) => `| ${r.cond} | ${r.seed} | ${r.round} | ${r.ms ? (r.ms / 1000).toFixed(1) : "-"} | ${r.slot} | ${r.call} | ${r.master} | ${r.tap}${/^(density|punch)/.test(r.call) ? "*" : ""} | ${r.tapDelta == null ? "-" : r.tapDelta.toFixed(1)} | ${r.dist_before.toFixed(2)}→${r.dist_after.toFixed(2)} | ${r.why.replace(/\|/g, "/")} |`).join("\n")}\n`);
   fs.writeFileSync(file.replace(".md", ".json"), JSON.stringify(rows, null, 2));
   console.log(`\n${table}\n\nwritten to ${file}`); e.stop(); setTimeout(() => process.exit(0), 900);
 });

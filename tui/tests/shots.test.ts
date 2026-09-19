@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { parseExpect, grade, NoiseFloor, forPrompt } from "../shots.ts";
+import { parseExpect, grade, NoiseFloor, forPrompt, attributable, MIN_SAMPLES } from "../shots.ts";
 const diff = (over: Partial<{ envelope_db: number; centroid_hz: number; onsets_per_beat: number; peak_to_envelope_db: number; sub: number }>) => ({ envelope_db: over.envelope_db ?? 0, peak_to_envelope_db: over.peak_to_envelope_db ?? 0, centroid_hz: over.centroid_hz ?? 0, onsets_per_beat: over.onsets_per_beat ?? 0, relative_bands_db: { sub: over.sub ?? 0, low: 0, mid: 0, high: 0, air: 0 } });
 
 test("EXPECT lines parse, with aliases, and reject unknown metrics", () => {
@@ -27,4 +27,20 @@ test("the noise floor rises when the unchanged music itself moves, and never dro
   assert.ok(n.floor("brightness") < 1200);
   assert.equal(n.floor("sub"), 1.2);
 });
-test("a miss tells the DJ it was wrong", () => { const e = { metric: "sub", dir: "up" } as const; assert.match(forPrompt(e, grade(e, diff({ sub: -3 }), 1.2)), /MISS.*you were wrong/); });
+test("a miss says the mix moved the other way, not that the DJ's change caused it", () => {
+  const e = { metric: "sub", dir: "up" } as const, line = forPrompt(e, grade(e, diff({ sub: -3 }), 1.2));
+  assert.match(line, /MISS/); assert.match(line, /the mix moved the other way/); assert.doesNotMatch(line, /you were wrong/);
+  assert.match(forPrompt(e, grade(e, diff({ sub: -3 }), 1.2), false), /it was called/);   // another DJ's record is not addressed to you
+});
+test("a comparison with a concrete overlapping change is not attributable", () => {
+  const general = ["live master mix, not an isolated voice", "different musical time; stochastic patterns and effect tails may differ"];
+  assert.equal(attributable(general), true);
+  assert.equal(attributable([...general, "other state or activation changes occurred"]), false);
+  assert.equal(attributable([...general, "mixer transitions and shared effects are not controlled"]), false);
+});
+test("the noise floor says when it is not calibrated yet", () => {
+  const n = new NoiseFloor(), abs = (c: number) => ({ sub: 0, low: 0, mid: 0, high: 0, air: 0, brightness: c, loudness: 0, density: 0, punch: 0 });
+  for (let i = 0; i <= MIN_SAMPLES; i++) { assert.equal(n.ready("brightness"), false, `ready after ${i} pushes`); assert.equal(n.floor("brightness"), 220, "uncalibrated floors use the fixed default"); n.push("s1:a1", abs(3000 + i * 1000)); }
+  assert.equal(n.ready("brightness"), true);
+  assert.ok(n.floor("brightness") > 1000);
+});

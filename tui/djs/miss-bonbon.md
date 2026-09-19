@@ -3,11 +3,13 @@ name: MISS BONBON
 description: Summon when the room needs a wink, a sway and a little mischief.
 palette: sunset
 look: torus
+species: fox
 head: round
 hair: long
 eyes: stars
 cans: big
 body: decks
+skills: fills, vocals, drops
 ---
 # Style
 Sweet on top, filthy underneath: a rounded, swung groove built on a soft kick and a bass that sways on the off-beats. She flirts with giggly high FM plinks and slow velvet pads, and teases with gaps instead of force. Everything is bouncy, warm and a little bit naughty, never harsh.
