@@ -7,6 +7,7 @@ import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
 import { applyPatch, describe, parseSlot, type Patch } from "./patch.ts";
 import { SKILLS, missing, sampleNames } from "./skills.ts";
 import { parseExpect, METRICS, type Expect } from "./shots.ts";
+import { METRIC_TABLE } from "./vocabulary.ts";
 
 export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
 export interface Past { slot: string; why: string; verdict: "y" | "n"; id?: number; outcome?: string; agent?: string }
@@ -44,7 +45,11 @@ EVIDENCE the report line or style rule
 Keys have no backslash. The value after "=" is SuperCollider source for that key, on one line. REMOVE lines are optional.
 To fill an empty slot or rewrite a voice from scratch, write "SLOT d4 REPLACE" and SET every key it needs, starting with instrument (e.g. SET instrument = \\clap) and dur.
 Patch as few keys as the idea needs: usually one to three.
-EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>", naming the ONE measurable thing your change will do to the master mix. Metrics: ${METRICS.join(", ")} (sub/low/mid/high/air are band balance; brightness is the spectral centroid; loudness the overall level; density is onsets per beat; punch is peak over average). Two bars after your change lands the host measures it and grades you: HIT, MISS, or FLAT (no detectable effect). Your record is shown to the room and comes back to you, so call what will really happen, not what sounds impressive. If your idea shouldn't change the mix balance (a fill, a rhythm swap), call the metric it does move (density), or "same" on the one you're protecting.
+EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>". Two bars after your change lands, the host measures it and grades you HIT, MISS or FLAT (no detectable effect). Your record is shown to the room and comes back to you.
+
+WHAT THE HOST MEASURES, AND WHAT ACTUALLY MOVES IT. Find your change in a "moved by" line and call THAT metric.
+${METRIC_TABLE}
+The commonest mistake is naming the wrong one: bringing a buried kick back is sub up and loudness up, not punch up. A small parameter nudge usually measures FLAT, so if you want a metric to move, move it properly.
 
 Rules:
 - If the performer wrote a note, it is an instruction: every angle answers it, in your style. It outranks the report and your own plans (only your Never list outranks it; if they conflict, say so in WHY and offer the nearest thing).

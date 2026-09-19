@@ -41,10 +41,16 @@ const asMetrics = (d: Differences): Partial<Record<Metric, number>> => ({ ...d.r
 /** how far the dry mix is from the clean base, in tolerances (1.5 dB per band, 0.15 octave of brightness, 1 dB level), each capped at 4 */
 const distance = (t: Record<string, Tap>, target: Record<string, Tap>) => { const a = mix(t), b = mix(target), cap = (x: number) => Math.min(4, x); return ([...a.rel.map((v, i) => cap(Math.abs(v - b.rel[i]) / 1.5)), cap(Math.abs(Math.log2(a.centroid / b.centroid)) / 0.15), cap(Math.abs(a.loud - b.loud) / 1)]).reduce((x, y) => x + y, 0) / 7; };
 /** deliberately worse: the kick buried, the hats too loud, the low voice's filter wide open */
+/**
+ * Deliberately worse: the kick buried, the hats far too loud, the low voice's filter wide open. The damage is
+ * folded into the numbers rather than appended as `* 2.6`, so the source looks like a track somebody wrote badly.
+ * Otherwise the code itself is an answer key and the "blind" condition is not blind at all.
+ */
+const scaleNumbers = (value: string, by: number, clamp = 20000) => value.replace(/\d+(\.\d+)?/g, (n) => String(Math.round(Math.min(clamp, Number(n) * by) * 100) / 100));
 const breakIt = (slots: Record<string, string>) => { const out = { ...slots }, val = (code: string, key: string) => parseSlot(code).find((p) => p.key === key)?.value;
   out.d1 = out.d1.replace(/, 0\.9\)/, ", 0.3)");
-  const hat = val(out.d2, "amp"); if (hat) out.d2 = applyPatch(out.d2, { slot: "d2", set: [{ key: "amp", value: `(${hat}) * 2.6` }] });
-  const cut = val(out.d4, "cutoff"); out.d4 = applyPatch(out.d4, { slot: "d4", set: [{ key: "cutoff", value: cut ? `(${cut}) * 3.2` : "3600" }] });
+  const hat = val(out.d2, "amp"); if (hat) out.d2 = applyPatch(out.d2, { slot: "d2", set: [{ key: "amp", value: scaleNumbers(hat, 2.6, 1) }] });
+  const cut = val(out.d4, "cutoff"); out.d4 = applyPatch(out.d4, { slot: "d4", set: [{ key: "cutoff", value: cut ? scaleNumbers(cut, 3.2, 6000) : "3600" }] });
   return out; };
 
 interface Row { cond: string; seed: number; round: number; calibrated?: boolean; ms: number | null; refused: number; slot: string; call: string; master: string; tap: string; tapDelta: number | null; dist_before: number; dist_after: number; why: string }
