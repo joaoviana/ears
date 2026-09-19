@@ -1,1 +1,1 @@
-~d.(\d1, \instrument, \kick, \dur, Pseq([1, 1, 1, 1/2, 1/2], inf), \amp, 1.0, \tune, 42)
+~d.(\d1, \instrument, \kick, \dur, 1/4, \amp, ~x.("X-----X---X--X--", 0.9), \tune, 52, \dec, 0.36, \drive, 1.2)

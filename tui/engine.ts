@@ -10,13 +10,21 @@ export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname)
 const SCLANG = ["/Applications/SuperCollider.app/Contents/MacOS/sclang", path.join(ROOT, ".tools/SuperCollider.app/Contents/MacOS/sclang")].find((p) => fs.existsSync(p));
 
 export interface Ears { rms: number; peak: number; centroid: number; flatness: number; bands: number[] }
-export interface Hit { slot: string; inst: string; at: number; amp: number }
+export interface Hit { slot: string; inst: string; at: number; amp: number; step: number }
 
 export class Engine extends EventEmitter {
   private sock = dgram.createSocket("udp4");
   private sc: ChildProcess | null = null;
   private lang = 0;
   ready = false;
+  // SuperCollider stamps events with its own logical clock. Messages arrive late by a varying amount (UDP, a busy
+  // render loop), so the clock offset is the smallest lateness seen recently: jitter only ever adds.
+  private offset = Infinity;
+  private toLocal(scSeconds: number, latency: number) {
+    const sample = Date.now() / 1000 - scSeconds;
+    this.offset = Math.min(this.offset + 0.0002, sample);
+    return (scSeconds + this.offset + latency) * 1000;
+  }
 
   start(mute = false) {
     if (!SCLANG) throw new Error("SuperCollider not found. See offline/README.md");
@@ -38,8 +46,8 @@ export class Engine extends EventEmitter {
       case "/ears": this.emit("ears", { rms: a[0], peak: a[1], centroid: a[2], flatness: a[3], bands: a.slice(4, 9) } as Ears); break;
       case "/onset": this.emit("onset"); break;
       case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
-      case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: Date.now() + a[2] * 1000, amp: a[3] } as Hit); break;
-      case "/bar": this.emit("bar", { n: a[0], at: Date.now() + a[1] * 1000, bpm: a[2] }); break;
+      case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: this.toLocal(a[4], a[2]), amp: a[3], step: Math.floor(((a[5] % 4) + 4) % 4 * 4 + 0.001) % 16 } as Hit); break;
+      case "/bar": this.emit("bar", { n: a[0], at: this.toLocal(a[3], a[1]), bpm: a[2] }); break;
       case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2] }); break;
     }
   }
@@ -49,6 +57,7 @@ export class Engine extends EventEmitter {
   }
   eval(code: string, id: string) { this.send("/eval", [code, id]); }
   volume(v: number) { this.send("/vol", [v]); }
+  tempo(bpm: number) { this.send("/tempo", [bpm]); }
 
   /** Quits this engine's own server, then its sclang. Never touches another engine that may be running. */
   stop() {

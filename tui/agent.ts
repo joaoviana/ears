@@ -12,13 +12,20 @@ const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set
 
 The code is SuperCollider. Each slot is exactly one expression:
   ~d.(\\dN, \\instrument, \\NAME, \\dur, ..., key, value, ...)
-Slots are d1..d4. 130 BPM, 4 beats per bar, \\dur is in beats. Patterns: Pseq([...], inf), Prand, Pwhite(lo, hi), Pdup(n, pat), Rest(0) or \\r for rests, arrays for chords.
+Slots are d1..d4. 4 beats per bar, \\dur is in beats. Tempo and key are given with the code; stay in key.
+Rhythm rows: \\amp, ~x.("X---x---X---x-x-", 0.9) with \\dur 1/4 is a 16-step row: X = hit at that amp, x = ghost, - = rest. Prefer it for drums: the audience can read it.
+Patterns: Pseq([...], inf), Rest(0) or \\r for rests, arrays for chords, .stutter(n) to hold values.
+Randomness is welcome and makes parts breathe: Prand([...], inf), Pwrand([...], [weights], inf), Pwhite(lo, hi), Pbrown(lo, hi, step), Pshuf([...], inf). Patterns can be multiplied: Pseq([...], inf) * Pwhite(0.8, 1.1).
 Instruments and their arguments:
-  \\kick  amp, tune (Hz, default 44)
-  \\hat   amp, dec (seconds, 0.03 closed / 0.16 open), hp (Hz), pan
-  \\clap  amp, send (reverb send 0..1)
-  \\bass  midinote, amp, cutoff (Hz, the Moog filter: low = dark and subby, high = bright and thin), res (0..3.5), dec
+  \\kick  amp, tune (Hz 36-60), dec (0.15-0.6 s), drive (1-3), punch
+  \\hat   amp (0.05-0.35), dec (0.03 closed .. 0.16 open), hp (Hz), pan
+  \\clap  amp, send (reverb 0..1)
+  \\bass  midinote, amp, cutoff (Hz; low = dark and subby, high = bright and thin), res (0..3.5, 2.5+ growls), dec
+  \\acid  midinote, amp, cutoff (base Hz), env (how far the filter opens per note, 500-5000), res (0..1, 0.85+ squelches), dec, wave (0 saw .. 1 square), send
   \\stab  midinote (array = chord), amp, cutoff, dec, send
+  \\fm    midinote, amp, ratio (1 warm, 2 hollow, 3.5 bell, 7.1 metal), index (0.5-8 bite), dec, pan, send
+  \\pad   midinote (array = chord), amp (keep under 0.15), cutoff, att, sus (seconds held), rel, send; use long \\dur like 8 or 16
+  \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
 Nothing else exists. No new SynthDefs, no other functions, no semicolons, one expression.
 
 Rules:
@@ -66,8 +73,9 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
 
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
-export async function ask(input: { dj: DJ; slots: Record<string, string>; report: string; note: string; history: Past[] }): Promise<Suggestion[]> {
+export async function ask(input: { dj: DJ; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }): Promise<Suggestion[]> {
   const prompt = [
+    "TEMPO AND KEY", input.context, "",
     "CURRENT CODE", ...Object.entries(input.slots).map(([k, v]) => `-- ${k}\n${v.trim() || "(empty)"}`),
     "", "LISTENING REPORT", input.report,
     "", "PERFORMER NOTE", input.note || "(none)",
@@ -91,7 +99,7 @@ const DJ_SCHEMA = {
 
 /** Writes a new guest from a description. The result is saved as markdown and joins the booth. */
 export function summon(description: string, taken: string[]): Promise<DJ> {
-  const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns that use five instruments: \\kick (amp, tune), \\hat (amp, dec, hp, pan), \\clap (amp, send), \\bass (midinote, amp 0-1, cutoff 200-4000 Hz, res 0-3.5 where 2.5+ growls and 3.3 squeals, dec in seconds), \\stab (midinote chords, amp, cutoff Hz, dec seconds, send 0-1), at a fixed 130 BPM. Amps are 0-1; hat dec is 0.03 closed to 0.16 open. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
+  const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns built from these instruments: \\kick (amp, tune, dec, drive), \\hat (amp, dec 0.03-0.16, hp, pan), \\clap (amp, send), \\bass (midinote, cutoff 200-4000 Hz, res 0-3.5, dec), \\acid (midinote, cutoff, env 500-5000, res 0-1, dec, wave), \\stab (chords, cutoff, dec, send), \\fm (midinote, ratio, index, dec, pan), \\pad (chords, cutoff, att, sus, rel), \\perc (freq Hz, dec, pan). Tempo and key vary per set, so describe notes as scale degrees or intervals from the root, not fixed pitches. Randomness (Prand, Pwhite, Pbrown, Pwrand) is available. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
 name: 1-3 words, uppercase stage name. tagline: one line, when to summon them. style: 2-3 sentences. greeting: what they say walking into the booth, under 12 words, in character. Pick the face parts, palette and visual look that suit them. id: kebab-case, not one of: ${taken.join(", ") || "(none)"}.`;
   return claude<DJ>(`Create a guest DJ: ${description}`, system, DJ_SCHEMA);
 }

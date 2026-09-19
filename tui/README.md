@@ -6,14 +6,34 @@ one change at a time. Everything is a terminal program, so the whole show is one
 ```
 npm run ears:stage        # tmux: your $EDITOR on the left, EARS on the right
 npm run ears              # just the TUI (edit tui/set/*.scd in any editor)
+npm run ears -- --seed 4821   # replay a base you liked (the seed is shown top right)
+npm run ears -- --keep    # continue the set that's on disk instead of rolling a new base
 npm run ears -- --mute    # silent: the ears still measure, nothing reaches the speakers
-npm run ears -- --manual  # the agent only speaks when you press a
-npm run ears:reset        # put the starting set back
+npm run ears -- --manual  # DJs only speak when you press a
+npm run ears -- --demo    # visuals only, fake pulse, no SuperCollider
 ```
+
+## A different base every time
+
+Each launch rolls a seed and builds the four slots from it: tempo (120–138), key and scale, kick figure (four,
+broken, euclidean, half-time), hat style, a bass or acid line drawn from the scale, and a fourth voice that might be
+stabs, FM bells, a pad, tuned percussion or a clap. **g** rolls a new base mid-set; it lands on the next bar and the
+tempo follows. Patterns carry their own randomness too (`Pwhite`, `Prand`, `Pbrown`, `Pwrand`), so one seed never
+loops identically, and the DJs are told they can use it. Whatever was in `tui/set/` is archived to `tui/sets/` first.
+Drums are written as step rows, `~x.("X---x---X---x-x-", 0.9)`, so the room can read them.
+Nine instruments: `\kick \hat \clap \bass \acid \stab \fm \pad \perc`.
+
+## The live thing is the code
+
+Every slot has a 16-step lane lit by the hits that actually sounded (SuperCollider reports each event's exact beat,
+so the lane is the pattern, not a guess). The slot is coloured by whoever wrote it: the seed, **you** (a file save),
+or a DJ, with the bar it landed on. The tokens a change brought in glow white for 8 bars. Under each avatar:
+how many rounds they offered, how many you took, and which slots are currently theirs. The report's band rows have
+live meters.
 
 Keys, booth: **1 2 3** take an option (**y** = 1) · **n** skip them all · **t** tell the active DJ something ·
 **a** ask now · **s** summon a new DJ from a description · **d** bring in someone from the roster · **x** dismiss.
-Keys, screen: **l / L** look · **p** palette · **c** characters · **f** fullscreen · **m** mute ·
+Keys, screen: **g** new base · **l / L** look · **p** palette · **c** characters · **f** fullscreen · **m** mute ·
 **r** save what's playing as the reference · **q** quit.
 
 ## DJs
