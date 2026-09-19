@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \fm, \dur, 3/4, \midinote, Prand([67, 70, 74, 79, 82, \r, \r, \r], inf), \ratio, 2, \index, Pwhite(0.8, 2.5), \dec, Pwhite(0.2, 0.8), \amp, 0.12, \pan, Pwhite(-0.7, 0.7), \send, 0.4)
+~d.(\d6, \instrument, \pad, \dur, 8, \midinote, Pseq([[64, 67, 71, 74], [73, 76, 79, 71]], inf), \sus, 3.051, \att, 1.5, \rel, 3, \cutoff, Pwhite(1200, 3000), \duck, 0.5, \amp, 0.05)

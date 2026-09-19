@@ -259,7 +259,7 @@ function App() {
       offer({ slot, code, why: String(m.why || "").slice(0, 140), evidence: String(m.evidence || "").slice(0, 140), diff: typeof m.code === "string" ? "rewrite" : describe(before, patch), angle: "wire", ms: 0 }, id, context);
     });
     const e = (eng.current = new Engine());
-    e.on("ready", () => { setLog("engine ready"); if (KEEP) SLOTS.forEach((s) => evaluateSlot(s, st.current.slots[s], "startup")); else newBase(SEED); setTimeout(() => (st.current.booted = true), 3000); });
+    e.on("ready", () => { setLog(e.sampleRate && e.sampleRate < 44000 ? `audio device is at ${Math.round(e.sampleRate / 1000)} kHz: a Bluetooth headset with its mic on. It will sound dull. Set the Mac's INPUT to the built-in mic (or use speakers), then restart` : "engine ready"); if (KEEP) SLOTS.forEach((s) => evaluateSlot(s, st.current.slots[s], "startup")); else newBase(SEED); setTimeout(() => (st.current.booted = true), 3000); });
     e.on("ears", (f) => { ears.current.push(f, { revision: evidence.revision, active_revision: evidence.activeRevision }); pulse.current.bands = f.bands; });
     e.on("scope", feed);
     e.on("onset", () => ears.current.onset());

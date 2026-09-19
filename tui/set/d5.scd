@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \choir, \dur, 4, \midinote, Pseq([[55, 58, 62, 65], [63, 67, 70, 74], [58, 62, 65, 69], [65, 69, 72, 75]], inf), \vowel, Pseq([0, 3, 4, 1], inf), \sus, 1.233, \att, 0.5, \rel, 0.616, \duck, 0.7, \amp, 0.1)
+~d.(\d5, \instrument, \stab, \dur, 1/4, \amp, ~x.(["------X---------", "------X------x--"], 0.2), \midinote, [52, 55, 59, 62], \cutoff, Pbrown(600, 1900, 150), \dec, 0.12, \send, 1)

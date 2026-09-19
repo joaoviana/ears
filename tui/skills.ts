@@ -2,7 +2,7 @@
 // any proposal that uses it, and the DJ isn't even told it exists. On the wire: `unlock` (earned) and `grant` (activated).
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, spawnSync } from "child_process";
 import { ROOT, type Engine } from "./engine.ts";
 
 export interface Skill { id: string; name: string; glyph: string; takes: number; blurb: string; teach: string; uses: (code: string, extra: { forBars?: number; transition?: string }) => boolean }
@@ -32,11 +32,20 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 export const sampleNames = () => { try { return fs.readdirSync(SAMPLES).filter((f) => /\.(wav|aiff?|flac)$/i.test(f)).map((f) => f.replace(/\.[^.]+$/, "")); } catch { return []; } };
 const sampleFile = (phrase: string) => { try { return fs.readdirSync(SAMPLES).map((f) => path.join(SAMPLES, f)).find((f) => slug(path.basename(f).replace(/\.[^.]+$/, "")) === slug(phrase)); } catch { return undefined; } };
 
-/** Record a voice note from the default microphone. Trims leading silence and normalises it. */
+// Never the default input: if that is a Bluetooth headset, opening its mic drops the headset (and the whole audio
+// device) to 16-24 kHz. Prefer the Mac's own microphone.
+let mic: string | null = null;
+function micName(): string {
+  if (mic) return mic;
+  try { const out = spawnSync("ffmpeg", ["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""], { encoding: "utf8" }).stderr as string, audio = out.slice(out.indexOf("audio devices")); const names = [...audio.matchAll(/\] \[\d+\] (.+)/g)].map((m) => m[1].trim()); mic = names.find((n) => /macbook.*microphone|built-in microphone/i.test(n)) ?? names.find((n) => !/airpods|headset|bluetooth/i.test(n)) ?? "default"; } catch { mic = "default"; }
+  return mic!;
+}
+
+/** Record a voice note from the Mac's own microphone. Trims leading silence and normalises it. */
 export function recordNote(seconds = 4): Promise<string> {
   fs.mkdirSync(SAMPLES, { recursive: true });
   const n = sampleNames().filter((x) => /^note-\d+$/.test(x)).length + 1, name = `note-${n}`, file = path.join(SAMPLES, name + ".wav");
-  return new Promise((resolve, reject) => execFile("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "avfoundation", "-i", ":default", "-t", String(seconds), "-af", "silenceremove=start_periods=1:start_threshold=-42dB,loudnorm=I=-16", "-ar", "44100", "-ac", "1", file], { timeout: (seconds + 8) * 1000 }, (err, _o, stderr) => (err || !fs.existsSync(file) ? reject(new Error((stderr || String(err)).split("\n")[0].slice(0, 120) || "recording failed")) : resolve(name))));
+  return new Promise((resolve, reject) => execFile("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "avfoundation", "-i", ":" + micName(), "-t", String(seconds), "-af", "silenceremove=start_periods=1:start_threshold=-42dB,loudnorm=I=-16", "-ar", "44100", "-ac", "1", file], { timeout: (seconds + 8) * 1000 }, (err, _o, stderr) => (err || !fs.existsSync(file) ? reject(new Error((stderr || String(err)).split("\n")[0].slice(0, 120) || "recording failed")) : resolve(name))));
 }
 export const phrasesIn = (code: string) => [...code.matchAll(/~v\.\("([^"]{1,60})"\)/g)].map((m) => m[1]);
 

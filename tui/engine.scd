@@ -32,7 +32,7 @@ s.waitForBoot {
   SynthDef(\acid, { |out = 0, freq = 55, amp = 0.5, cutoff = 500, res = 0.8, env = 2500, dec = 0.18, wave = 0, send = 0.1|
     var osc = SelectX.ar(wave.clip(0, 1), [Saw.ar(freq), Pulse.ar(freq, 0.45)]);
     var fenv = EnvGen.kr(Env.perc(0.002, dec * 0.9));
-    var sig = RLPF.ar(osc, (cutoff + (env * fenv)).clip(60, 12000), (1.02 - res.clip(0, 1)).clip(0.04, 1));
+    var sig = RLPF.ar(osc, (cutoff + (env * fenv)).clip(60, 12000).min(SampleRate.ir * 0.42), (1.02 - res.clip(0, 1)).clip(0.04, 1));
     sig = (sig * 1.8).tanh * EnvGen.kr(Env.perc(0.003, dec), doneAction: 2);
     Out.ar(out, sig * amp ! 2); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
@@ -45,7 +45,7 @@ s.waitForBoot {
   // pad: slow, wide, filtered. sus is the hold time in seconds
   SynthDef(\pad, { |out = 0, freq = 220, amp = 0.12, cutoff = 1200, att = 0.8, sus = 2, rel = 2, send = 0.6, duck = 0.7|
     var e = EnvGen.kr(Env.linen(att, sus, rel, 1, \sine), doneAction: 2) * (1 - (In.kr(~duck) * duck).clip(0, 1));
-    var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.992, 0.998, 1.003, 1.009])), cutoff * LFTri.kr(0.11).range(0.7, 1.3), 0.5) * e;
+    var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.992, 0.998, 1.003, 1.009])), (cutoff * LFTri.kr(0.11).range(0.7, 1.3)).min(SampleRate.ir * 0.42), 0.5) * e;
     Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
   // tuned percussion: tom / conga / blip depending on freq and dec
@@ -55,7 +55,7 @@ s.waitForBoot {
     Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
   SynthDef(\hat, { |out = 0, amp = 0.2, dec = 0.03, hp = 8500, pan = 0|
-    var sig = HPF.ar(WhiteNoise.ar, hp) * EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
+    var sig = HPF.ar(WhiteNoise.ar, hp.min(SampleRate.ir * 0.42)) * EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
     Out.ar(out, Pan2.ar(sig, pan, amp));
   }).add;
   SynthDef(\clap, { |out = 0, amp = 0.5, send = 0.5|
@@ -65,12 +65,12 @@ s.waitForBoot {
     Out.ar(out, sig * amp ! 2); Out.ar(~fx, sig * send ! 2);
   }).add;
   SynthDef(\bass, { |out = 0, freq = 43, amp = 0.8, cutoff = 600, res = 2.7, dec = 0.17, duck = 0.4|
-    var sig = MoogFF.ar(Saw.ar(freq) + (Pulse.ar(freq * 0.5, 0.4) * 0.4), cutoff, res)
+    var sig = MoogFF.ar(Saw.ar(freq) + (Pulse.ar(freq * 0.5, 0.4) * 0.4), cutoff.min(SampleRate.ir * 0.42), res)
       * EnvGen.kr(Env.perc(0.003, dec), doneAction: 2);
     Out.ar(out, (sig * 1.4).tanh * amp * (1 - (In.kr(~duck) * duck).clip(0, 1)) ! 2);
   }).add;
   SynthDef(\stab, { |out = 0, freq = 440, amp = 0.1, cutoff = 1800, dec = 0.16, send = 1|
-    var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff, 0.35)
+    var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff.min(SampleRate.ir * 0.42), 0.35)
       * EnvGen.kr(Env.perc(0.004, dec), doneAction: 2);
     Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
@@ -116,18 +116,21 @@ s.waitForBoot {
   SynthDef(\djfx, { |hp = 30, lp = 18000, echo = 0, dt = 0.346, on = 0|
     var dry = ~safe.(In.ar(0, 2)), wet;
     wet = HPF.ar(HPF.ar(dry, hp.clip(30, 8000).lag(0.08)), hp.clip(30, 8000).lag(0.08));
-    wet = LPF.ar(LPF.ar(wet, lp.clip(200, 18000).lag(0.08)), lp.clip(200, 18000).lag(0.08));
+    wet = LPF.ar(LPF.ar(wet, lp.clip(200, 18000).min(SampleRate.ir * 0.42).lag(0.08)), lp.clip(200, 18000).min(SampleRate.ir * 0.42).lag(0.08));   // at 24 kHz (AirPods in headset mode) an 18 kHz low-pass is above Nyquist: unstable, and it screamed
     wet = wet + CombL.ar(wet * echo.lag(0.05), 1, dt, 3.5);
     ReplaceOut.ar(0, Select.ar(on > 0.5, [dry, ~safe.(wet)]));   // a switch, not a crossfade: inf * 0 is NaN
   }).add;
-  SynthDef(\riser, { |dur = 4, amp = 0.16|
-    var env = EnvGen.kr(Env([0, 1, 0], [dur, 0.02], [4, 0]), doneAction: 2);
-    var sig = BPF.ar(WhiteNoise.ar, env.linexp(0, 1, 300, 10000), 0.25) + (Saw.ar(env.linexp(0, 1, 110, 880) * [1, 1.01]) * 0.15);
-    Out.ar(0, Pan2.ar(sig.sum, SinOsc.kr(env * 9) * 0.6) * env * amp);
+  // Transition sounds are SUSTAINED, so at the same peak they are far louder than a track made of short hits:
+  // they sit well under the mix on purpose (measured: a ride should not raise the master's average level).
+  SynthDef(\riser, { |dur = 4, amp = 0.028|
+    var env = EnvGen.kr(Env([0, 1, 0], [dur, 0.05], [3, 0]), doneAction: 2);
+    var sig = BPF.ar(PinkNoise.ar(2), env.linexp(0, 1, 250, 4200), 0.45) + (LPF.ar(Saw.ar(env.linexp(0, 1, 110, 440) * [1, 1.01]), 1800) * 0.12);
+    sig = LPF.ar(Pan2.ar(sig.sum, SinOsc.kr(env * 6) * 0.5), 6000) * env * amp;
+    Out.ar(0, sig); Out.ar(~fx, sig * 0.5);
   }).add;
-  SynthDef(\crash, { |amp = 0.3|
-    var sig = HPF.ar(WhiteNoise.ar, 2500) * EnvGen.kr(Env.perc(0.001, 2.8, 1, -6), doneAction: 2);
-    Out.ar(0, sig * amp ! 2); Out.ar(~fx, sig * amp * 0.7 ! 2);
+  SynthDef(\crash, { |amp = 0.07|
+    var sig = LPF.ar(HPF.ar(PinkNoise.ar(2), 1800), 9000) * EnvGen.kr(Env.perc(0.002, 1.8, 1, -5), doneAction: 2);
+    Out.ar(0, sig * amp ! 2); Out.ar(~fx, sig * amp * 0.6 ! 2);
   }).add;
   SynthDef(\master, {
     var sig = ~safe.(In.ar(0, 2)) * 2.6;
@@ -233,7 +236,7 @@ s.waitForBoot {
   OSCdef(\transition, { |msg|
     var kind = msg[1].asSymbol, bars = msg[2].asInteger.max(1);
     var from = ~clock.beats, target = ~clock.nextBar + ((bars - 1) * 4);
-    Synth(\riser, [\dur, (target - from) / ~clock.tempo, \amp, if(kind == \riser, 0.12, 0.17)]);
+    Synth(\riser, [\dur, (target - from) / ~clock.tempo, \amp, if(kind == \riser, 0.022, 0.03)]);
     ~djfx.set(\dt, 0.75 / ~clock.tempo, \on, 1);
     ~clock.sched(0, {
       var f = ((~clock.beats - from) / (target - from)).clip(0, 1);
@@ -245,7 +248,7 @@ s.waitForBoot {
       } {
         case
           { kind == \build } { ~djfx.set(\hp, f.linexp(0, 1, 30, 2200)) }
-          { kind == \wash } { ~djfx.set(\lp, f.linexp(0, 1, 18000, 350), \echo, f.squared * 0.7) };
+          { kind == \wash } { ~djfx.set(\lp, f.linexp(0, 1, 18000, 350), \echo, f.squared * 0.35) };
         0.125
       }
     });
@@ -255,7 +258,7 @@ s.waitForBoot {
   // bar clock for the TUI: bar number and when (in seconds from now) it lands
   ~clock.schedAbs(~clock.nextBar, { tui.sendMsg('/bar', (~clock.beats / 4).round.asInteger, s.latency, ~clock.tempo * 60, thisThread.seconds); 4 });
 
-  tui.sendMsg('/ready', NetAddr.langPort);
+  tui.sendMsg('/ready', NetAddr.langPort, s.sampleRate);
   "ENGINE READY on %".format(NetAddr.langPort).postln;
 };
 )

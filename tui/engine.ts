@@ -17,6 +17,8 @@ export class Engine extends EventEmitter {
   private sc: ChildProcess | null = null;
   private lang = 0;
   ready = false;
+  /** what the audio device is really running at; 24000 means a Bluetooth headset with its microphone on */
+  sampleRate = 0;
   private clock = new EngineClock();
   private toLocal(scSeconds: number, latency: number, observedSeconds = scSeconds) {
     return this.clock.map(scSeconds, latency, observedSeconds);
@@ -40,7 +42,7 @@ export class Engine extends EventEmitter {
     try { m = osc.fromBuffer(buf); } catch { return; }
     const a = (m.args || []).map((x: any) => x.value);
     switch (m.address) {
-      case "/ready": this.lang = a[0]; this.ready = true; this.emit("ready"); break;
+      case "/ready": this.lang = a[0]; this.ready = true; this.sampleRate = Number(a[1]) || 0; this.emit("ready"); break;
       case "/ears": this.emit("ears", { rms: a[0], peak: a[1], centroid: a[2], flatness: a[3], bands: a.slice(4, 9) } as Ears); break;
       case "/onset": this.emit("onset"); break;
       case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
