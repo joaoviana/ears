@@ -126,7 +126,7 @@ function App() {
       else if (input && !key.ctrl && !key.meta) setTyping({ ...typing, text: typing.text + input });
       return;
     }
-    if (input === "q") { eng.current.stop(); exit(); }
+    if (input === "q") { eng.current.stop(); setTimeout(() => { exit(); process.exit(0); }, 600); }
     if (input === "y" || input === "1") take(0);
     if (input === "2") take(1);
     if (input === "3") take(2);

@@ -21,7 +21,7 @@ export class Engine extends EventEmitter {
   start(mute = false) {
     if (!SCLANG) throw new Error("SuperCollider not found. See offline/README.md");
     this.sock.on("message", (buf) => this.onMessage(buf));
-    this.sock.bind(57200, "127.0.0.1");
+    this.sock.bind(Number(process.env.EARS_PORT || 57200), "127.0.0.1");
     this.sc = spawn(SCLANG, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
     this.sc.stdout?.on("data", (d) => {
       for (const line of String(d).split("\n")) if (/ERROR|WARNING|FAILURE/.test(line) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line.trim());
@@ -50,9 +50,10 @@ export class Engine extends EventEmitter {
   eval(code: string, id: string) { this.send("/eval", [code, id]); }
   volume(v: number) { this.send("/vol", [v]); }
 
+  /** Quits this engine's own server, then its sclang. Never touches another engine that may be running. */
   stop() {
-    try { this.sc?.kill(); } catch {}
-    try { spawn("pkill", ["-f", "scsynth"]); } catch {}
-    try { this.sock.close(); } catch {}
+    try { this.send("/eval", ["s.quit; { 0.exit }.defer(0.2); 1", "bye"]); } catch {}
+    const sc = this.sc, sock = this.sock;
+    setTimeout(() => { try { sc?.kill(); } catch {} try { sock.close(); } catch {} }, 400).unref?.();
   }
 }

@@ -4,8 +4,10 @@
 //   - an "ears" synth on the master bus streams measurements to the TUI
 //   - every scheduled hit is announced to the TUI ahead of time (server latency), so visuals can land on it
 (
-var tui = NetAddr("127.0.0.1", 57200);
+var tui = NetAddr("127.0.0.1", ("EARS_PORT".getenv ? "57200").asInteger);
 var mute = "SOUNDCHECK_MUTE".getenv.notNil;
+// a second engine (tests, a second deck) needs its own server port
+if("EARS_SC_PORT".getenv.notNil) { Server.default = s = Server(\ears2, NetAddr("127.0.0.1", "EARS_SC_PORT".getenv.asInteger)) };
 s.options.numInputBusChannels = 0;
 s.options.memSize = 2 ** 17;
 s.latency = 0.2;
