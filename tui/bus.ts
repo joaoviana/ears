@@ -23,7 +23,8 @@ export class Bus extends EventEmitter {
     // outside agents connect here: they receive every message as a JSON line and may send `proposal` and `note` lines back
     const server = net.createServer((sock) => {
       this.peers.add(sock); sock.on("close", () => this.peers.delete(sock)); sock.on("error", () => this.peers.delete(sock));
-      for (const m of this.recent.filter((m) => m.type === "state" || m.type === "observation").slice(-2)) sock.write(JSON.stringify(m) + "\n");
+      // a newcomer hears the room as it is now: the latest code and the latest report
+      for (const type of ["hello", "state", "observation"]) { const m = [...this.recent].reverse().find((x) => x.type === type); if (m) sock.write(JSON.stringify(m) + "\n"); }
       let buf = "";
       sock.on("data", (d) => { buf += d; let i; while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); try { const m = JSON.parse(line); if (m && typeof m.type === "string") this.emit("inbound", m); } catch {} } });
     });
@@ -34,7 +35,8 @@ export class Bus extends EventEmitter {
 
   send(type: string, from: string, body: Record<string, unknown> = {}) {
     const m: Msg = { v: 0, t: Date.now(), bar: this.bar, type, from, ...body };
-    this.recent.push(m); if (this.recent.length > 400) this.recent.shift();
+    this.recent.push(m);
+    if (this.recent.length > 400) { const i = this.recent.findIndex((x) => x.type !== "state" && x.type !== "hello"); this.recent.splice(i < 0 ? 0 : i, 1); }   // keep the last state around for newcomers
     const line = JSON.stringify(m) + "\n";
     this.file?.write(line);
     for (const p of this.peers) p.write(line);

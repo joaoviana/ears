@@ -70,6 +70,35 @@ When any change lands, the visuals wipe to a new look and palette on that bar.
 - Nothing calls `eval` on a suggestion. The only path to the engine is a file write, and the only thing that writes
   the file is the **y** key.
 
+## Takeover
+
+Autonomy is something you grant, per DJ, mid-set. **o** gives the active DJ `auto`: when it offers ideas you get a
+two-bar veto window (**n** vetoes), then the host takes one for it, rotating between its style, fix and bold
+angles, and riding a build into the bold ones. **O** grants everyone: a back-to-back set that plays itself while
+you stand there. **o** again takes control back. The DJ never gains a new ability; the host acts on its behalf, and
+every such verdict is logged as `grant:auto`.
+
+## Speed
+
+A DJ's three angles (fix the report · push its style · one bold move) are asked **in parallel**, each answers with
+a few lines of patch (`SET cutoff = 600`) instead of rewriting code, at low reasoning effort. The first idea is on
+screen in about 3 seconds and they appear as they arrive (it was 6–20 s for anything at all). The host turns the
+patch into code, shows it as a diff, and validates it. `EARS_MODEL` and `EARS_EFFORT` override the defaults.
+
+## The wire (for demos)
+
+**e** splits the field with a live log of every message: `observation`, `request`, `proposal`, `rejected`,
+`verdict`, `applied`, `landed`, `grant`… with timings. The same stream is written to `tui/logs/latest.jsonl`;
+`npm run ears:tail` follows it in another pane or on a second screen. It's the proof that nothing reaches the
+speakers without passing validation and a verdict.
+
+## The protocol, and outside agents
+
+The messages above are the [EARS protocol](../../ears-protocol/SPEC.md), in its own repo. This TUI is its reference
+host: it listens on `localhost:57400`, and anything that connects can watch the wire and send `proposal` and `note`
+and nothing else. `ears-protocol/src/mcp.ts` bridges that to MCP, so a Claude Code session can sit in the booth:
+it shows up as a robot marked `wire`, its ideas join the same option list, and they pass the same validator.
+
 ## Transitions
 
 A DJ mixer sits across the whole mix in SuperCollider (`\djfx`: high-pass, low-pass, echo), and a transition rides it
