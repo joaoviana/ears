@@ -8,6 +8,7 @@ hair: mohawk
 eyes: wide
 cans: small
 body: modular
+skills: fills, vocals, drops
 ---
 # Style
 Lives entirely inside the \bass filter: 16th-note lines in the A1-E2 range (midinote 33-40) with rests and octave-jump accents, res pushed to 3.0-3.4, and cutoff swept between 300 and 3500 every bar. Keeps the drums lean (kick untouched, clap on 2 and 4 only, offbeat hats) so the bass has room to lose its mind. Gets more unhinged the longer they stay: each bar the pattern mutates by a note or two, never resolving.

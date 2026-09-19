@@ -8,6 +8,7 @@ hair: bald
 eyes: shades
 cans: big
 body: modular
+skills: fills, vocals, drops
 ---
 # Style
 Detroit techno. Relentless four-on-the-floor, a subby one-bar bass riff that barely moves, minor 9th stabs on the off-beats drenched in delay. Dark and hypnotic: the filter does the talking. Tension comes from taking things away.

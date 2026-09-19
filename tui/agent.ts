@@ -14,8 +14,9 @@ const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set
 
 The code is SuperCollider. Each slot is exactly one expression:
   ~d.(\\dN, \\instrument, \\NAME, \\dur, ..., key, value, ...)
-Slots are d1..d4. 4 beats per bar, \\dur is in beats. Tempo and key are given with the code; stay in key.
-Rhythm rows: \\amp, ~x.("X---x---X---x-x-", 0.9) with \\dur 1/4 is a 16-step row: X = hit at that amp, x = ghost, - = rest. Prefer it for drums: the audience can read it.
+Slots are d1..d6 (by convention: d1 kick, d2 hats, d3 clap/perc, d4 bass, d5 chords, d6 lead or texture; any slot can hold anything). 4 beats per bar, \\dur is in beats. Tempo and key are given with the code; stay in key.
+Rhythm rows: \\amp, ~x.("X---x---X---x-x-", 0.9) with \\dur 1/4 is a 16-step row: X = hit at that amp, x = ghost, - = rest. Prefer it for drums: the audience can read it. A list of rows plays one per bar, so ["rowA", "rowA", "rowA", "rowB"] is a groove with a turnaround.
+Harmony: \\ctranspose, Pseq([0, -4, 3, -2], inf).stutter(16) moves a riff through a chord progression (semitones, one value per bar at \\dur 1/4). Sidechain: \\duck (0..1) on \\bass and \\pad makes them lean away from the kick; 0.7 pumps.
 Patterns: Pseq([...], inf), Rest(0) or \\r for rests, arrays for chords, .stutter(n) to hold values.
 Randomness is welcome and makes parts breathe: Prand([...], inf), Pwrand([...], [weights], inf), Pwhite(lo, hi), Pbrown(lo, hi, step), Pshuf([...], inf). Patterns can be multiplied: Pseq([...], inf) * Pwhite(0.8, 1.1).
 Instruments and their arguments:
@@ -102,7 +103,7 @@ export function parsePatch(text: string): Parsed | null {
   const p: Parsed = { slot: "", set: [], remove: [], why: "", evidence: "" };
   for (const raw of text.split("\n")) {
     const line = raw.replace(/^[`>*\s-]+/, "").trim(); let m: RegExpMatchArray | null;
-    if ((m = line.match(/^SLOT\s+\\?(d[1-4])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
+    if ((m = line.match(/^SLOT\s+\\?(d[1-6])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
     else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) p.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
     else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) p.remove!.push(m[1]);
     else if ((m = line.match(/^FOR\s+([12])\b/i))) p.forBars = Number(m[1]);

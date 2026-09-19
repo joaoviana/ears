@@ -14,12 +14,18 @@ s.options.memSize = 2 ** 17;
 s.latency = 0.2;
 
 s.waitForBoot {
+  // Nothing that isn't sound gets into a feedback loop or the limiter: NaN/inf become silence, and anything beyond
+  // +-4 (music here never exceeds ~2 before the limiter) is clipped. Without this, a burst of garbage at server
+  // start circulated in the echo and reverb for ~15 s and kept the limiter pinned, ducking the whole mix.
+  ~safe = { |sig| Sanitize.ar(sig).clip2(4) };
   ~fx = Bus.audio(s, 2);
+  ~duck = Bus.control(s, 1);   // the kick's envelope, for sidechain pumping (\duck 0..1 on bass, acid, stab, pad)
   ~clock = TempoClock(130 / 60);
 
   SynthDef(\kick, { |out = 0, amp = 0.9, tune = 44, dec = 0.36, drive = 1.6, punch = 190|
     var env = EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
     var sig = SinOsc.ar(tune + (punch * EnvGen.kr(Env.perc(0.001, 0.045))));
+    Out.kr(~duck, EnvGen.kr(Env.perc(0.002, 0.22)) * amp.min(1));
     Out.ar(out, (sig * env * drive).tanh * amp ! 2);
   }).add;
   // 303-ish: the filter envelope is the instrument. res 0..1, env = how far the filter opens per note
@@ -37,8 +43,8 @@ s.waitForBoot {
     Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
   // pad: slow, wide, filtered. sus is the hold time in seconds
-  SynthDef(\pad, { |out = 0, freq = 220, amp = 0.12, cutoff = 1200, att = 0.8, sus = 2, rel = 2, send = 0.6|
-    var e = EnvGen.kr(Env.linen(att, sus, rel, 1, \sine), doneAction: 2);
+  SynthDef(\pad, { |out = 0, freq = 220, amp = 0.12, cutoff = 1200, att = 0.8, sus = 2, rel = 2, send = 0.6, duck = 0.7|
+    var e = EnvGen.kr(Env.linen(att, sus, rel, 1, \sine), doneAction: 2) * (1 - (In.kr(~duck) * duck).clip(0, 1));
     var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.992, 0.998, 1.003, 1.009])), cutoff * LFTri.kr(0.11).range(0.7, 1.3), 0.5) * e;
     Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
@@ -58,10 +64,10 @@ s.waitForBoot {
     var sig = BPF.ar(PinkNoise.ar(7), 1400, 0.6) * (env + bursts);
     Out.ar(out, sig * amp ! 2); Out.ar(~fx, sig * send ! 2);
   }).add;
-  SynthDef(\bass, { |out = 0, freq = 43, amp = 0.8, cutoff = 600, res = 2.7, dec = 0.17|
+  SynthDef(\bass, { |out = 0, freq = 43, amp = 0.8, cutoff = 600, res = 2.7, dec = 0.17, duck = 0.4|
     var sig = MoogFF.ar(Saw.ar(freq) + (Pulse.ar(freq * 0.5, 0.4) * 0.4), cutoff, res)
       * EnvGen.kr(Env.perc(0.003, dec), doneAction: 2);
-    Out.ar(out, (sig * 1.4).tanh * amp ! 2);
+    Out.ar(out, (sig * 1.4).tanh * amp * (1 - (In.kr(~duck) * duck).clip(0, 1)) ! 2);
   }).add;
   SynthDef(\stab, { |out = 0, freq = 440, amp = 0.1, cutoff = 1800, dec = 0.16, send = 1|
     var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff, 0.35)
@@ -69,10 +75,10 @@ s.waitForBoot {
     Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
   SynthDef(\space, { |out = 0, dt = 0.346|
-    var dry = In.ar(~fx, 2);
+    var dry = ~safe.(In.ar(~fx, 2));
     var echo = CombL.ar(dry, 1, dt.lag(0.5), 2.4);
     var wet = FreeVerb2.ar(dry[0] + echo[0], dry[1] + echo[1], 1, 0.86, 0.35);
-    Out.ar(out, (wet * 0.4) + (echo * 0.45));
+    Out.ar(out, ~safe.((wet * 0.4) + (echo * 0.45)));
   }).add;
   // vocals: a phrase rendered by the host (macOS `say`) and loaded as a buffer. chop = where in the phrase to start
   // (0..1), len = how long to let it speak, rate = pitch/speed. Short len + a pattern of chops = a vocal hook.
@@ -83,12 +89,15 @@ s.waitForBoot {
     Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
   // the DJ mixer: a filter and an echo across the whole mix, for transitions
-  SynthDef(\djfx, { |hp = 20, lp = 20000, echo = 0, dt = 0.346|
-    var sig = In.ar(0, 2);
-    sig = HPF.ar(HPF.ar(sig, hp.lag(0.08)), hp.lag(0.08));
-    sig = LPF.ar(LPF.ar(sig, lp.lag(0.08)), lp.lag(0.08));
-    sig = sig + CombL.ar(sig * echo.lag(0.05), 1, dt, 3.5);
-    ReplaceOut.ar(0, sig);
+  // Bypassed unless a transition is riding it (`on`). A 2nd-order high-pass parked at 20 Hz, or a low-pass parked
+  // next to Nyquist, is numerically unstable in single precision: left in the path it threw huge spikes into the
+  // master limiter, which then ducked the whole mix. So the filters only exist while they're doing something.
+  SynthDef(\djfx, { |hp = 30, lp = 18000, echo = 0, dt = 0.346, on = 0|
+    var dry = ~safe.(In.ar(0, 2)), wet;
+    wet = HPF.ar(HPF.ar(dry, hp.clip(30, 8000).lag(0.08)), hp.clip(30, 8000).lag(0.08));
+    wet = LPF.ar(LPF.ar(wet, lp.clip(200, 18000).lag(0.08)), lp.clip(200, 18000).lag(0.08));
+    wet = wet + CombL.ar(wet * echo.lag(0.05), 1, dt, 3.5);
+    ReplaceOut.ar(0, Select.ar(on > 0.5, [dry, ~safe.(wet)]));   // a switch, not a crossfade: inf * 0 is NaN
   }).add;
   SynthDef(\riser, { |dur = 4, amp = 0.16|
     var env = EnvGen.kr(Env([0, 1, 0], [dur, 0.02], [4, 0]), doneAction: 2);
@@ -100,7 +109,7 @@ s.waitForBoot {
     Out.ar(0, sig * amp ! 2); Out.ar(~fx, sig * amp * 0.7 ! 2);
   }).add;
   SynthDef(\master, {
-    var sig = In.ar(0, 2) * 2.6;
+    var sig = ~safe.(In.ar(0, 2)) * 2.6;
     sig = Compander.ar(sig, sig, 0.35, 1, 0.5, 0.005, 0.12);
     ReplaceOut.ar(0, Limiter.ar(sig, 0.95, 0.004));
   }).add;
@@ -117,7 +126,7 @@ s.waitForBoot {
       amp.(BPF.ar(sig, 3000, 1.4)),
       amp.(HPF.ar(HPF.ar(sig, 7000), 7000)),
     ];
-    SendReply.kr(Impulse.kr(15), '/ears', [amp.(sig), Peak.kr(sig, Impulse.kr(15)), SpecCentroid.kr(chain), SpecFlatness.kr(chain)] ++ bands);
+    SendReply.kr(Impulse.kr(15), '/ears', [amp.(sig), A2K.kr(Peak.ar(sig, Impulse.ar(15))), SpecCentroid.kr(chain), SpecFlatness.kr(chain)] ++ bands);
     SendReply.kr(Onsets.kr(chain, 0.18), '/onset');
   }).add;
   // the picture's raw material: the master bus itself, low-passed and written into a small ring buffer
@@ -152,7 +161,11 @@ s.waitForBoot {
     name
   };
   // ~x.("X---x---X---x-x-") : a step row you can read from the back of the room. X = hit, x = ghost, anything else = rest
-  ~x = { |str, amp = 0.9| Pseq(str.as(Array).collect { |c| case { c == $X } { amp } { c == $x } { amp * 0.55 } { Rest(0) } }, inf) };
+  // a list of rows plays one row per pass: ["X---X---X---X---", ..., "X---X---X--XX-X-"] is a groove with a turnaround
+  ~x = { |str, amp = 0.9|
+    var row = { |r| r.as(Array).collect { |c| case { c == $X } { amp } { c == $x } { amp * 0.55 } { Rest(0) } } };
+    Pseq(if(str.isString) { row.(str) } { str.collect(row).flatten }, inf)
+  };
   // ~v.("work it") : the buffer holding that phrase. The host renders and loads phrases before it evals the slot.
   ~voxBufs = IdentityDictionary.new;
   ~silence = Buffer.alloc(s, 64, 1);
@@ -177,18 +190,18 @@ s.waitForBoot {
     var kind = msg[1].asSymbol, bars = msg[2].asInteger.max(1);
     var from = ~clock.beats, target = ~clock.nextBar + ((bars - 1) * 4);
     Synth(\riser, [\dur, (target - from) / ~clock.tempo, \amp, if(kind == \riser, 0.12, 0.17)]);
-    ~djfx.set(\dt, 0.75 / ~clock.tempo);
+    ~djfx.set(\dt, 0.75 / ~clock.tempo, \on, 1);
     ~clock.sched(0, {
       var f = ((~clock.beats - from) / (target - from)).clip(0, 1);
       if(~clock.beats >= (target - 0.01)) {
-        ~djfx.set(\hp, 20, \lp, 20000, \echo, 0);
+        ~djfx.set(\hp, 30, \lp, 18000, \echo, 0, \on, 0);
         s.makeBundle(s.latency, { Synth(\crash) });
         tui.sendMsg('/dropped', kind);
         nil
       } {
         case
-          { kind == \build } { ~djfx.set(\hp, f.linexp(0, 1, 20, 2200)) }
-          { kind == \wash } { ~djfx.set(\lp, f.linexp(0, 1, 20000, 350), \echo, f.squared * 0.7) };
+          { kind == \build } { ~djfx.set(\hp, f.linexp(0, 1, 30, 2200)) }
+          { kind == \wash } { ~djfx.set(\lp, f.linexp(0, 1, 18000, 350), \echo, f.squared * 0.7) };
         0.125
       }
     });

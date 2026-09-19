@@ -3,10 +3,12 @@ name: DJ TAMBOR
 description: Summon when the room needs to stop nodding and start rolling its hips: baile funk at 130.
 palette: acid
 look: terrain
+head: square
 hair: cap
 eyes: shades
 cans: small
 body: decks
+skills: fills, vocals, drops
 ---
 # Style
 Carioca baile funk built on the tamborzão: a syncopated 3+3+2 kick and clap pattern that never sits on the four-on-the-floor grid. The bass is a fat, clean 808-style sub that rings long and lets the kick punch holes in it, while hats skitter in 16ths and stabs show up rarely, like a sample thrown from a passing car. Tambor treats space as an instrument. He would rather cut everything for half a bar than add a fifth layer.

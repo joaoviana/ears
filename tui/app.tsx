@@ -34,7 +34,7 @@ const voiceOf = (id: string) => VOICES[[...id].reduce((a, c) => (a * 31 + c.char
 
 const SET = process.env.EARS_SET || path.join(ROOT, "tui/set");   // EARS_SET lets a test instance play from its own folder
 const REF = path.join(ROOT, "tui/refs/detroit.json");
-const SLOTS = ["d1", "d2", "d3", "d4"], RAMP_NAMES: Ramp[] = ["pixels", "ascii", "blocks", "dots", "code"];
+const SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6"], RAMP_NAMES: Ramp[] = ["pixels", "ascii", "blocks", "dots", "code"];
 const { text: TEXT, dim: DIM, faint: FAINT } = NEUTRAL;
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const arg = (f: string) => process.argv.includes(f);
@@ -84,7 +84,7 @@ function App() {
   const [ref, setRef] = useState<Profile | null>(() => { try { return JSON.parse(fs.readFileSync(REF, "utf8")); } catch { return null; } });
   const [say, setSay] = useState("waiting for the first report");
   const [typing, setTyping] = useState<"tell" | "summon" | null>(null), [thinking, setThinking] = useState("");
-  const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster">(null), [logs, setLogs] = useState(arg("--logs")), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
+  const [ramp, setRamp] = useState(0), [full, setFull] = useState(arg("--full")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster" | "skills">(null), [logs, setLogs] = useState(arg("--logs")), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
 
   const voiceRef = useRef(voice); voiceRef.current = voice;
   const logsRef = useRef(logs); logsRef.current = logs;
@@ -147,8 +147,18 @@ function App() {
   const submit = (raw: string) => {
     const text = raw.trim(), mode = typing, s = st.current; setTyping(null);
     if (!text) return;
-    if (mode === "tell") { s.note = text; s.options = null; s.round++; bus.current.send("note", "human", { text, to: active().id }); think(); }
+    if (mode === "tell") {
+      const g = s.booth[s.turn % s.booth.length], wants = /vocal|voice|sing|say |lyric|chant|spoken/i.test(text) ? "vocals" : /\bfill\b|stutter|roll\b/i.test(text) ? "fills" : /\bdrop\b|build.?up|riser/i.test(text) ? "drops" : null;
+      if (wants && !(g.dj.skills || []).includes(wants)) { const k = skill(wants); greet.current = { who: g.dj.name, rgb: accent(g.dj.palette), text: `I can't do ${k.name.toLowerCase()} yet: that skill is locked (it unlocks after ${k.takes} of my ideas are taken; I'm on ${g.taken}). Press K to give it to me now.`, until: s.bar + 10 }; }
+      s.note = text; s.options = null; s.round++; bus.current.send("note", "human", { text, to: active().id }); think(); }
     else { setThinking(`writing a DJ who ${text}`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message)).finally(() => setThinking("")); }
+  };
+  const grantSkill = (g: Guest, id: string) => {
+    const s = st.current, k = skill(id); if ((g.dj.skills || []).includes(id)) return;
+    g.pending = g.pending.filter((x) => x !== id); g.dj.skills = [...(g.dj.skills || []), id]; if (!g.remote) save(g.dj);
+    bus.current.send("grant", "human", { agent: g.dj.id, skill: id }); announce(k.name, accent(g.dj.palette), 2, g.dj.id);
+    greet.current = { who: `${g.dj.name} · ${k.glyph} ${k.name}`, rgb: accent(g.dj.palette), text: `${k.blurb}. Watch the next options: they'll use it`, until: s.bar + 12 };
+    s.turn = s.booth.indexOf(g); s.note = `The performer just activated your ${k.name} skill. Show it off: use it in this idea.`; s.options = null; s.round++; setSay(""); think();
   };
   const take = (i: number, by = "human") => {
     const s = st.current, o = s.options?.[i] as (Option & { riding?: boolean }) | undefined; if (!o) return;
@@ -241,7 +251,7 @@ function App() {
     const s = st.current;
     if (typing) { if (key.escape) setTyping(null); return; }   // the TextInput owns the keyboard
     if (overlay) {
-      if (overlay === "roster") { if (key.escape || input === "q") setOverlay(null); return; }   // the Select owns the arrows and enter
+      if (overlay === "roster" || overlay === "skills") { if (key.escape || input === "q") setOverlay(null); return; }   // the Select owns the arrows and enter
       setOverlay(null); return;
     }
     if (input === "?") { setOverlay("help"); return; }
@@ -264,10 +274,11 @@ function App() {
     if (input === "f") setFull((x) => !x);
     if (input === "v") { setVoice((x) => !x); setSay(voice ? "DJs go quiet" : VOICES.length ? "DJs will speak their greeting when they walk in" : "no `say` voices found on this machine"); }
     if (input === "o" || input === "O") { const gs = input === "O" ? s.booth : [s.booth[s.turn % s.booth.length]], level = gs[0].level === "auto" ? "suggest" : "auto"; gs.forEach((g) => { g.level = level; bus.current.send("grant", "human", { agent: g.dj.id, level }); }); setSay(level === "auto" ? `${gs.map((g) => g.dj.name).join(" + ")} can take their own ideas after a 2-bar veto window. n vetoes, o takes it back` : "back to suggestions only"); if (level === "auto") s.autoAt = s.bar + 2; }
+    if (input === "K") { setOverlay("skills"); return; }
     if (input === "k") {
       const g = [s.booth[s.turn % s.booth.length], ...s.booth].find((x) => x.pending.length);
       if (!g) setSay("nothing to activate yet. DJs unlock skills as you take their ideas: fills after 1, vocals after 2, drops after 3");
-      else { const id = g.pending.shift()!, k = skill(id); g.dj.skills = [...(g.dj.skills || []), id]; save(g.dj); bus.current.send("grant", "human", { agent: g.dj.id, skill: id }); announce(k.name, accent(g.dj.palette), 2, g.dj.id); setSay(`${g.dj.name} can now use ${k.name}: ${k.blurb}`); s.options = null; s.round++; s.askAt = s.bar + 1; }
+      else grantSkill(g, g.pending[0]);
     }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
@@ -300,7 +311,7 @@ function App() {
     const laneStr = lane.map((at, i) => { const age = (now - at) / barAt.current.len, lit = at > 0 && age < 0.97; return lit ? fgc(i === step ? [255, 255, 255] : rgb, (0.45 + amps.current[k][i] * 0.55) * (1 - age * 0.5)) + (age < 0.06 ? "█" : "■") : fgc(i === step ? Trgb : Frgb, i % 4 === 0 && i !== step ? 1.5 : 1) + (i === step ? "▁" : i % 4 === 0 ? "╷" : "·"); }).join("") + RESET;
     const out: string[] = [""]; let len = 0;
     for (const t of tokens(s.slots[k] || "")) {
-      if (len + t.length + 1 > codeW) { if (out.length === 2) { out[1] += fgc(Frgb) + "…"; break; } out.push(""); len = 0; }
+      if (len + t.length + 1 > codeW - 1) { out[0] += fgc(Frgb) + "…"; break; }   // six slots: one line each, the file has the rest
       out[out.length - 1] += paint(t, hot && a!.fresh.has(t)) + " "; len += t.length + 1;
     }
     return { laneStr, code: out.map((l) => l + RESET), by: a ? `${a.name} · bar ${a.bar}` : "", rgb };
@@ -320,7 +331,7 @@ function App() {
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
-    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"]]],
+    ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"]]],
     ["the set", [["g", "new random base, through a build"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];
@@ -338,9 +349,8 @@ function App() {
             const v = slotView(k), bad = status[k] && status[k] !== "ok";
             return (
               <Box key={k} flexDirection="column">
-                <Text wrap="truncate">{fgc(v.rgb)}[1m{k}[22m{RESET} {v.laneStr}  {bad ? <Text color={B}>✗ still playing the last good version · {status[k]}</Text> : <Text color={DIM}>{s.slots[k].trim() ? v.by : "empty"}</Text>}</Text>
+                <Text wrap="truncate">{fgc(v.rgb)}[1m{k}[22m{RESET} {v.laneStr}  {bad ? <Text color={B}>✗ still playing the last good version · {status[k]}</Text> : <Text color={DIM}>{s.slots[k].trim() ? v.by : "empty"}</Text>}{s.reverts.filter((r) => r.slot === k).map((r, i) => <Text key={i} color={B} bold>  ⟲ fill · back in {Math.max(1, r.atBar - s.bar + 1)} bar{r.atBar - s.bar + 1 > 1 ? "s" : ""}</Text>)}</Text>
                 <Text wrap="truncate">{v.code[0] || " "}</Text>
-                <Text wrap="truncate">{v.code[1] || " "}</Text>
               </Box>
             );
           })}
@@ -382,7 +392,7 @@ function App() {
             : s.options?.length ? <>
               {s.options.map((o, i) => (
                 <Box key={o.id} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
-                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text><Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
+                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text>{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
                   {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.diff}</Text></Text>}
                   {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
                 </Box>
@@ -406,6 +416,10 @@ function App() {
       {overlay === "roster" && <Box flexDirection="column" paddingX={2} paddingY={1} height={fieldH} overflow="hidden">
         <Text bold>{grad("who walks in?")}<Text color={DIM}>   ↑↓ choose · enter · esc closes</Text></Text>
         <Select visibleOptionCount={Math.max(3, fieldH - 4)} options={all.current.map((d) => ({ value: d.id, label: `${d.name.padEnd(18)} ${s.booth.some((g) => g.dj.id === d.id) ? "(in the booth) " : ""}${d.tagline}`.slice(0, W - 10) }))} onChange={(id) => { const dj = all.current.find((d) => d.id === id); setOverlay(null); if (dj) enter(dj); }} />
+      </Box>}
+      {overlay === "skills" && <Box flexDirection="column" paddingX={2} paddingY={1} height={fieldH} overflow="hidden">
+        <Text bold>{grad(`give ${who.name.toLowerCase()} a skill`)}<Text color={DIM}>   ↑↓ choose · enter · esc closes   (they also unlock on their own as you take ideas)</Text></Text>
+        <Select options={SKILLS.map((k) => ({ value: k.id, label: `${k.glyph} ${k.name.padEnd(8)} ${(who.skills || []).includes(k.id) ? "(already active) " : ""}${k.blurb}` }))} onChange={(id) => { setOverlay(null); const g = s.booth[s.turn % s.booth.length]; if (g) grantSkill(g, id); }} />
       </Box>}
       {!overlay && <Box>
         <Box flexDirection="column" width={W - logW}>{rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}</Box>

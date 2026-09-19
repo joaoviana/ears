@@ -1,0 +1,1 @@
+~d.(\d6, \instrument, \fm, \dur, 1/4, \midinote, Pseq([75, 79, 75, \r, 72, \r, \r, 87, 75, 79, 75, \r, 72, \r, \r, 87, 72, \r, 72, 91, 72, 72, 81, 81, 75, 79, 75, \r, 72, \r, \r, 87], inf), \ctranspose, Pseq([0, 0, 5, 0], inf).stutter(16), \ratio, 1, \index, Pbrown(0.4, 1.5, 0.2), \dec, Pwhite(0.12, 0.3), \amp, 0.11, \pan, Pbrown(-0.6, 0.6, 0.15), \send, 0.7)
