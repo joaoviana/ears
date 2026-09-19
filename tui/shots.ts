@@ -37,6 +37,8 @@ export class NoiseFloor {
     if (this.last && this.last.key === key) for (const m of METRICS) { const s = this.samples[m]; s.push(Math.abs(absolute[m] - this.last.d[m])); if (s.length > 24) s.shift(); }
     this.last = { key, d: absolute };
   }
+  /** feed a measured difference directly (e.g. a counterfactual diff between two windows of unchanged music) */
+  sample(diff: Partial<Record<Metric, number>>) { for (const m of METRICS) if (diff[m] != null) { const s = this.samples[m]; s.push(Math.abs(diff[m]!)); if (s.length > 24) s.shift(); } }
   floor(m: Metric): number {
     const s = this.samples[m]; if (s.length < 3) return BASE[m];
     const mean = s.reduce((a, b) => a + b, 0) / s.length;

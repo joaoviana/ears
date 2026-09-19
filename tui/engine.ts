@@ -46,6 +46,7 @@ export class Engine extends EventEmitter {
       case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
       case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: this.toLocal(a[4], a[2]), amp: a[3], step: Math.floor(((a[5] % 4) + 4) % 4 * 4 + 0.001) % 16 } as Hit); break;
       case "/bar": this.emit("bar", { n: a[0], at: this.toLocal(a[3], a[1]), bpm: a[2] }); break;
+      case "/slotears": this.emit("slotears", { slot: "d" + a[0], rms: a[1], centroid: a[2], bands: a.slice(3, 8) }); break;
       case "/voxd": this.emit("voxd", String(a[0])); break;
       case "/dropped": this.emit("dropped", a[0]); break;
       case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2], execution_id: a[3], scheduled_at_ms: a[4] > 0 ? this.toLocal(a[4], a[5], a[6]) : undefined }); break;

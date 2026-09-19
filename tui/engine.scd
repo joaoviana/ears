@@ -135,6 +135,13 @@ s.waitForBoot {
     ReplaceOut.ar(0, Limiter.ar(sig, 0.95, 0.004));
   }).add;
   SynthDef(\vol, { |vol = 1| ReplaceOut.ar(0, In.ar(0, 2) * vol.lag(0.05)) }).add;
+  SynthDef(\slottap, { |in, slot = 1|
+    var st = ~safe.(In.ar(in, 2)), sig = st.sum * 0.5, chain = FFT(LocalBuf(1024), sig);
+    var amp = { |x| Amplitude.kr(x, 0.01, 0.25) };
+    SendReply.kr(Impulse.kr(7.5), '/slotears', [slot, amp.(sig), SpecCentroid.kr(chain),
+      amp.(LPF.ar(LPF.ar(sig, 80), 80)), amp.(BPF.ar(sig, 150, 1.0)), amp.(BPF.ar(sig, 700, 1.6)), amp.(BPF.ar(sig, 3000, 1.4)), amp.(HPF.ar(HPF.ar(sig, 7000), 7000))]);
+    Out.ar(0, st);
+  }).add;
   // the agent's ears: after the master chain, before the volume stage, so a muted test still reads true
   SynthDef(\ears, {
     var sig = In.ar(0, 2).sum * 0.5;
@@ -158,6 +165,12 @@ s.waitForBoot {
   ~scopeBuf = Buffer.alloc(s, 512, 2);
   s.sync;
 
+  // per-slot taps: each slot plays into its own bus, a small analyser measures it on its own (dry, before the shared
+  // echo/reverb and the master dynamics), and passes it on to the master. This is what lets a change to the hats be
+  // judged on the hats, not on a master mix where the kick and bass drown it.
+  ~slotBus = 6.collect { Bus.audio(s, 2) };
+  ~slotBus.do { |bus, i| Synth.tail(s, \slottap, [\in, bus, \slot, i + 1]) };
+  OSCdef(\slotears, { |msg| tui.sendMsg(*(['/slotears'] ++ msg[3..])) }, '/slotears');
   ~space = Synth.tail(s, \space);
   ~djfx = Synth.tail(s, \djfx);
   Synth.tail(s, \master);
@@ -177,7 +190,7 @@ s.waitForBoot {
   ~d = { |name ... pairs|
     var execution = ~evaluationId ? "", first = true;
     ~scheduledSeconds = ~clock.beats2secs(~clock.nextBar);
-    Pdef(name, Pbind(*(pairs ++ [\stretch, 1,
+    Pdef(name, Pbind(*(pairs ++ [\stretch, 1, \out, ~slotBus[(name.asString.drop(1).asInteger - 1).clip(0, 5)],
       \tell, Pfunc { |ev|
         if(first) { first = false; tui.sendMsg('/active', name, execution, s.latency, thisThread.seconds, "pattern_event", Main.elapsedTime) };
         if(ev.isRest.not) { tui.sendMsg('/hit', name, ev[\instrument] ? \default, s.latency, (ev[\amp] ? 0.1).asFloat, thisThread.seconds, thisThread.beats) }; 0 }
