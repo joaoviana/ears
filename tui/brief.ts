@@ -19,7 +19,8 @@ export interface Attempt { metric: string; slot: string; grade: string }
 const dB = (p: number) => 10 * Math.log10(Math.max(p, 1e-12));
 const METRIC_OF: Record<string, Metric> = { "sub  <80Hz": "sub", "low  150Hz": "low", "mid  700Hz": "mid", "high 3kHz": "high", "air  >7kHz": "air", centroid: "brightness", "onsets/beat": "density", envelope: "loudness", "peak/env": "punch", width: "width", groove: "groove" };
 /** how far off a line is, in units of its own tolerance, so metrics can be compared with each other */
-const severity = (l: Line) => (l.delta !== null && !Number.isFinite(l.delta) ? 0 : (l.label === "headroom" ? (l.word === "slamming the limiter" ? 9 : l.word === "limiting" ? 3 : 0) : l.delta === null ? 0 : Math.abs(l.delta) / (l.label === "centroid" ? 25 : l.label === "onsets/beat" ? 0.8 : l.label === "envelope" ? 2.5 : l.label === "groove" ? 0.004 : 3)));   // clipping outranks everything
+// every tolerance is in the unit the line's own delta is printed in: dB, % of centroid, onsets/beat, ms off the grid
+const severity = (l: Line) => (l.delta !== null && !Number.isFinite(l.delta) ? 0 : (l.label === "headroom" ? (l.word === "slamming the limiter" ? 9 : l.word === "limiting" ? 3 : 0) : l.delta === null ? 0 : Math.abs(l.delta) / (l.label === "centroid" ? 25 : l.label === "onsets/beat" ? 0.8 : l.label === "envelope" ? 2.5 : l.label === "groove" ? 4 : 3)));   // clipping outranks everything
 
 /** Which slots moved, and in which direction, against the same window the target was measured in. */
 export function slotDrift(now: Record<string, SlotLevel>, target: Record<string, SlotLevel>): { slot: string; db: number }[] {
@@ -48,8 +49,9 @@ export function brief(lines: Line[], refName: string, drift: { slot: string; db:
   if (drift.length) out.push("", "WHICH VOICE MOVED (level against how this base sounded when it started; this is where the damage is)", ...drift.slice(0, 4).map((d) => `  ${d.slot} is ${d.db > 0 ? "+" : ""}${d.db.toFixed(1)} dB ${d.db > 0 ? "louder" : "quieter"} than it should be`));
   if (masking.length) out.push("", "VOICES FIGHTING EACH OTHER (two things in one band at one moment; this is what \"muddy\" and \"boxy\" usually are)", ...masking);
 
-  const worst = off[0] && METRIC_OF[off[0].label];
-  if (worst && floors[worst] != null) out.push("", `A change to ${worst} smaller than ${floors[worst]!.toFixed(1)} ${worst === "brightness" ? "Hz" : worst === "density" ? "onsets/beat" : "dB"} cannot be measured and will be graded FLAT. Make a move big enough to see.`);
+  // the worst problem the agent can actually be graded on: headroom outranks everything but is not a called metric
+  const worst = off.map((l) => METRIC_OF[l.label]).find((m) => m && floors[m] != null);
+  if (worst) out.push("", `A change to ${worst} smaller than ${floors[worst]!.toFixed(1)} ${worst === "brightness" ? "Hz" : worst === "density" ? "onsets/beat" : "dB"} cannot be measured and will be graded FLAT. Make a move big enough to see.`);
 
   if (tried.length) {
     const failed = tried.filter((t) => t.grade === "flat" || t.grade === "miss");

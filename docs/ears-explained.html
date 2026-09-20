@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>EARS Explained</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -47,7 +48,7 @@ header.hero{padding-block:56px 28px;display:flex;flex-direction:column;gap:18px}
 nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-block:1px solid var(--line);margin-inline:-20px;padding:8px 20px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
 nav.toc a{font:500 .8rem/1 var(--mono);color:var(--dim);text-decoration:none;margin-right:16px;padding:4px 0;display:inline-block}
 nav.toc a:hover{color:var(--text)}
-section{padding-top:64px;display:flex;flex-direction:column;gap:18px}
+section{padding-top:64px;display:flex;flex-direction:column;gap:18px;scroll-margin-top:46px}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px 32px}
 .cols>div{display:flex;flex-direction:column;gap:8px}
 .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -81,6 +82,19 @@ ul{margin:0;padding-left:1.1em;max-width:68ch} li+li{margin-top:.35em}
 .sw{display:flex;align-items:center;gap:8px;font:500 .8rem var(--mono);color:var(--dim)}
 .sw i{display:block;width:44px;height:16px;border-radius:4px}
 .lane{letter-spacing:.06em}
+/* results */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,208px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stats>div{background:var(--surface);padding:18px 16px;display:flex;flex-direction:column;gap:7px}
+.stats b{font:800 clamp(1.6rem,4vw,2.3rem)/1 var(--display);letter-spacing:-.02em;color:var(--agent);display:block}
+.stats b em{font-style:normal;font-size:.55em;color:var(--faint);font-weight:500;padding-inline:.12em}
+.stats p{font-size:.9rem;color:var(--dim);line-height:1.45;max-width:none}
+.stats i{font:500 .68rem var(--mono);font-style:normal;letter-spacing:.09em;text-transform:uppercase;color:var(--host);margin-top:auto}
+tr.best td{background:var(--surface2)} tr.best td:first-child{font-weight:600;color:var(--human)}
+.fin{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.fin>div{border:1px solid var(--line);border-left-width:3px;border-radius:0 10px 10px 0;background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.fin>div:nth-child(1){border-left-color:var(--agent)} .fin>div:nth-child(2){border-left-color:var(--gold)} .fin>div:nth-child(3){border-left-color:var(--engine)}
+.fin h3{margin:0} .fin p{font-size:.93rem}
+.fin .num{font:700 .72rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
 footer{margin-top:72px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
 /* svg vocabulary */
 svg text{font-family:var(--body);font-size:12px;fill:var(--text)}
@@ -101,6 +115,7 @@ svg .grid{stroke:var(--line);stroke-width:1}
   <div class="eyebrow">soundcheck/tui · reference host for the EARS protocol · Founder House, London, 23 Sept 2026</div>
   <h1><span>EARS</span></h1>
   <p class="lede">A live-coded techno set in a terminal. The human writes SuperCollider patterns. Claude-powered DJs cannot hear and cannot touch the code: they read a measured listening report and propose small patches. The human takes or skips, every change lands on a bar line, and every message is on screen.</p>
+  <p class="gist">Every proposal has to predict its own effect, and the host grades it two bars later. Across 392 graded ideas, that report takes an agent from <b class="c-agent">20%</b> to <b class="c-human">46%</b> accuracy about what its own change will do. <a href="#proof">How that was measured →</a></p>
   <div class="roles">
     <div><b class="c-human">Human</b>Performs, gives verdicts, grants and revokes autonomy.</div>
     <div><b class="c-agent">Agent (a DJ)</b>Reads text, returns text. Two message types, no tools.</div>
@@ -136,7 +151,7 @@ svg .grid{stroke:var(--line);stroke-width:1}
 </header>
 
 <nav class="toc" aria-label="Sections">
-  <a href="#system">system</a><a href="#round">one round</a><a href="#hears">how it hears</a><a href="#safe">safety</a><a href="#grants">grants</a><a href="#djs">DJs</a><a href="#code">code pane</a><a href="#sound">sound</a><a href="#visuals">visuals</a><a href="#wire">the wire</a><a href="#keys">keys</a><a href="#verified">verified?</a><a href="#run">run it</a><a href="#origin">origin</a>
+  <a href="#system">system</a><a href="#round">one round</a><a href="#hears">how it hears</a><a href="#proof">does it help?</a><a href="#safe">safety</a><a href="#grants">grants</a><a href="#djs">DJs</a><a href="#code">code pane</a><a href="#sound">sound</a><a href="#visuals">visuals</a><a href="#wire">the wire</a><a href="#keys">keys</a><a href="#verified">verified?</a><a href="#run">run it</a><a href="#origin">origin</a>
 </nav>
 
 <section id="system">
@@ -243,14 +258,14 @@ svg .grid{stroke:var(--line);stroke-width:1}
   </figure>
   <div class="cols">
     <div><h3>When the host asks</h3><ul><li>4 bars after a new base, first round.</li><li>2 bars after a take, 1 bar after a skip, 4 bars after a failed round.</li><li><kbd>a</kbd> asks now; <code>--manual</code> turns the automatic asks off.</li><li>A note typed mid-round cancels the round and re-asks at once, with the note.</li></ul></div>
-    <div><h3>What goes in the prompt</h3><ul><li>Tempo, key and bass root.</li><li>All six slots as they are on disk.</li><li>The latest listening report, as text.</li><li>Your note, which outranks the report (only the DJ's Never list outranks it).</li><li>The last 8 verdicts: taken or skipped, with each idea's reason.</li></ul></div>
+    <div><h3>What goes in the prompt</h3><ul><li>Tempo, key and bass root.</li><li>All six slots as they are on disk.</li><li>The latest listening report, ranked worst-first.</li><li>A table of every metric and <em>what actually moves it</em>, because the benchmark showed good changes failing on the wrong name.</li><li>Your note, which outranks the report (only the DJ's Never list outranks it).</li><li>The last 8 verdicts: taken or skipped, with each idea's reason <em>and how its prediction was graded</em>.</li></ul></div>
   </div>
 </section>
 
 <section id="hears">
   <div class="eyebrow">Sensing</div>
   <h2>How an agent that cannot hear, hears</h2>
-  <p class="gist">An <code>ears</code> synth on the master bus streams numbers 15 times a second. Every 2 bars the host averages them, compares each to a saved reference (<code>refs/detroit.json</code>), and writes one plain word per line. That text is the agent's entire sense of hearing.</p>
+  <p class="gist">An <code>ears</code> synth on the master bus streams numbers 15 times a second, and each of the six slots plays to its own bus with its own analyser before the shared effects, so the host can also say <em>which voice</em> moved. Every 2 bars it averages them, compares each to a reference, and writes one plain word per line. That text is the agent's entire sense of hearing.</p>
   <figure>
     <div class="scroll">
     <svg viewBox="0 0 990 270" role="img" aria-label="Five measurement bands on a log frequency axis with the word used when each is below or above the reference.">
@@ -270,15 +285,162 @@ svg .grid{stroke:var(--line);stroke-width:1}
       <text x="60" y="258" class="sm d">Band shapes are schematic: two cascaded low-passes at 80 Hz, band-passes at 150, 700 and 3000 Hz, two cascaded high-passes at 7 kHz.</text>
     </svg>
     </div>
-    <figcaption>Four more lines follow the bands: <b>centroid</b> (bright / dark past ±25%), <b>onsets per beat</b> (sparse / busy past ±0.8), <b>envelope</b> level (quiet / hot past ±2.5 dB) and <b>peak/envelope</b>, the crest (squashed / spiky past ±3 dB). Frames with NaN, a peak above 8 or the wrong band count are dropped, not averaged.</figcaption>
+    <figcaption>Seven more lines follow the bands. <b>centroid</b> (bright / dark past ±25%), <b>onsets per beat</b> (sparse / busy past ±0.8), <b>envelope</b> level (quiet / hot past ±2.5 dB) and <b>peak/envelope</b>, the crest (squashed / spiky past ±3 dB). Then three the benchmark asked for: <b>width</b>, side over mid in dB (narrow / wide); <b>groove</b>, how far the average hit lands from the grid, taken from the engine's own event times rather than from audio; and <b>headroom</b>, measured <em>before</em> the limiter, because after it the peak is pinned by design and always reads "clipping". Frames with NaN, a peak above 8 or the wrong band count are dropped, not averaged.</figcaption>
   </figure>
-  <pre>vs reference "detroit"
-sub  &lt;80Hz     -1.5 dB  +3.8  boomy
-low  150Hz     -8.5 dB  +0.2  ok
-high 3kHz      -5.5 dB        dull
-air  &gt;7kHz    -31.4 dB  -16.0 closed
-centroid                -48.5% dark</pre>
-  <p class="c-dim" style="font-size:.88rem">Lines assembled from observations and evidence strings in the example session. <kbd>r</kbd> saves whatever is playing as the new reference; <code>npm run ears:ref</code> records one muted.</p>
+  <pre>vs reference "this track as it should sound"
+sub  &lt;80Hz    -10.0 dB   -2.1  ok
+low  150Hz     -9.7 dB   -0.1  ok
+mid  700Hz     -5.1 dB   +1.5  ok
+high 3kHz     -11.0 dB   +1.0  ok
+air  &gt;7kHz    -14.1 dB   +6.7  fizzy
+centroid       6.8 kHz  +40.8% bright
+onsets/beat        1.4   +0.0  ok
+envelope      -12.0 dB   -0.7  ok
+peak/env       10.1 dB   -0.6  ok
+width          -6.4 dB   +2.6  ok
+groove       18 ms off   +0.7  ok
+headroom       -2.7 dB         limiting</pre>
+  <p class="c-dim" style="font-size:.88rem">Real output, seed 41, four bars of a deliberately damaged mix (<code>tui/dev/one-brief.ts</code>). The reference here is how this same base sounded when it started, which is what the live host uses now; <kbd>r</kbd> re-saves it mid-set and <code>npm run ears:ref</code> records one muted. <b>This shape of report is the one the benchmark found wanting</b> — twelve numbers of equal weight, and the agent chases the loudest of them. What replaced it is below.</p>
+</section>
+
+<section id="proof">
+  <div class="eyebrow">Evidence · four runs · 392 graded ideas</div>
+  <h2>Does any of this help, or is the report decoration?</h2>
+  <p class="gist">The fair worry about a listening report is that the agent would have said the same thing from the code alone. So the same DJ was run against the same broken mixes four different ways, and every idea had to call its shot before the host applied it.</p>
+
+  <div class="stats">
+    <div><b>20% <em>→</em> 46%</b><p>of ideas whose predicted effect actually happened: code only, versus the full protocol.</p><i>n = 112 · p = 0.003</i></div>
+    <div><b>2 <em>of</em> 392</b><p>ideas that moved the sound the <em>opposite</em> way to the call. Nearly every failure is a move too small to measure.</p><i>timid, not wrong</i></div>
+    <div><b>0.94 <em>vs</em> 1.05</b><p>how close the full protocol got to restoring the clean mix, against the code-only DJ. 0 is back where it was.</p><i>the first run it also repaired better</i></div>
+    <div><b>4.5 s</b><p>per idea with the ranked report, against 5.6 s with the flat one. Ranking is cheaper to read.</p><i>better and faster</i></div>
+  </div>
+
+  <div class="cols">
+    <div><h3>The experiment</h3><p>One DJ (THE RESIDENT), one idea per round, taken automatically, on a second muted engine. Four seeded bases are measured clean — that measurement is the target — then deliberately damaged: the kick buried, the hats 2.6× too loud, the low voice's filter 3.2× open. The damage is folded into the numbers rather than appended as <code>* 2.6</code>, so the source is not an answer key and the code-only condition is genuinely blind. Seven rounds per seed per condition. <code>npm run ears:bench</code>.</p></div>
+    <div><h3>The two questions</h3><p><b>Can it predict?</b> Every proposal carries <code>EXPECT air down</code>. Two bars later the host measures what moved and grades <b class="c-human">HIT</b>, <b class="c-warn">MISS</b> or <b class="c-dim">FLAT</b> — FLAT meaning the move was smaller than the noise floor, and the floor is <em>measured</em> from four windows of the unchanged music, not assumed.</p><p><b>Can it repair?</b> Distance from the clean base, in tolerances: 1.5 dB per band, 0.15 octave of brightness, 1 dB of level. Two windows of the <em>unchanged</em> base sit about 1.1 apart, so anything near 1.1 is as close as this measurement can see.</p></div>
+  </div>
+
+  <div class="tscroll"><table>
+    <tr><th>Condition</th><th>What the DJ is given</th></tr>
+    <tr><td><b>blind</b></td><td>The six slots of code. Nothing else. "Still call your shot."</td></tr>
+    <tr><td><b>ears</b></td><td>+ the listening report: nine measurements, flat, all the same weight.</td></tr>
+    <tr><td><b>ears + shots</b></td><td>+ its own graded record of what earlier calls did.</td></tr>
+    <tr><td><b class="c-human">brief + shots</b></td><td>The report rewritten for a reader instead of a meter: ranked worst-first, naming which voice drifted and which two voices are fighting, stating what counts as a measurable move, and saying what has already failed.</td></tr>
+  </table></div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 960 300" role="img" aria-label="Bar chart of how often each condition's prediction came true in run four. Blind 18 percent measured on the edited voice's own tap and 25 percent on the master mix; ears 29 and 50; ears plus shots 39 and 54; brief plus shots 46 and 61.">
+      <g class="grid"><line x1="190" y1="36" x2="190" y2="258"/><line x1="365" y1="36" x2="365" y2="258"/><line x1="540" y1="36" x2="540" y2="258"/><line x1="715" y1="36" x2="715" y2="258"/><line x1="890" y1="36" x2="890" y2="258"/></g>
+      <g class="m" text-anchor="middle"><text x="190" y="278">0%</text><text x="365" y="278">25%</text><text x="540" y="278">50%</text><text x="715" y="278">75%</text><text x="890" y="278">100%</text></g>
+      <g class="m"><rect x="190" y="12" width="11" height="11" class="fa"/><text x="208" y="22">graded on the edited voice's own tap</text><rect x="500" y="12" width="11" height="11" class="fo"/><text x="518" y="22">graded on the whole master mix</text></g>
+      <g text-anchor="end" font-weight="600"><text x="178" y="58">blind</text><text x="178" y="116">ears</text><text x="178" y="174">ears + shots</text><text x="178" y="232" class="fh">brief + shots</text></g>
+      <g class="m d" text-anchor="end"><text x="178" y="74">code only</text><text x="178" y="132">flat report</text><text x="178" y="190">+ own record</text><text x="178" y="248">ranked report</text></g>
+      <g opacity=".85">
+        <rect x="190" y="40" width="126" height="16" rx="2" class="fa"/><rect x="190" y="60" width="175" height="16" rx="2" class="fo"/>
+        <rect x="190" y="98" width="203" height="16" rx="2" class="fa"/><rect x="190" y="118" width="350" height="16" rx="2" class="fo"/>
+        <rect x="190" y="156" width="273" height="16" rx="2" class="fa"/><rect x="190" y="176" width="378" height="16" rx="2" class="fo"/>
+      </g>
+      <rect x="190" y="214" width="322" height="16" rx="2" class="fa"/><rect x="190" y="234" width="427" height="16" rx="2" class="fo"/>
+      <g class="m" style="font-size:12px">
+        <text x="324" y="53">18%</text><text x="373" y="73">25%</text>
+        <text x="401" y="111">29%</text><text x="548" y="131">50%</text>
+        <text x="471" y="169">39%</text><text x="576" y="189">54%</text>
+        <text x="520" y="227" class="fh" font-weight="600">46%</text><text x="625" y="247" class="fh" font-weight="600">61%</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Run 4, the one with all four new observation categories live. The two graders disagree about the absolute level and agree about the order, which is the point: the per-slot tap asks "did <em>that voice</em> move", the master asks "did the room move". Only the blind condition produced any MISS in this run — three of them.</figcaption>
+  </figure>
+
+  <div class="tscroll"><table>
+    <tr><th>Run 4</th><th>Called it right<br><span style="text-transform:none;letter-spacing:0">per-slot (hit/miss/flat)</span></th><th>Same calls,<br><span style="text-transform:none;letter-spacing:0">on the master</span></th><th>Repair<br><span style="text-transform:none;letter-spacing:0">start → best</span></th><th>Ideas that<br><span style="text-transform:none;letter-spacing:0">moved it closer</span></th><th>s / idea</th></tr>
+    <tr><td>blind</td><td>18% (5 / 0 / 23)</td><td>25% (7 / <b class="c-warn">3</b> / 18)</td><td>3.23 → 1.05</td><td>64%</td><td>3.7</td></tr>
+    <tr><td>ears</td><td>29% (8 / 1 / 19)</td><td>50% (14 / 0 / 14)</td><td>2.93 → 1.18</td><td>75%</td><td>5.4</td></tr>
+    <tr><td>ears + shots</td><td>39% (11 / 0 / 17)</td><td>54% (15 / 0 / 13)</td><td>2.81 → 1.20</td><td>46%</td><td>5.6</td></tr>
+    <tr class="best"><td>brief + shots</td><td>46% (13 / 0 / 15)</td><td>61% (17 / 0 / 11)</td><td>2.86 → <b>0.94</b></td><td>64%</td><td>4.5</td></tr>
+  </table></div>
+  <p class="c-dim" style="font-size:.88rem">28 ideas per condition, none refused. "Best" is the closest each seed came to its clean base, averaged. 1.1 is the floor of what this measurement can resolve, so 0.94 and 1.05 are both "as good as it gets"; the protocol reaching it while also predicting best is the result that took four runs to get.</p>
+
+  <h3>Reproduced four times, and every fix is visible in the numbers</h3>
+  <div class="tscroll"><table>
+    <tr><th>Run</th><th>What changed before it</th><th>blind</th><th>ears</th><th>+ shots</th><th>brief</th></tr>
+    <tr><td>1</td><td>First attempt. The damage was appended to the source as <code>* 2.6</code>, so "blind" could read the answer.</td><td>11%</td><td>29%</td><td>39%</td><td>–</td></tr>
+    <tr><td>2</td><td>Damage folded into the numbers; the DJ prompt gained a table of every metric and what actually moves it.</td><td>18%</td><td>32%</td><td>43%</td><td>–</td></tr>
+    <tr><td>3</td><td>The ranked brief added as a fourth condition.</td><td>21%</td><td>29%</td><td>32%</td><td><b>46%</b></td></tr>
+    <tr><td>4</td><td>Masking, stereo width, groove and headroom added to what the host can measure.</td><td>18%</td><td>29%</td><td>39%</td><td><b>46%</b></td></tr>
+  </table></div>
+  <p class="c-dim" style="font-size:.88rem">Prediction accuracy on the per-slot grader. Four seeds × seven rounds per cell. The ordering holds in every run; the size of the gap does not, which is what a sample of 28 looks like.</p>
+
+  <h3>Three things the runs taught, which are now in the code</h3>
+  <div class="fin">
+    <div>
+      <span class="num">Finding 1 · fixation</span>
+      <h3>One loud number eats the whole agent</h3>
+      <p>Given nine measurements of equal weight, the DJ called <code>air</code> 11 times in 28 rounds: loud hats are the loudest thing in the report, so it chased that symptom while the buried kick stayed buried. Ranking the problems by how far each is from the target moved its top call to <code>loudness</code>, 12 times of 28 — which is where the damage actually lived — and it repaired best.</p>
+      <p class="c-dim" style="font-size:.88rem">Ranking does not spread an agent's attention. It redirects it. <code>brief.ts</code></p>
+    </div>
+    <div>
+      <span class="num">Finding 2 · timidity</span>
+      <h3>Agents are not wrong, they are shy</h3>
+      <p>Across 392 graded ideas, exactly <b>2</b> moved the sound opposite to the prediction. 269 were FLAT: the right thing moved, too little to measure. So the report now states the measured noise floor in the units the call will be graded in — "a change to air smaller than 1.8 dB cannot be measured" — and tells the agent to make a move big enough to see.</p>
+      <p class="c-dim" style="font-size:.88rem">The fix for a shy agent is a number, not an adjective. <code>shots.ts</code></p>
+    </div>
+    <div>
+      <span class="num">Finding 3 · the one blind spot</span>
+      <h3>Brightness is the thing they get backwards</h3>
+      <p>Of the eight MISSes in all four runs, seven were a call of <code>brightness down</code> or <code>high down</code>. Closing a filter reliably makes a voice darker and just as reliably fails to make the <em>mix</em> darker, because the other five voices did not move. This is exactly the error a whole-mix analyser cannot catch, and the reason every slot now plays to its own bus with its own analyser.</p>
+      <p class="c-dim" style="font-size:.88rem">Six taps before the shared effects. <code>engine.scd</code> · <code>slotears.ts</code></p>
+    </div>
+  </div>
+
+  <h3>The report that won, on the same four bars</h3>
+  <p class="gist">This is the mix printed flat <a href="#hears">two sections up</a> — same seed, same damage, same measurements, nothing added. Only the order and the sentences are different, and that difference is the 20% → 46%.</p>
+  <pre>Measured against this track as it should sound, worst first.
+
+<b class="c-warn">THE BIGGEST PROBLEM: limiting (headroom -2.7 dB)</b>
+Then: fizzy (air, +6.7 off) · bright (centroid, +40.8% off)
+
+<b class="c-agent">WHICH VOICE MOVED</b> (level against how this base sounded when it started; this is where the damage is)
+  d3 is +13.1 dB louder than it should be
+  d2 is +12.5 dB louder than it should be
+  d5 is +6.5 dB louder than it should be
+  d1 is -5.1 dB quieter than it should be
+
+<b class="c-agent">VOICES FIGHTING EACH OTHER</b> (two things in one band at one moment; this is what "muddy" and "boxy" usually are)
+  d2 and d3 are both filling high at the same moments (88% together, 75% of that band). Move one of them out, or duck one under the other.
+  d3 and d5 are both filling high at the same moments (78% together, 69% of that band). Move one of them out, or duck one under the other.
+  d3 and d6 are both filling high at the same moments (68% together, 70% of that band). Move one of them out, or duck one under the other.
+
+<b class="c-human">A change to air smaller than 2.0 dB cannot be measured</b> and will be graded FLAT. Make a move big enough to see.
+
+<b class="c-gold">ALREADY TRIED AND IT DID NOT WORK: air ×2.</b> Stop pushing on air; the cause is somewhere else.
+
+Full measurements:
+  sub  &lt;80Hz   -10.0 dB     -2.1  ok
+  low  150Hz    -9.7 dB     -0.1  ok
+  mid  700Hz    -5.1 dB     +1.5  ok
+  high 3kHz    -11.0 dB     +1.0  ok
+  air  &gt;7kHz   -14.1 dB     +6.7  fizzy
+  centroid      6.8 kHz   +40.8%  bright
+  onsets/beat       1.4     +0.0  ok
+  envelope     -12.0 dB     -0.7  ok
+  peak/env      10.1 dB     -0.6  ok
+  width         -6.4 dB     +2.6  ok
+  groove      18 ms off     +0.7  ok
+  headroom      -2.7 dB    limiting</pre>
+  <p class="c-dim" style="font-size:.9rem">Five things a flat table cannot say: <b>which problem to fix first</b> (clipping outranks a band, a band outranks a colour); <b>which voice drifted</b>, from the per-slot taps, against how this base sounded when it started; <b>which two voices are fighting for a band at the same moments</b>, which is what "muddy" and "boxy" usually are and no master-bus number can express; <b>how big a move has to be</b> to register at all; and <b>what this agent has already tried that did not work</b>. The last one is the cure for fixation.</p>
+
+  <div class="panel nope" style="border-left:3px solid var(--warn)">
+    <h3>What this cannot tell you</h3>
+    <ul>
+      <li>Four seeds, one DJ, one model. 28 ideas per cell is a small sample: read the ordering, not the decimals.</li>
+      <li>Grading is observational on a live mix, not a controlled re-render. The per-slot figure rebuilds the dry mix with every other voice held at its "before" measurement; the edited voice still carries its own randomness, and shared effects sit outside it.</li>
+      <li>The gap between <code>ears + shots</code> and <code>brief + shots</code> is not significant on its own (p = 0.25). The gap between code-only and the full protocol is (p = 0.003).</li>
+      <li>"Repair" means distance from a measurement of the clean base, not whether the music got better. Nobody heard any of it.</li>
+    </ul>
+  </div>
+  <p class="c-dim" style="font-size:.9rem">Full write-up and every round of every run: <code>docs/does-the-protocol-help.md</code> and <code>docs/bench/</code>.</p>
 </section>
 
 <section id="safe">
@@ -357,7 +519,7 @@ cans: small  body: laptop
         <li><b>Back to back.</b> Up to three share the booth; after each verdict the next one steps up. <kbd>tab</kbd> skips ahead, <kbd>x</kbd> retires.</li>
         <li><b>Tallies.</b> Under each face: taken / offered, the slots currently theirs, and skill glyphs.</li>
       </ul>
-      <p class="c-dim" style="font-size:.88rem">On disk now, nine: The Resident, Detroit 130, Dub Siren, Acid Reflux, DJ Tambor, Nightbus Nia, Heon, Queen Funty, Miss Bonbon.</p>
+      <p class="c-dim" style="font-size:.88rem">On disk now, ten: The Resident, Detroit 130, Dub Siren, Acid Reflux, DJ Tambor, Nightbus Nia, Heon, Queen Funty, Miss Bonbon, Velvet Scat.</p>
     </div>
   </div>
 </section>
@@ -381,7 +543,7 @@ cans: small  body: laptop
 
 <section id="sound">
   <div class="eyebrow">Sound</div>
-  <h2>Nine instruments, nine styles, one guarded master</h2>
+  <h2>Ten instruments, fifteen styles, one guarded master</h2>
   <p class="gist">Every voice is one <code>~d.(\dN, \instrument, …)</code> Pbind wrapped in a Pdef quantised to 4 beats. Convention: d1 kick, d2 hats, d3 clap or perc, d4 bass, d5 chords, d6 lead.</p>
   <div class="tscroll"><table>
     <tr><th>Instrument</th><th>What it is</th><th>Main arguments</th></tr>
@@ -393,12 +555,13 @@ cans: small  body: laptop
     <tr><td><code>\stab</code></td><td>Detuned saws, short, sent to the space bus</td><td>midinote (chord), cutoff, dec, send</td></tr>
     <tr><td><code>\fm</code></td><td>Two-operator pluck or bell</td><td>ratio, index, dec, pan, send</td></tr>
     <tr><td><code>\pad</code></td><td>Four detuned saws, slow filter, ducked</td><td>cutoff, att, sus, rel, send, duck</td></tr>
-    <tr><td><code>\perc</code></td><td>Tuned tom, conga or blip</td><td>freq, dec, click, pan, send</td></tr>
+    <tr><td><code>\perc</code></td><td>Tuned tom, conga, marimba or blip</td><td>freq, dec, click, pan, send</td></tr>
+    <tr><td><code>\choir</code></td><td>Formant-filtered voices: ooh and aah pads, the warm end of the palette</td><td>midinote, vowel, cutoff, sus, send</td></tr>
     <tr><td><code>\vox</code> <span class="c-gold">skill</span></td><td>Buffer player for rendered phrases</td><td>buf, rate, chop, len, amp, hp</td></tr>
   </table></div>
 
   <h3>Seeded bases: a style first, then everything else</h3>
-  <p>One number picks a style; the style decides the tempo range (even BPMs only), scale pool, kick figure, hat feel and swing, clap placement, what the bass does, the chord voice and the lead. A four-bar progression is chosen from six, and the bass follows it with <code>\ctranspose, Pseq([0, -4, 3, -2], inf).stutter(16)</code>. Drum rows come as lists of four (A A A B), so grooves turn around every fourth bar, and patterns carry <code>Pwhite</code>, <code>Pbrown</code>, <code>Pwrand</code>, so one seed never loops identically. <kbd>g</kbd> rolls a new base through a build or wash; the previous set is archived to <code>tui/sets/</code> first.</p>
+  <p>One number picks a style; the style decides the tempo range (even BPMs only), scale pool, kick figure, hat feel and swing, clap placement, what the bass does, the chord voice and the lead. A four-bar progression is chosen from six, and the bass follows it with <code>\ctranspose, Pseq([0, -4, 3, -2], inf).stutter(16)</code>. Drum rows come as lists of four (A A A B), so grooves turn around every fourth bar, and patterns carry <code>Pwhite</code>, <code>Pbrown</code>, <code>Pwrand</code>, so one seed never loops identically. <kbd>g</kbd> rolls a new base through a build or wash; the previous set is archived to <code>tui/sets/</code> first. <kbd>b</kbd> picks which family the next roll comes from — <b>dark</b>, <b>vibey</b> or anything.</p>
   <div class="tscroll"><table>
     <tr><th>Style</th><th>BPM</th><th>Kick (A row)</th><th>Hats</th><th>Bass</th><th>Chords · lead</th></tr>
     <tr><td>detroit</td><td>126–132</td><td><code>X---X---X---X---</code></td><td>sixteenths</td><td>riff</td><td>stabs · sparse FM</td></tr>
@@ -410,6 +573,13 @@ cans: small  body: laptop
     <tr><td>progressive</td><td>128–134</td><td><code>X---X---X---X---</code></td><td>offbeat open</td><td>offbeat</td><td>pad · arp</td></tr>
     <tr><td>halftime</td><td>140–150</td><td><code>X---------X-----</code></td><td>rolls</td><td>reese</td><td>pad · sparse FM</td></tr>
     <tr><td>house</td><td>120–126</td><td><code>X---X---X---X---</code></td><td>offbeat open, swing 0.02</td><td>octaves</td><td>organ · arp</td></tr>
+    <tr><td colspan="6" style="color:var(--dim);font-size:.88rem;padding-top:14px"><b class="c-gold">the vibey family</b> — major, lydian and dorian; 7th and 9th chords; round basses, electric piano, shakers and congas. Added because the dark nine only ever sounded ominous.</td></tr>
+    <tr><td>deep house</td><td>118–124</td><td><code>X---X---X---X---</code></td><td>shaker, swing 0.025</td><td>round</td><td>e-piano · pluck</td></tr>
+    <tr><td>nu disco</td><td>114–122</td><td><code>X---X---X---X---</code></td><td>offbeat open</td><td>disco</td><td>warm choir · bright arp</td></tr>
+    <tr><td>balearic</td><td>106–116</td><td><code>X---X---X---X---</code></td><td>shaker, swing 0.02</td><td>round</td><td>warm pad · e-piano melody</td></tr>
+    <tr><td>afro house</td><td>118–124</td><td><code>X---X---X---X---</code></td><td>shaker, swing 0.015</td><td>offbeat round</td><td>marimba · choir "ooh"</td></tr>
+    <tr><td>french touch</td><td>120–126</td><td><code>X---X---X---X---</code></td><td>offbeat open</td><td>disco</td><td>filter stabs · pluck</td></tr>
+    <tr><td>sunny garage</td><td>128–132</td><td><code>X---------X-----</code></td><td>swung 0.045</td><td>sub bounce</td><td>e-piano · e-piano melody</td></tr>
   </table></div>
 
   <h3>Signal path, and why it is guarded</h3>
@@ -485,11 +655,13 @@ cans: small  body: laptop
   <p class="gist">Everything between host, agents and human is one JSON line with the envelope <code>v, t, bar, type, from</code>. The log pane (<kbd>e</kbd>), <code>tui/logs/latest.jsonl</code> and the socket on <code>localhost:57400</code> read the same stream. It is the proof that nothing reaches the speakers without validation and a verdict.</p>
   <div class="tscroll"><table>
     <tr><th>From</th><th>Types</th><th>Meaning</th></tr>
-    <tr><td class="c-host">host</td><td><code>hello state request proposal rejected applied enter leave unlock transition</code></td><td>The work as it is; an ask per angle; a proposal that passed, now with an id; one that did not; a file written and when it lands; presence; an earned skill</td></tr>
-    <tr><td class="c-engine">ears, engine</td><td><code>observation landed error</code></td><td>The listening report (<code>same: true</code> when nothing changed); SuperCollider took the code, or refused it</td></tr>
-    <tr><td class="c-human">human</td><td><code>verdict grant note</code></td><td>take or skip, <code>by</code> human or <code>grant:auto</code>; a level or a skill; an instruction that outranks the report</td></tr>
+    <tr><td class="c-host">host</td><td><code>hello state request proposal rejected applied enter leave unlock transition</code></td><td>The work as it is, with a <code>revision</code>; an ask per angle; a proposal that passed, now with an id; one that did not; a file written and when it lands; presence; an earned skill</td></tr>
+    <tr><td class="c-engine">ears, engine</td><td><code>observation evaluated scheduled active superseded error</code></td><td>The listening report, scoped and windowed; then the receipts kept apart: the engine <em>compiled</em> it, queued it, and a pattern event actually sounded. <code>landed</code> is still sent beside <code>evaluated</code> so older readers keep working</td></tr>
+    <tr><td class="c-host">host, after the fact</td><td><code>comparison outcome</code></td><td>What the measurements did between two revisions, and the verdict on the agent's own prediction: <b class="c-human">HIT</b>, <b class="c-warn">MISS</b>, <b class="c-dim">FLAT</b>, or ungraded when something else changed at the same time</td></tr>
+    <tr><td class="c-human">human</td><td><code>verdict grant note</code></td><td>take or skip, <code>by</code> human or <code>grant:auto</code>; a level or a skill; an instruction that outranks the report. Every option that lost gets its own verdict, so the log is a complete account</td></tr>
     <tr><td class="c-agent">agent</td><td><code>proposal note</code></td><td>The only two. There is no message that applies anything</td></tr>
   </table></div>
+  <p>Since the benchmark, a proposal is not allowed on the wire without a prediction: <code>expect {metric, dir}</code>, refused otherwise, for outside agents as much as for the built-in DJs. Two bars after it lands the host answers with an <code>outcome</code>, graded against a noise floor it measured rather than assumed, and on the edited slot's own tap when it has one. That is what makes the log a scoreboard instead of a diary — see <a href="#proof">does it help?</a>.</p>
   <pre><span class="c-faint">bar  +s     type         from      </span>
 <span class="c-faint"> 3   0.00</span>  <span class="c-engine">observation</span>  ears      high dull · air closed · centroid dark
 <span class="c-faint"> 4   0.00</span>  <span class="c-dim">request</span>      resident  fix · sonnet   <span class="c-faint">(+ style, bold, same ms)</span>
@@ -524,6 +696,7 @@ cans: small  body: laptop
       <dt><kbd>K</kbd></dt><dd>give the active DJ any skill now</dd></dl></div>
     <div><h3>the set</h3><dl>
       <dt><kbd>g</kbd></dt><dd>new random base, through a build</dd>
+      <dt><kbd>b</kbd></dt><dd>base family: vibey / dark / any</dd>
       <dt><kbd>u</kbd> <kbd>w</kbd></dt><dd>build / wash by hand</dd>
       <dt><kbd>m</kbd></dt><dd>mute</dd>
       <dt><kbd>v</kbd></dt><dd>DJs speak their greeting</dd>
@@ -549,9 +722,11 @@ cans: small  body: laptop
       <li>Broken code is refused while the music continues.</li>
       <li>Measurements and hit times arrive; the report renders.</li>
       <li>Claude returns valid patches; a take lands; a typed note changes the next ideas.</li>
-      <li>Round timings: the example session shows ideas 3.5 to 5.0 s after the ask.</li>
+      <li>Round timings: the example session shows ideas 3.5 to 5.0 s after the ask; 392 benchmark ideas average 3.7 to 5.6 s.</li>
       <li>Quit leaves no scsynth behind.</li>
-      <li>The master-chain fault was found by its numbers (limiter pinned) and fixed by design.</li></ul></div>
+      <li>The master-chain fault was found by its numbers (limiter pinned) and fixed by design.</li>
+      <li><b>That the report helps.</b> Four benchmark runs, 392 graded ideas, same DJ, same damage, four conditions. <a href="#proof">The numbers</a>.</li>
+      <li>Per-slot grading: a louder hat raises <code>air</code> on its own tap while the other five voices are held still.</li></ul></div>
     <div class="panel nope"><h3>Not verified</h3><ul>
       <li>How any of it sounds through speakers. Its builder has never heard a note.</li>
       <li>Audio-to-visual latency by eye.</li>
@@ -561,13 +736,14 @@ cans: small  body: laptop
   </div>
   <h3>Known gaps, from reading the code</h3>
   <ul>
-    <li>The validator is a deny-list plus shape checks. It does not check instrument or argument names; an unknown one gets past it and is left for SuperCollider to refuse or ignore.</li>
+    <li>The validator is a deny-list plus shape checks. It does not check instrument or argument names; an unknown one gets past it and is left for SuperCollider to refuse or ignore. A patch such as <code>amp = 0</code> passes everything and produces silence.</li>
     <li>Vocals depend on macOS <code>say</code>; if rendering fails the slot plays a silent buffer.</li>
-    <li>If port 57400 is taken the host carries on without the socket, silently.</li>
-    <li>The protocol's <code>observe</code> level is not implemented in this host (levels are <code>suggest</code> and <code>auto</code>), and the spec's music profile still says slots d1 to d4.</li>
-    <li><code>evidence.ts</code> (before/after metric bookkeeping per change) exists but the screen does not import it yet, so "what did this take do" is read off the trend chart, not computed.</li>
-    <li>Skill grants print as <code>agent → </code> with nothing after the arrow in the log pane, because the formatter only knows levels.</li>
+    <li><code>density</code> and <code>punch</code> have no per-slot measurement, so a call on either is still graded on the whole mix.</li>
+    <li>The protocol's <code>observe</code> level is not implemented in this host; the levels that exist are <code>suggest</code> and <code>auto</code>.</li>
+    <li>The ranked report beat the flat one on four seeds. Four seeds is not many, and the gap to <code>ears + shots</code> alone is inside the noise (p = 0.25).</li>
+    <li>The engine ran at 24 kHz for part of the earlier work, which compresses the <code>air</code> band; everything quoted here is from 48 kHz runs.</li>
   </ul>
+  <p class="c-dim" style="font-size:.88rem">Closed since the last version of this page: <code>evidence.ts</code> is wired into the screen, so "what did this take do" is computed rather than eyeballed off the trend chart; the log pane prints skill grants properly; a busy port 57400 now says so on the bus instead of failing quietly; the spec's music profile says six slots.</p>
 </section>
 
 <section id="run">
@@ -581,9 +757,12 @@ npm run ears -- --mute        <span class="c-faint"># silent: the ears still mea
 npm run ears -- --manual      <span class="c-faint"># DJs only speak when you press a</span>
 npm run ears -- --demo        <span class="c-faint"># visuals only, fake pulse, no SuperCollider</span>
 npm run ears -- --logs        <span class="c-faint"># start with the wire pane open (also --full, --voice)</span>
+npm run ears -- --mood dark   <span class="c-faint"># which family g rolls from: vibey (default), dark, any</span>
 npm run ears:tail             <span class="c-faint"># follow tui/logs/latest.jsonl in another pane</span>
 npm run ears:ref              <span class="c-faint"># record the reference, muted</span>
-npm run ears:reset            <span class="c-faint"># restore tui/set from tui/set.start</span></pre>
+npm run ears:reset            <span class="c-faint"># restore tui/set from tui/set.start</span>
+npm run ears:bench -- 4 7     <span class="c-faint"># the experiment: 4 seeds × 7 rounds × 4 conditions, its own muted engine</span>
+npm run test:ears             <span class="c-faint"># 28 host tests: grading, noise floors, per-slot attribution, masking</span></pre>
   <p class="c-dim" style="font-size:.9rem">Environment: <code>EARS_MODEL</code> (default sonnet), <code>EARS_EFFORT</code> (default low), <code>EARS_ANGLES</code>, <code>EARS_SET</code>, <code>EARS_DJS</code>, <code>EARS_PORT</code> 57200, <code>EARS_SC_PORT</code>, <code>EARS_BUS_PORT</code> 57400. The last five are how a second, muted test instance runs beside a live one without touching it.</p>
 </section>
 
@@ -593,5 +772,5 @@ npm run ears:reset            <span class="c-faint"># restore tui/set from tui/s
   <p><code>soundcheck</code> began as one brief (Detroit techno, 130 BPM, F minor) played by Strudel, Tone.js, Faust, Glicol and a SuperCollider render, level-matched, keys <kbd>1</kbd> to <kbd>5</kbd>, so the stack would be chosen by listening instead of by reading docs. <code>DECISION.md</code> recommended Strudel for the date, with a Faust or Tone rack as the upgrade, and called SuperCollider the highest ceiling and the highest venue risk. EARS is what happened when the ceiling won: SuperCollider direct, in a terminal, with the agent moved from author to advisor. That document carries the same caveat as this page: verified for signal, levels and errors; never heard by the one who wrote it.</p>
 </section>
 
-<footer>Every statement here traces to <code>soundcheck/tui/*</code>, <code>ears-protocol/SPEC.md</code> and <code>examples/session.jsonl</code> as of 19 Sept 2026. Where the README and the code disagree, this page follows the code.</footer>
+<footer>Every statement here traces to <code>soundcheck/tui/*</code>, <code>ears-protocol/SPEC.md</code>, <code>examples/session.jsonl</code> and the four runs in <code>docs/bench/</code>, as of 20 Sept 2026. Where the README and the code disagree, this page follows the code. The reports on this page are real output from a muted engine; the benchmark numbers are every round of every run, not a selection. Nothing here is a claim about how any of it sounds.</footer>
 </div>

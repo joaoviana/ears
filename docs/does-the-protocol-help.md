@@ -1,104 +1,135 @@
 # Does the protocol help?
 
-Two runs, 19-20 September 2026. 4 seeds × 7 rounds × 3 conditions each, 168 ideas, all graded, none refused.
-Run 1 exposed two flaws (below); run 2 is the same experiment with both fixed, and is the one to read.
+Four runs, 19–20 September 2026. 4 seeds × 7 rounds × 3 or 4 conditions, **392 graded ideas**, none refused.
+Each run fixed something the previous one exposed. Run 4 is the one to read; the others are why it says what it says.
 
 ## The answer, in one line
 
-**Yes for prediction, not yet for repair.** The protocol roughly triples an agent's ability to say what its own
-change will do (18% → 32% → 43%, and 21% → 32% → 57% graded on the master mix). It did not make the agent better
-at restoring a broken mix, and the reason looks like a property of the report, not of the idea.
+**Yes, and the biggest single gain came from something neither protocol specifies: the *order* of the report.**
+Reasoning from code alone, an agent is right about what its own change will do 20% of the time. Given the
+measurements ranked worst-first, told which voice drifted and which two voices are fighting, and told how big a
+move has to be before the instruments can see it, it is right 46% of the time (p = 0.003) — and for the first
+time it also repairs a broken mix better than the code-only agent.
 
 ## The setup
 
-One DJ (THE RESIDENT), one idea per round, auto-taken, on a muted second engine. Each base is measured clean, then
-deliberately broken: the kick buried, the hats 2.6× too loud, the low voice's filter 3.2× open, with the damage
-folded into the numbers so the source is not an answer key. Two things are measured:
+One DJ (THE RESIDENT), one idea per round, auto-taken, on a muted second engine. Each base is measured clean —
+that measurement is the target — then deliberately broken: the kick buried, the hats 2.6× too loud, the low
+voice's filter 3.2× open, with the damage folded into the numbers so the source is not an answer key. Two
+questions:
 
 - **Can it predict?** Every idea must call its shot (`EXPECT air down`). The host measures the change two bars
   later against a noise floor learned from four windows of the unchanged music, and grades HIT, MISS or FLAT.
+  Graded twice: on the edited slot's own tap, and on the whole master mix.
 - **Can it steer?** Distance from the clean base, in tolerances (1.5 dB per band, 0.15 octave of brightness, 1 dB
-  of level). Two windows of the *unchanged* base sit about 1.0 apart, so anything near 1.0 is as close as this
+  of level). Two windows of the *unchanged* base sit about 1.1 apart, so anything near 1.1 is as close as this
   measurement can see.
 
 | condition | what the DJ sees |
 |---|---|
 | **blind** | the code only |
-| **ears** | the code + the listening report (the protocol's observation) |
+| **ears** | the code + the listening report, flat: twelve measurements of equal weight |
 | **ears+shots** | the above, plus its own graded record fed back into the next prompt |
+| **brief+shots** | the same measurements, **ranked** worst-first, with per-voice drift, masking, the measured noise floor, and what has already failed |
 
-## Run 2, the corrected experiment
+## Run 4, the one with everything live
 
-| condition | ideas | predictions that came true | graded on the master | steering: start → end | best reached | moved it closer |
+| condition | ideas | predicted right, per-slot | on the master | steering: start → best | moved it closer | s/idea |
 |---|---|---|---|---|---|---|
-| blind | 28 | **18%** (5 hit / 0 miss / 23 flat) | 21% | 3.09 → 1.25 | **0.93** | 57% |
-| ears | 28 | **32%** (9 / 0 / 19) | 32% | 2.82 → 1.81 | 1.57 | 54% |
-| ears + shots | 28 | **43%** (12 / 0 / 16) | **57%** | 2.68 → 1.87 | 1.35 | 61% |
+| blind | 28 | 18% (5 / 0 / 23) | 25% (7 / **3** / 18) | 3.23 → 1.05 | 64% | 3.7 |
+| ears | 28 | 29% (8 / 1 / 19) | 50% (14 / 0 / 14) | 2.93 → 1.18 | 75% | 5.4 |
+| ears + shots | 28 | 39% (11 / 0 / 17) | 54% (15 / 0 / 13) | 2.81 → 1.20 | 46% | 5.6 |
+| **brief + shots** | 28 | **46%** (13 / 0 / 15) | **61%** (17 / 0 / 11) | 2.86 → **0.94** | 64% | **4.5** |
 
-### 1. The protocol makes an agent much better at knowing what its own changes do
+Pooled over the two runs in which all four conditions ran head to head (n = 56 per cell):
+blind 20%, ears 29%, ears+shots 36%, brief+shots 46%.
+blind vs brief+shots **z = 3.01, p = 0.003**. blind vs ears+shots p = 0.057. ears+shots vs brief+shots p = 0.25 —
+the last step is real in every run but not separable on this sample.
 
-18% → 32% → 43%, monotonic, and both halves contribute: the measured report nearly doubles the hit rate over
-reasoning from code alone, and feeding the agent its own graded record adds another third on top. Graded on the
-master mix the spread is wider still, 21% → 57%. Run 1 showed the same ordering from a lower base (11 → 29 → 39)
-before the metric table was added, so the effect has now been reproduced twice with different prompts.
+## 1. The protocol makes an agent much better at knowing what its own changes do
+
+20% → 29% → 36% → 46%, monotonic, and each half contributes: the measured report lifts it over reasoning from
+code alone, feeding the agent its own graded record adds more, and rewriting the report adds the most. Graded on
+the master mix the run-4 spread is wider still, 25% → 61%.
 
 This is what the protocol is *for*: an agent that cannot hear, told what it did, gets better at anticipating what
 it will do.
 
-**Almost nothing is a MISS.** Across 168 ideas in both runs there was exactly one case of the sound moving
-opposite to the prediction. Nearly every failure is FLAT: the agent moves the right thing, too little to measure.
-It is timid, not wrong. That is a much better problem to have, and it argues for asking agents to make bigger
-moves rather than more careful ones.
+## 2. Agents are timid, not wrong
 
-### 2. It still did not steer better, and the reason is the report, not the protocol
+Across all 392 ideas there were **2** cases of the sound moving opposite to the prediction on the per-slot
+grader (6 on the master, 5 of those from the blind condition). 269 were FLAT: the agent moved the right thing,
+too little to measure. That is a much better problem to have, and the fix is a number, not an adjective — the
+report now states the measured floor in the units the call will be graded in ("a change to air smaller than
+2.0 dB cannot be measured") and tells the agent to make a move big enough to see.
 
-Blind reached 0.93 from the clean base; the two report conditions reached 1.57 and 1.35. Feeding grades back helps
-(1.35 beats 1.57, and it moved the mix closer more often, 61% of ideas), but neither beats having no report.
+**The one thing they get backwards is brightness.** Seven of the eight MISSes in four runs were a call of
+`brightness down` or `high down`: closing a filter reliably darkens *that voice* and just as reliably fails to
+darken *the mix*, because the other five voices did not move. Exactly the error a whole-mix analyser cannot
+catch, and the reason every slot now has its own tap.
 
-The metric histogram says why. The `ears` DJ called `air` 11 times out of 28 and `high` 4 more: loud hats are the
-loudest thing in the report, so it chased that symptom round after round while the buried kick and the wide-open
-filter stayed broken. The blind DJ, with nothing to chase, spread its attention (`sub` 9, `mid` 5,
-`brightness` 5, `high` 4) and fixed the actual damage. Feeding grades back partly cures this, because a FLAT tells
-the agent to stop pushing the same thing.
+## 3. A flat report is a trap, and ranking it is worth more than any message format
 
-**One loud number in a report will monopolise an agent's attention.** That is a finding about how to write an
-observation, and it is fixable: rank the problems by how far each is from the target and say which to fix first,
-instead of presenting nine numbers of equal weight. That is the next experiment, and it is a change to the report,
-not to the protocol.
+Given twelve numbers of equal weight the DJ called `air` **11 times out of 28**: loud hats are the loudest thing
+in the report, so it chased that symptom round after round while the buried kick stayed buried. The blind DJ,
+with nothing to chase, spread its attention and fixed the actual damage — which is why for three runs *blind
+steered better than the protocol did*.
 
-## What run 1 got wrong, and what changed
+Ranking the same measurements moved the top call to `loudness` (12 of 28), which is where the damage actually
+lived, and produced both the best prediction rate and the best repair (0.94, against blind's 1.05). Ranking does
+not spread an agent's attention; it redirects it.
 
-### 3. The predictions were often the wrong metric (fixed between runs)
+Five things a flat table cannot say, all of them now in `brief.ts`:
 
-In run 1 the agent repeatedly made a good change and named the wrong measurement: restoring a buried kick and
-predicting `punch up` when what moved was `sub` and `loudness`. The grade then said FLAT for a correct musical
-decision. The DJ prompt and `hello.capabilities` now carry a table of every metric with **what actually moves it**,
-and every condition's hit rate rose between the runs (11→18, 29→32, 39→43).
+1. **which problem to fix first** — clipping outranks a band, a band outranks a colour
+2. **which voice drifted**, from the per-slot taps, against how this base sounded when it started
+3. **which two voices are fighting for one band at the same moments** — what "muddy" and "boxy" actually are
+4. **how big a move has to be** to register at all
+5. **what this agent has already tried that did not work** — the cure for fixation
 
-### 4. "Blind" was not blind (fixed between runs)
+## What each run fixed
 
-Run 1 applied the damage by appending `* 2.6` and `* 3.2` to the code, so the code-only condition could read what
-had been done and undo it. Folding the damage into the numbers cost blind some of its advantage in steering
-(0.69 → 0.93 best distance) and raised its prediction rate, which is what a fairer test should do.
+| run | what changed before it | blind | ears | +shots | brief |
+|---|---|---|---|---|---|
+| 1 | First attempt. Damage appended to the source as `* 2.6`, so "blind" could read the answer. | 11% | 29% | 39% | – |
+| 2 | Damage folded into the numbers; DJ prompt gained the metric table with `moved_by`. | 18% | 32% | 43% | – |
+| 3 | The ranked brief added as a fourth condition. | 21% | 29% | 32% | **46%** |
+| 4 | Masking, stereo width, groove and headroom added to what the host can measure. | 18% | 29% | 39% | **46%** |
 
-## What changed because of these runs
+Two flaws found and fixed between runs 1 and 2:
 
-1. The metric table with `moved_by` is now in the DJ's prompt and published by the protocol, so outside agents get
+- **The predictions named the wrong metric.** The agent would restore a buried kick and predict `punch up` when
+  what moved was `sub` and `loudness`. The DJ prompt and `hello.capabilities` now carry a table of every metric
+  with **what actually moves it**, and every condition's hit rate rose.
+- **"Blind" was not blind.** Folding the damage into the numbers cost blind some of its steering advantage
+  (0.69 → 0.93 best distance) and raised its prediction rate, which is what a fairer test should do.
+
+## What changed in the code because of these runs
+
+1. The metric table with `moved_by` is in the DJ's prompt and published by the protocol, so outside agents get
    the same help (`ears-protocol/src/profile.ts`, `tui/vocabulary.ts`).
-2. The benchmark's damage is hidden from the source, so "blind" is genuinely blind.
-3. Both were in run 2, which is the table above.
-4. Next: rank the report's problems instead of listing them flat, and re-test steering. The fixation is the one
-   thing standing between this protocol and an agent that repairs a mix better than one reasoning from code.
+2. Per-slot taps: six buses, six analysers, grading on the edited voice's own measurement with its own noise
+   floor (`engine.scd`, `tui/slotears.ts`).
+3. The ranked brief replaced the flat report in the live app, not only in the benchmark (`tui/brief.ts`,
+   `tui/app.tsx`).
+4. Four new observation categories the benchmark asked for: masking, stereo width, groove and headroom measured
+   before the limiter (`tui/masking.ts`, `tui/report.ts`).
+5. Noise floors need four baseline pairs before they are trusted; below that the report says it is not
+   calibrated instead of silently using a default (`tui/shots.ts`).
 
 ## What this cannot tell you
 
-Four seeds and one DJ per run. Grading is observational on a live mix; per-slot figures are a dry-slot contribution
-estimate, not a controlled re-render. The engine ran at 24 kHz for part of the earlier work, which compresses the
-`air` band. Everything was measured, nothing was heard. Read the prediction result as a real effect,
-reproduced twice with a small sample, and the steering result as a report-design problem with a named next step.
+Four seeds and one DJ per run, 28 ideas per cell: read the ordering, not the decimals. Grading is observational
+on a live mix; per-slot figures are a dry-slot contribution estimate, not a controlled re-render. `density` and
+`punch` have no per-slot measurement and fall back to the master. The engine ran at 24 kHz for part of the
+earlier work, which compresses the `air` band; everything quoted here is from 48 kHz runs. Everything was
+measured, nothing was heard.
 
 ## Data
 
-- Run 2 (corrected): [`bench/2026-09-19-23-49.md`](bench/2026-09-19-23-49.md)
+- Run 4: [`bench/2026-09-20-10-26.md`](bench/2026-09-20-10-26.md) · every round: `bench/2026-09-20-09-42.rounds.jsonl`
+- Run 3: [`bench/2026-09-20-00-39.md`](bench/2026-09-20-00-39.md)
+- Run 2: [`bench/2026-09-19-23-49.md`](bench/2026-09-19-23-49.md)
 - Run 1 (flawed, kept for the record): [`bench/2026-09-19-23-13.md`](bench/2026-09-19-23-13.md)
-- Re-run either with `npm run ears:bench -- <seeds> <rounds>`; it always uses its own muted engine.
+- Re-run with `npm run ears:bench -- <seeds> <rounds>`; it always uses its own muted engine.
+- One report printed both ways, from a muted engine: `npx tsx tui/dev/one-brief.ts <seed>`.
