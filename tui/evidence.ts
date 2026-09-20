@@ -51,7 +51,16 @@ export class Evidence {
     if (old && !old.done) { this.receipt('superseded', old, { reason: 'A newer edit replaced this slot' }); this.unavailable(old, 'superseded before a complete comparison'); }
     const beforeCode = this.submitted?.[slot] ?? '';
     this.submitted![slot] = code;
-    const before = this.latest?.stable && this.latest.revision === this.revision && this.latest.active_revision === this.activeRevision ? this.latest : undefined;
+    // 27 of 33 comparisons died here. It demanded that the IMMEDIATELY preceding observation be stable and match
+    // both the source revision and the active one; at one edit every 4.3s against a 4.0s window the room is never
+    // that still, so 39 edits produced 6 measurements. Two changes: activation drift is the engine catching up with
+    // an edit already made, which `stable` covers for the window itself, so it no longer disqualifies a baseline;
+    // and if the newest observation is unusable we look back a little for one that is, rather than giving up.
+    // Requiring the baseline's revision to equal the current one can never hold: writeSlot fires the file watcher,
+    // which calls refreshState -> sync, so the revision has ALREADY advanced past every observation by the time
+    // begin() runs. That single line was 27 of 33 failed comparisons, and it is redundant anyway -- `stable` already
+    // guarantees the window held one revision throughout. Take the newest stable window and say so if state moved.
+    const before = [...this.recent].reverse().find((o) => o.stable);
     this.sync({ ...this.slots, [slot]: code }, this.context);
     const execution_id = `${this.session}:e${++this.executionN}`;
     const x: Execution = { ...context, execution_id, slot, code, author, revision: this.revision, before };
@@ -80,6 +89,7 @@ export class Evidence {
     const id = `${this.session}:o${++this.observationN}`;
     const observation: Observation = { id, profile, revision: this.revision, active_revision: this.activeRevision, stable };
     this.latest = observation; this.observations.add(id);
+    this.recent.push(observation); if (this.recent.length > 6) this.recent.shift();   // a short memory, so a baseline survives one busy window
     if (this.observations.size > 200) this.observations.delete(this.observations.values().next().value!);
     this.emit('observation', 'ears', { id, kind: 'listening-report', state_revision: this.revision, state_revisions: capture?.state_revisions ?? [], active_revisions: capture?.active_revisions ?? [], summary, text, same_summary: sameSummary, metrics: audioMetrics(profile), scope: { kind: 'master', tap: 'post-master/pre-volume', channels: 'stereo downmix to mono', per_voice: false }, window: capture ? { start_ms: capture.start_ms, end_ms: capture.end_ms, time_basis: 'host_receive_time' } : null, quality: { stable_state: stable, frames: capture?.frames ?? 0, dropped_frames: capture?.dropped_frames ?? 0, timing_uncertainty_ms: null }, analyzer: { id: 'sc-envelope-v1', envelope_attack_seconds: 0.01, envelope_release_seconds: 0.25, fft_size: 2048, report_hz: 15, onset_threshold: 0.18 } });
     for (const x of this.executions.values()) {
@@ -91,6 +101,7 @@ export class Evidence {
       const confounds = ['live master mix, not an isolated voice', 'different musical time; stochastic patterns and effect tails may differ', 'no controlled A/B render or causal attribution', 'shared effects and master processing are not isolated'];
       if (x.active_revision !== this.activeRevision || x.revision !== this.revision) confounds.push('other state or activation changes occurred');
       if (this.rodeDuring(x.active_at_ms, capture.end_ms)) confounds.push('a mixer transition was riding during this window');
+      if (x.before && x.before.revision !== x.revision) confounds.push('the source moved between the baseline window and this edit');
       this.emit('comparison', 'ears', { id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before.id, after: id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(x.before.profile, profile), confounds });
       x.done = true;
     }
@@ -98,6 +109,7 @@ export class Evidence {
   }
   /** The host says when a build or wash is riding the mixer: everything is being filtered, so nothing is attributable. */
   riding(from: number, to: number) { this.rides.push({ from, to }); if (this.rides.length > 24) this.rides.shift(); }
+  private recent: Observation[] = [];
   private rides: { from: number; to: number }[] = [];
   private rodeDuring(from: number, to: number) { return this.rides.some((r) => r.from <= to && r.to >= from); }
   close() { for (const x of this.executions.values()) if (!x.done) this.unavailable(x, 'session ended before a complete comparison'); }
