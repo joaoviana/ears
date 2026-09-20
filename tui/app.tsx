@@ -156,6 +156,17 @@ function App() {
   const prefetching = useRef(false);
   const bank = useRef<{ dj: DJ; opts: Suggestion[]; slots: Record<string, string> } | null>(null);
   const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
+  /** One voice per angle: the worst drift for fix, something empty or undoubled for add, anything else for turn. */
+  const aimAt = (): Record<string, string> => {
+    const s = st.current, all = SLOTS;
+    const drift = slotRef.current ? slotDrift(slotEars.current.all(Date.now() - 6000, Date.now()), slotRef.current) : [];
+    const empty = all.filter((k) => !(evidence.slots[k] || "").trim());
+    const stale = all.filter((k) => (evidence.slots[k] || "").trim()).map((k) => ({ k, n: s.bar - (authors.current[k]?.bar ?? 0) })).sort((a, b) => b.n - a.n);
+    const fix = drift[0]?.slot ?? stale[0]?.k ?? "d1";
+    const add = empty[0] ?? stale.map((x) => x.k).find((k) => k !== fix) ?? "d6";
+    const turn = all.find((k) => k !== fix && k !== add) ?? "d3";
+    return { fix, add, turn };
+  };
   const quietLine = () => {
     const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
       .map((k) => ({ k, bars: s.bar - (authors.current[k]?.bar ?? 0) })).filter((x) => x.bars >= 8).sort((a, b) => b.bars - a.bars);
@@ -205,7 +216,7 @@ function App() {
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
     const seen = { ...evidence.slots };   // what the agent was shown, to judge staleness per slot rather than per session
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, aim: aimAt(), layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context, seen);
         if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
           turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken

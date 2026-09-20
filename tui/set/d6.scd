@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \fm, \dur, 1/2, \midinote, Prand([67, 71, 74, 79, 83, 86, \r, \r], inf), \ctranspose, Pseq([5, -5, 4, -3], inf).stutter(8), \ratio, 2, \index, Pwhite(0.6, 1.8), \dec, Pwhite(0.18, 0.4), \amp, 0.1, \pan, Pwhite(-0.6, 0.6), \send, 0.9)
+~d.(\d6, \instrument, \supersaw, \dur, 1/4, \midinote, Pseq([72, 81, 79, 64, 60, 67], inf), \ctranspose, Pseq([0, -5, -3, 5], inf).stutter(4), \detune, 0.35, \cutoff, 300, \env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \res, 0.537, \att, 0, \sus, 0.09, \rel, 0.12, \spread, 0.9, \send, 0.5, \amp, 0.07)

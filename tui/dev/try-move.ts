@@ -30,7 +30,7 @@ A change to air smaller than 2.0 dB cannot be measured and will be graded FLAT. 
 console.log(`${base.style} · ${base.bpm} BPM · key ${base.key}\n`);
 let slots = 0, ideas = 0, up = 0; const turns: string[] = [];   // the app remembers these across rounds; so must this
 for (let r = 0; r < rounds; r++) {
-  await ask({ dj, skills: [], slots: base.slots, report, note: "", history: [], turns, layers: ["  d2 and d3 play the same rhythm (12 of 12 hits together, 100%): they are one layered part, so a change to one usually needs the other.", "  Nothing doubles d4, d6 — each is carrying its part on its own, and could be thickened by a second voice on the same steps in a different register."], context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` },
+  await ask({ dj, skills: [], slots: base.slots, report, note: "", history: [], turns, aim: { fix: "d5", add: "d6", turn: "d3" }, layers: ["  d2 and d3 play the same rhythm (12 of 12 hits together, 100%): they are one layered part, so a change to one usually needs the other.", "  Nothing doubles d4, d6 — each is carrying its part on its own, and could be thickened by a second voice on the same steps in a different register."], context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` },
     (o) => {
       ideas++; slots += o.parts.length; if (o.expect.dir === "up") up++;
       if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value])); turns.push(`${k.instrument ?? "same"} ${k.dur ?? "same"}`); }

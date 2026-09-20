@@ -186,7 +186,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
@@ -194,6 +194,14 @@ export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: r
  * idea — the screen showed `low`, `low`, `low`. Withholding is the only thing that works: an angle told to ignore the
  * report does not ignore it.
  */
+// Collisions were 13 of 19 refusals, nearly all on d6, and a retry fires 8-10s too late to help. Steering each
+// angle at a different voice up front costs nothing and is the host's job: it is the one that knows which slot
+// drifted, which is empty and which nobody doubles.
+function aimLine(angle: string, input: AskInput): string {
+  const slot = input.aim?.[angle];
+  return slot ? `\n\nSTART FROM ${slot.toUpperCase()}. The other two angles are being pointed at different voices so the performer gets a real choice; work on ${slot} unless the idea genuinely belongs somewhere else, and say why in WHY if you move.` : "";
+}
+
 function reportFor(angle: string, input: AskInput): string {
   const empty = Object.entries(input.slots).filter(([, v]) => !v.trim()).map(([k]) => k);
   if (angle === "turn") return "NO LISTENING REPORT FOR THIS ANGLE. You are not fixing anything. Read the code and choose by what it is, not by how it measures.";
@@ -230,7 +238,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const used = angle === "turn" && input.turns?.length
         ? `\n\nLEFT TURNS ALREADY USED IN THIS SET: ${input.turns.join("; ")}. Those axes are spent — if you have just done triplets against a straight grid, that one is used up. Take a different axis: a different instrument family, an octave jump, silence where it has been busy, a new harmonic centre, half-time or double-time, or a rhythm family nobody has used.`
         : "";
-      const sys = SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief + used;
+      const sys = SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief + aimLine(angle, input) + used;
       const p = parseMove(await claudeText(prompt, sys));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }
