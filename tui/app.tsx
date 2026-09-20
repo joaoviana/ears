@@ -147,7 +147,7 @@ function App() {
   };
   const ride = (kind: "build" | "wash" | "riser", bars: number, then?: () => void) => {
     const now = Date.now(), nextBar = barAt.current.at + Math.ceil((now - barAt.current.at) / barAt.current.len) * barAt.current.len, drop = nextBar + (bars - 1) * barAt.current.len;
-    eng.current?.transition(kind, bars); build.current = { from: now, until: drop, kind }; bus.current.send("transition", "host", { kind, bars });
+    eng.current?.transition(kind, bars); build.current = { from: now, until: drop, kind }; evidence.riding(now, drop + 400); bus.current.send("transition", "host", { kind, bars });
     if (then) setTimeout(then, Math.max(0, drop - now - 450));   // written just before the bar line, so Pdef's quantise lands it on the drop
   };
   const newBase = (seed: number) => {

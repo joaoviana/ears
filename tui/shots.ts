@@ -9,7 +9,10 @@ export interface Expect { metric: Metric; dir: Dir }
 export type Grade = "hit" | "miss" | "flat" | "ungraded";
 // Confounds the evidence layer always attaches (the general observational caveat) are fine; these mean something
 // concrete intervened between the two windows, so nobody can say whose change moved the sound.
-const AMBIGUOUS = /other state or activation changes|mixer transitions/i;
+// Only events, never the standing disclaimers every live comparison carries. `mixer transitions and shared effects
+// are not controlled` used to match here, and since the host attaches it to every comparison the live set graded
+// nothing for weeks: every called shot came back `ungraded` while the benchmark, which grades directly, was fine.
+const AMBIGUOUS = /other state or activation changes|a mixer transition was riding/i;
 export const attributable = (confounds: string[] = []) => !confounds.some((c) => AMBIGUOUS.test(c));
 export interface Outcome { grade: Grade; delta: number | null; unit: string; floor: number; text: string }
 export interface Differences { envelope_db: number; peak_to_envelope_db: number; centroid_hz: number; onsets_per_beat: number; relative_bands_db: Record<string, number>; width_db?: number; off_grid_beats?: number }

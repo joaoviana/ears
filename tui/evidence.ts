@@ -86,13 +86,20 @@ export class Evidence {
       if (x.done || x.active_at_ms == null || !capture) continue;
       if (!stable || capture.start_ms < x.active_at_ms) continue;
       if (!x.before) { this.unavailable(x, 'no stable observation immediately before this edit', id); continue; }
-      const confounds = ['live master mix, not an isolated voice', 'different musical time; stochastic patterns and effect tails may differ', 'no controlled A/B render or causal attribution', 'mixer transitions and shared effects are not controlled'];
+      // the first four are standing properties of live observation. Only an EVENT makes a comparison unattributable,
+      // so those must not read like one: a grader that treats a disclaimer as a confound grades nothing, ever.
+      const confounds = ['live master mix, not an isolated voice', 'different musical time; stochastic patterns and effect tails may differ', 'no controlled A/B render or causal attribution', 'shared effects and master processing are not isolated'];
       if (x.active_revision !== this.activeRevision || x.revision !== this.revision) confounds.push('other state or activation changes occurred');
+      if (this.rodeDuring(x.active_at_ms, capture.end_ms)) confounds.push('a mixer transition was riding during this window');
       this.emit('comparison', 'ears', { id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before.id, after: id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(x.before.profile, profile), confounds });
       x.done = true;
     }
     return id;
   }
+  /** The host says when a build or wash is riding the mixer: everything is being filtered, so nothing is attributable. */
+  riding(from: number, to: number) { this.rides.push({ from, to }); if (this.rides.length > 24) this.rides.shift(); }
+  private rides: { from: number; to: number }[] = [];
+  private rodeDuring(from: number, to: number) { return this.rides.some((r) => r.from <= to && r.to >= from); }
   close() { for (const x of this.executions.values()) if (!x.done) this.unavailable(x, 'session ended before a complete comparison'); }
   private ids(x: Execution) { return { execution_id: x.execution_id, slot: x.slot, proposal: x.proposal, request_id: x.request_id, revision: x.revision, author: x.author, based_on_revision: x.based_on_revision, evidence_ids: x.evidence_ids }; }
   private receipt(type: string, x: Execution, body: Record<string, unknown>) { this.emit(type, 'host', { ...this.ids(x), ...body }); }

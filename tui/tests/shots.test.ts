@@ -32,11 +32,18 @@ test("a miss says the mix moved the other way, not that the DJ's change caused i
   assert.match(line, /MISS/); assert.match(line, /the mix moved the other way/); assert.doesNotMatch(line, /you were wrong/);
   assert.match(forPrompt(e, grade(e, diff({ sub: -3 }), 1.2), false), /it was called/);   // another DJ's record is not addressed to you
 });
-test("a comparison with a concrete overlapping change is not attributable", () => {
-  const general = ["live master mix, not an isolated voice", "different musical time; stochastic patterns and effect tails may differ"];
-  assert.equal(attributable(general), true);
-  assert.equal(attributable([...general, "other state or activation changes occurred"]), false);
-  assert.equal(attributable([...general, "mixer transitions and shared effects are not controlled"]), false);
+// The exact four the host attaches to EVERY measured comparison (evidence.ts). They are properties of live
+// observation, not events. Treating one of them as a confound silently ungrades every shot in a real set, which
+// is what happened: the benchmark grades directly and stayed green while the TUI graded nothing at all.
+const STANDING = ["live master mix, not an isolated voice", "different musical time; stochastic patterns and effect tails may differ",
+  "no controlled A/B render or causal attribution", "shared effects and master processing are not isolated"];
+test("the standing disclaimers on a live comparison do not make it unattributable", () => {
+  assert.equal(attributable(STANDING), true, "if this fails, the live host has stopped grading called shots");
+  assert.equal(attributable([]), true);
+});
+test("a comparison with a concrete overlapping event is not attributable", () => {
+  assert.equal(attributable([...STANDING, "other state or activation changes occurred"]), false);
+  assert.equal(attributable([...STANDING, "a mixer transition was riding during this window"]), false);
 });
 test("the noise floor says when it is not calibrated yet", () => {
   const n = new NoiseFloor(), abs = (c: number) => ({ sub: 0, low: 0, mid: 0, high: 0, air: 0, brightness: c, loudness: 0, density: 0, punch: 0 });
