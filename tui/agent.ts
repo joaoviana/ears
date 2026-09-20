@@ -104,7 +104,10 @@ export function validate(s: { slot: string; code: string }): string | null {
 
 // A round is only as fast as its slowest angle, and every retry is another full call on a 2.6s floor. An angle
 // that has already spent this long gives up its retry and offers nothing: two good options beat three late ones.
-const RETRY_BY = Number(process.env.EARS_RETRY_BY || 2600);
+// A collision or a repeated turn can only be seen AFTER the first answer lands, which takes 3-10s in a real set.
+// At 2.6s this guard had always already expired, so every retry was refused and the third option was simply lost
+// -- five times in five rounds. The budget has to outlast the first call; the retry itself gets a shorter leash.
+const RETRY_BY = Number(process.env.EARS_RETRY_BY || 7000), RETRY_DEADLINE = 8000;
 const MODEL = process.env.EARS_MODEL || "sonnet";   // at low effort: a patch needs taste, not deliberation (haiku hangs on this prompt)
 
 function claude<T>(prompt: string, system: string, schema: object, timeout = 70000): Promise<T> {
@@ -235,7 +238,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       if (angle === "turn" && !isTurn(input.slots[p.patches[0].slot] || "", p.patches[0])) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
         if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
-        const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", sys));
+        const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", sys, RETRY_DEADLINE));
         if (!again || !isTurn(input.slots[again.patches[0].slot] || "", again.patches[0])) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
@@ -245,7 +248,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       if (angle === "turn" && (input.turns || []).includes(sig(p))) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: `that left turn (${sig(p)}) has already been used this set; asking for a different axis`, ms: Date.now() - t0 });
         if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
-        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: "${sig(p)}" is a move you have already made in this set. Take a genuinely different axis.`, sys));
+        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: "${sig(p)}" is a move you have already made in this set. Take a genuinely different axis.`, sys, RETRY_DEADLINE));
         if (!again || (input.turns || []).includes(sig(again))) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
@@ -256,7 +259,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
         const taken = claimed().join(" and ");
         onEvent("rejected", { agent: input.dj.id, angle, reason: `another angle already has ${p.patches[0].slot}; asking again elsewhere`, ms: Date.now() - t0 });
         if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
-        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: another angle is already changing ${taken}. The performer needs three DIFFERENT choices, so make your move somewhere else. Keep your angle.`, sys));
+        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: another angle is already changing ${taken}. The performer needs three DIFFERENT choices, so make your move somewhere else. Keep your angle.`, sys, RETRY_DEADLINE));
         if (!again || claimed().includes(again.patches[0].slot)) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
