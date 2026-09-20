@@ -111,6 +111,7 @@ function App() {
     else run();
   };
   const discardOptions = (reason: string) => {
+    bank.current = null;
     for (const o of st.current.options ?? []) bus.current.send("verdict", "host", { proposal: o.id, request_id: o.request_id, decision: "skip", by: "host", reason });
     st.current.options = null;
   };
@@ -149,6 +150,11 @@ function App() {
   // What the `add` angle is given instead of the problem list: the parts nobody has touched. A ranked report names one
   // worst thing and every angle then solves that one thing; this is the other half of the room.
   const beats = useRef<Beat[]>([]);     // every hit that sounded, so the report can say what doubles what
+  // think() refuses to run while options are on screen, so the agent sat idle exactly when it could be working and
+  // every round paid a fresh 3-5s. Generation is irreducible; WHEN it starts is not. The next DJ is asked as soon
+  // as the current options are all in, and the answers wait here until a verdict frees the screen.
+  const prefetching = useRef(false);
+  const bank = useRef<{ dj: DJ; opts: Suggestion[]; slots: Record<string, string> } | null>(null);
   const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
   const quietLine = () => {
     const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
@@ -198,8 +204,34 @@ function App() {
           turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
         if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered
       (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
-      .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })
+      .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; prefetch(); }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })
       .finally(() => { busy.current = false; setThinking(""); if (st.current.round !== round && !st.current.options?.length) think(); });   // something changed mid-round (a note, a grant): go again now, with it
+  };
+  /** Ask the DJ who is up next, while the current options are still being read. Nothing reaches the screen here. */
+  const prefetch = () => {
+    const s = st.current;
+    if (bank.current || prefetching.current || !s.options?.length || !s.report || s.booth.length === 0) return;
+    const g = s.booth[(s.turn + 1) % s.booth.length];
+    if (!g || g.remote) return;
+    prefetching.current = true;
+    const opts: Suggestion[] = [], slots = { ...evidence.slots };
+    ask({ dj: g.dj, skills: g.dj.skills, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current,
+          layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)),
+          note: "", history: s.history, context: `${s.bpm} BPM, key ${s.key}` },
+        (o) => opts.push(o), () => {})
+      .then(() => { if (opts.length) bank.current = { dj: g.dj, opts, slots }; }, () => {})
+      .finally(() => { prefetching.current = false; });
+  };
+  /** Spend the bank if it is still good: an option is dropped only if a slot it touches was rewritten since. */
+  const drain = (): boolean => {
+    const s = st.current, b = bank.current; bank.current = null;
+    if (!b || s.options?.length || !s.booth.some((x) => x.dj.id === b.dj.id)) return false;
+    const usable = b.opts.filter((o) => (o.parts ?? [{ slot: o.slot }]).every((x) => (b.slots[x.slot] ?? "").trim() === (evidence.slots[x.slot] || "").trim()));
+    if (!usable.length) return false;
+    const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
+    for (const o of usable) offer(o, b.dj.id, context);
+    if (st.current.options?.length) { setThinking(""); setSay(`${b.dj.name.toLowerCase()} was already thinking`); return true; }
+    return false;
   };
   const enter = (dj: DJ, remote = false) => {
     bus.current.send("enter", "host", { agent: dj.id, name: dj.name, remote });
@@ -247,12 +279,12 @@ function App() {
     for (const x of parts) evaluateSlot(x.slot, x.code, o.agent, { ...o, slot: x.slot, code: x.code, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
-    s.options = null; s.round++; s.turn++; s.askAt = s.bar; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
+    s.options = null; s.round++; s.turn++; s.askAt = s.bar; if (drain()) s.askAt = s.bar + 99; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
   const skip = (by = "human") => {
     const s = st.current; if (!s.options) return;
     s.options.forEach((o) => { s.history.push({ slot: o.slot, why: o.why, verdict: "n", agent: o.agent }); bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "skip", by }); });
-    s.options = null; s.round++; s.turn++; s.askAt = s.bar + 1; setSay("skipped. next DJ up");
+    s.options = null; s.round++; s.turn++; s.askAt = s.bar + 1; if (drain()) s.askAt = s.bar + 99; setSay("skipped. next DJ up");
   };
 
   useEffect(() => {
