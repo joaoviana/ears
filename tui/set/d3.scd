@@ -1,1 +1,1 @@
-~d.(\d3, \instrument, \perc, \dur, Pseq([0.265, 0.235], inf), \amp, ~x.(["--x-X--x-X--x-X-", "--x-X--x-X-xX-x-"], 0.28), \freq, Pseq([262, 262, 392, 262, 330], inf), \dec, Pwhite(0.09, 0.16), \click, 0.5, \pan, Pseq([-0.35, 0.35, 0.1], inf), \send, 0.25)
+~d.(\d3, \instrument, \clap, \dur, 1/4, \amp, ~x.(["----X-------X---", "----X-------X--x"], 0.5), \send, 0.428)

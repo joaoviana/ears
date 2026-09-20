@@ -33,6 +33,11 @@ export function applyPatch(code: string, p: Patch): string {
   return `~d.(\\${p.slot}, ${pairs.map((x) => `\\${x.key}, ${x.value}`).join(", ")})`;
 }
 
+/** A move is one idea that touches up to three slots at once, applied on the same bar line. */
+export interface Part { slot: string; code: string; diff: string }
+/** What a whole move changed, for the projector: "d2 amp … → … | d4 + duck 0.7". */
+export const describeMove = (parts: Part[]) => parts.map((p) => (parts.length > 1 ? `${p.slot} ` : "") + p.diff).join("  |  ");
+
 /** What changed, for the projector: "cutoff 3800 → 600 · + res 2.8". */
 export function describe(code: string, p: Patch): string {
   const before = Object.fromEntries(parseSlot(code).map((x) => [x.key, x.value])), short = (v: string) => (v.length > 28 ? v.slice(0, 27) + "…" : v);

@@ -167,7 +167,7 @@ function App() {
     const opt: Option = { ...o, ...context, id: ++s.seq, agent };
     if (!s.options?.length) { s.by = agent; s.autoAt = s.bar + 2; }
     s.options = [...(s.options || []), opt].slice(0, 3);
-    bus.current.send("proposal", agent, { ...context, id: opt.id, slot: o.slot, diff: o.diff, code: o.code, why: o.why, evidence: o.evidence, angle: o.angle, ms: o.ms, expect: o.expect, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });   // the prediction is on the wire when the idea is first offered, not only when it is taken
+    bus.current.send("proposal", agent, { ...context, id: opt.id, slot: o.slot, slots: o.parts?.map((x) => x.slot) ?? [o.slot], diff: o.diff, code: o.code, why: o.why, evidence: o.evidence, angle: o.angle, ms: o.ms, expect: o.expect, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });   // the prediction is on the wire when the idea is first offered, not only when it is taken
   };
   const think = () => {
     const s = st.current;
@@ -214,16 +214,19 @@ function App() {
     refreshState();
     const stale = evidence.check(o);
     if (stale) { bus.current.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: stale }); s.options = s.options!.filter(x => x !== o); setSay(stale); return; }
-    if ((evidence.slots[o.slot] || "").trim() === o.code.trim()) { bus.current.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: "no source change" }); s.options = s.options!.filter(x => x !== o); return; }
+    const parts = o.parts?.length ? o.parts : [{ slot: o.slot, code: o.code, diff: o.diff }];
+    if (parts.every((x) => (evidence.slots[x.slot] || "").trim() === x.code.trim())) { bus.current.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: "no source change" }); s.options = s.options!.filter(x => x !== o); return; }
     if (o.transition && !o.riding) { o.riding = true; setSay(`${o.transition} into it…`); ride(o.transition, 2, () => take(s.options?.indexOf(o) ?? -1, by)); return; }   // DROPS: the change arrives on the drop
     const g = s.booth.find((x) => x.dj.id === o.agent), who = g?.dj ?? active(); if (g) g.taken++;
-    if (o.forBars) s.reverts.push({ slot: o.slot, code: evidence.slots[o.slot] || "", appliedCode: o.code.trim(), atBar: s.bar + o.forBars });   // FILLS: put it back afterwards
+    if (o.forBars) for (const x of parts) s.reverts.push({ slot: x.slot, code: evidence.slots[x.slot] || "", appliedCode: x.code.trim(), atBar: s.bar + o.forBars });   // FILLS: put every slot back afterwards
     if (g && !g.remote) for (const k of earned(g.taken, g.dj.skills || [], g.pending)) { g.pending.push(k.id); bus.current.send("unlock", "host", { agent: g.dj.id, skill: k.id }); setTimeout(() => setSay(`${g.dj.name} unlocked ${k.name}: ${k.blurb}.  k activates it`), 1500); }
-    author(o.slot, o.code, { name: who.name, rgb: accent(who.palette) });   // set before writing, so the file watcher doesn't credit the change to you
-    writeSlot(o.slot, o.code);
+    // every slot of a move is written before any of them is evaluated, so they swap on the same bar line
+    for (const x of parts) author(x.slot, x.code, { name: who.name, rgb: accent(who.palette) });   // set before writing, so the file watcher doesn't credit the change to you
+    for (const x of parts) writeSlot(x.slot, x.code);
     bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "take", by });
-    if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: o.slot, expect: o.expect });
-    evaluateSlot(o.slot, o.code, o.agent, { ...o, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
+    // a move that touches more than one slot cannot be attributed to one tap: it is graded on the room
+    if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: parts.length > 1 ? "" : o.slot, expect: o.expect });
+    for (const x of parts) evaluateSlot(x.slot, x.code, o.agent, { ...o, slot: x.slot, code: x.code, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
     s.options = null; s.round++; s.turn++; s.askAt = s.bar + 2; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
@@ -259,13 +262,13 @@ function App() {
       const md = m.differences as Differences | undefined;
       // If both windows heard this slot and the metric has a per-slot meaning, grade the slot's own contribution.
       const wins = slotWins.current, w0 = wins[wins.length - 2], w1 = wins[wins.length - 1];   // not `b`: that is the bus
-      const sd = clean && md && PER_SLOT_METRICS.has(shot.expect.metric) && w0 && w1 ? slotDifference(w0.w, w1.w, shot.slot, md) : null;
+      const sd = clean && md && shot.slot && PER_SLOT_METRICS.has(shot.expect.metric) && w0 && w1 ? slotDifference(w0.w, w1.w, shot.slot, md) : null;
       const scope = sd ? "slot" : "master", floor = sd ? (slotNoise.current[shot.slot] ?? noise.current).floor(shot.expect.metric) : noise.current.floor(shot.expect.metric);
       const out = clean ? grade(shot.expect, sd ?? md!, floor)
         : { grade: "ungraded" as const, delta: null, unit: "", floor: 0, text: m.status === "measured" ? "another change overlapped this one" : String((m.confounds as string[])?.[0] ?? "no clean before/after window") };
       const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
       const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out, true);
-      attempts.current.push({ metric: shot.expect.metric, slot: shot.slot, grade: out.grade }); if (attempts.current.length > 12) attempts.current.shift();
+      attempts.current.push({ metric: shot.expect.metric, slot: shot.slot || "the move", grade: out.grade }); if (attempts.current.length > 12) attempts.current.shift();
       b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: (sd ? slotNoise.current[shot.slot] ?? noise.current : noise.current).ready(shot.expect.metric), scope: { kind: scope, per_voice: !!sd, estimate: sd ? "dry-slot contribution: other slots held at their before-measurement; not a controlled re-render" : undefined }, basis: "live master mix; observational, not causal", confounds: m.confounds });
       shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text + (sd ? `  (${shot.slot} alone)` : ""), grade: out.grade, until: st.current.bar + 8 };
     });
@@ -524,7 +527,7 @@ function App() {
             : s.options?.length ? <>
               {s.options.map((o, i) => (
                 <Box key={o.id} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
-                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{o.slot}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
+                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
                   {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.diff}</Text></Text>}
                   {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
                 </Box>

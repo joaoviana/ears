@@ -4,12 +4,13 @@
 import { spawn } from "child_process";
 import { LOOKS, PALETTE_NAMES } from "./ascii.ts";
 import { HAIR, EYES, CANS, BODY, HEAD, SPECIES, type DJ } from "./djs.ts";
-import { applyPatch, describe, parseSlot, type Patch } from "./patch.ts";
+import { applyPatch, describe, describeMove, parseSlot, type Part, type Patch } from "./patch.ts";
 import { SKILLS, missing, sampleNames } from "./skills.ts";
 import { parseExpect, METRICS, type Expect } from "./shots.ts";
 import { METRIC_TABLE } from "./vocabulary.ts";
 
-export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
+/** `parts` is the whole move; `slot`/`code`/`diff` are its first part, so every single-slot reader still works. */
+export interface Suggestion { slot: string; code: string; why: string; evidence: string; diff: string; parts: Part[]; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
 export interface Past { slot: string; why: string; verdict: "y" | "n"; id?: number; outcome?: string; agent?: string }
 
 const SYSTEM = `You are a guest DJ standing next to a live coder in a techno set. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE idea as a small patch. Two other DJs' brains are offering a different angle at the same moment, so commit to yours. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
@@ -34,7 +35,7 @@ Instruments and their arguments:
   \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
 Nothing else exists. No new SynthDefs, no other functions, no semicolons, one expression.
 
-You answer with a PATCH to one slot, never whole code, in exactly this plain-text form and nothing else:
+You answer with a MOVE, never whole code, in exactly this plain-text form and nothing else:
 SLOT d3
 SET cutoff = 600
 SET res = 2.8
@@ -44,7 +45,19 @@ WHY one sentence
 EVIDENCE the report line or style rule
 Keys have no backslash. The value after "=" is SuperCollider source for that key, on one line. REMOVE lines are optional.
 To fill an empty slot or rewrite a voice from scratch, write "SLOT d4 REPLACE" and SET every key it needs, starting with instrument (e.g. SET instrument = \\clap) and dur.
-Patch as few keys as the idea needs: usually one to three.
+
+A MOVE MAY TOUCH UP TO THREE SLOTS. Repeat the SLOT block; the SET and REMOVE lines under each one belong to it. WHY, EVIDENCE and EXPECT are written once, for the whole move, and every slot lands together on the same bar line.
+SLOT d2
+SET amp = ~x.("X-x-X-x-X-x-X-x-", 0.14)
+SLOT d4
+SET duck = 0.75
+SET cutoff = 900
+EXPECT sub up
+WHY Hats step back and the bass leans into the kick, so the floor opens up.
+EVIDENCE d2 is +12 dB louder than it should be
+Use a second or third slot when the idea genuinely needs it: one voice makes room and another fills it, two parts answer each other, a new layer arrives and something ducks to let it in. Do not spread an unrelated tweak across slots to look busy. One slot is still the right answer for a mix correction.
+
+ADD, DON'T ONLY TRIM. Across 392 graded ideas, 69% of them turned something down and only one ever changed how much music was playing. Turning things down is not DJing; a room notices what arrives, not what leaves. Before you reach for a cut, ask whether the fix is something MISSING: a counter-rhythm against a straight part, an answer in the gaps of a busy one, a second voice an octave up, an empty slot nobody has filled, a chord that moves where everything is static, ghost notes where a row is all rests. If a voice is too loud against another, consider bringing the quiet one up instead of pulling the loud one down.
 EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>". Two bars after your change lands, the host measures it and grades you HIT, MISS or FLAT (no detectable effect). Your record is shown to the room and comes back to you.
 
 WHAT THE HOST MEASURES, AND WHAT ACTUALLY MOVES IT. Find your change in a "moved by" line and call THAT metric.
@@ -59,8 +72,10 @@ Rules:
 
 // Three angles asked in parallel. Each call writes a few dozen tokens, so the first idea is on screen in seconds.
 export const ANGLES: Record<string, string> = {
-  fix: "YOUR ANGLE: fix. Find the single biggest problem in the listening report and correct it with the smallest patch.",
-  style: "YOUR ANGLE: style. Ignore small mix problems. Push one slot further toward your own sound, using your idioms.",
+  fix: "YOUR ANGLE: fix. Find the single biggest problem in the listening report and correct it. Prefer the smallest change that actually moves the measurement; if the cause is one voice sitting on another, moving both is one fix, not two.",
+  // the benchmark found the DJs almost never add anything: 69% of ideas turned something down, and `density` was
+  // called once in 392. This angle exists to make arriving material as available as trimming it.
+  add: "YOUR ANGLE: add. Something is MISSING, not too loud. Find what the track does not have — an empty slot, a rhythm nobody is answering, a register nobody is in, a part that has not changed in a long time — and put something there, in your own idioms. You may use two or three slots: the new thing plus whatever has to move aside for it (level, filter, duck, a thinned row). Do not make this a mix correction; the room should hear something arrive.",
   // the third option is never a refinement: it is the thing least like what's playing, so there's always a way out
   turn: `YOUR ANGLE: left turn. Ignore the listening report. Offer the move that is LEAST like what is playing right now. Read the code, name the thing everything has in common (all straight 16ths? everything dark and low? four-on-the-floor for ages? one chord? nothing above middle C? every slot busy?), and break exactly that in ONE slot: a different rhythm family (straight vs broken vs euclidean vs triplets vs half-time), a different instrument in that slot, a jump of an octave or more, silence where it's been busy, or a new harmonic centre via \\ctranspose. It must be a rewrite: "SLOT dN REPLACE" with every key set, and at least the instrument, the rhythm (\\dur or the ~x rows) or the register must differ from that slot's current code. Not a parameter tweak, not a filter move. Stay in key and in your character; keep it something a room can dance to. WHY must name what it contrasts with ("everything is straight 16ths, so: triplets").`,
 };
@@ -108,28 +123,40 @@ function claudeText(prompt: string, system: string, timeout = 40000): Promise<st
   });
 }
 
-/** Lenient on purpose: models add blank lines, code fences and stray backslashes. */
-export type Parsed = Patch & { why: string; evidence: string; forBars?: number; transition?: "build" | "wash"; expect?: Expect };
-export function parsePatch(text: string): Parsed | null {
-  const p: Parsed = { slot: "", set: [], remove: [], why: "", evidence: "" };
+/**
+ * Lenient on purpose: models add blank lines, code fences and stray backslashes.
+ * Each `SLOT dN` opens a block and the SET/REMOVE lines under it belong to that slot; WHY, EVIDENCE, EXPECT, FOR and
+ * WITH describe the whole move wherever they appear. A single-slot answer parses exactly as it always did.
+ */
+export type Parsed = { patches: Patch[]; why: string; evidence: string; forBars?: number; transition?: "build" | "wash"; expect?: Expect };
+export const MAX_SLOTS = 3;
+export function parseMove(text: string): Parsed | null {
+  const p: Parsed = { patches: [], why: "", evidence: "" };
+  let cur: Patch | null = null;
   for (const raw of text.split("\n")) {
     const line = raw.replace(/^[`>*\s-]+/, "").trim(); let m: RegExpMatchArray | null;
-    if ((m = line.match(/^SLOT\s+\\?(d[1-6])\b(.*)$/i))) { p.slot = m[1].toLowerCase(); p.replace = /replace/i.test(m[2]); }
-    else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) p.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
-    else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) p.remove!.push(m[1]);
+    if ((m = line.match(/^SLOT\s+\\?(d[1-6])\b(.*)$/i))) {
+      const slot = m[1].toLowerCase(), replace = /replace/i.test(m[2]);
+      cur = p.patches.find((x) => x.slot === slot) ?? null;          // a repeated slot keeps adding to the same block
+      if (cur) { if (replace) cur.replace = true; }
+      else { cur = { slot, set: [], remove: [], replace }; p.patches.push(cur); }
+    }
+    else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) cur?.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
+    else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) cur?.remove!.push(m[1]);
     else if (/^EXPECT\b/i.test(line)) p.expect = parseExpect(line) ?? p.expect;
     else if ((m = line.match(/^FOR\s+([12])\b/i))) p.forBars = Number(m[1]);
     else if ((m = line.match(/^WITH\s+(build|wash)\b/i))) p.transition = m[1].toLowerCase() as "build" | "wash";
     else if ((m = line.match(/^WHY\s*:?\s*(.+)$/i))) p.why = m[1];
     else if ((m = line.match(/^EVIDENCE\s*:?\s*(.+)$/i))) p.evidence = m[1];
   }
-  return p.slot && p.set.length && p.why ? p : null;
+  p.patches = p.patches.filter((x) => x.set.length || x.remove!.length);
+  return p.patches.length && p.why ? p : null;
 }
 
 const persona = (d: DJ) => `\n\nYOU ARE ${d.name}. ${d.tagline}\nStyle: ${d.style}\nIdioms you reach for:\n${d.idioms.map((x) => "- " + x).join("\n")}\nNever:\n${d.never.map((x) => "- " + x).join("\n")}`;
 
 /** Is this patch really a departure? Different instrument, different rhythm, or a register an octave away. */
-function isTurn(before: string, p: Parsed): boolean {
+function isTurn(before: string, p: Patch): boolean {
   const old = Object.fromEntries(parseSlot(before).map((x) => [x.key, x.value])), get = (k: string) => p.set.find((x) => x.key.replace(/^\\/, "") === k)?.value;
   if (!before.trim()) return true;                                     // filling an empty slot is always new
   const inst = get("instrument"), dur = get("dur"), amp = get("amp"), notes = get("midinote") ?? get("freq");
@@ -158,18 +185,27 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach + (k.id === "vocals" && sampleNames().length ? ` REAL RECORDED VOICES are available and sound far better than a rendered phrase: use them by name, e.g. ~v.("${sampleNames()[sampleNames().length - 1]}"). Names: ${sampleNames().slice(-12).join(", ")}.` : "")).join("\n");
-      const p = parsePatch(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
+      const p = parseMove(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }
-      if (angle === "turn" && !isTurn(input.slots[p.slot] || "", p)) {
+      if (p.patches.length > MAX_SLOTS) { onEvent("rejected", { agent: input.dj.id, angle, reason: `a move touches at most ${MAX_SLOTS} slots; this one touches ${p.patches.length}`, ms: Date.now() - t0 }); return; }
+      if (angle === "turn" && !isTurn(input.slots[p.patches[0].slot] || "", p.patches[0])) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
-        const again = parsePatch(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", SYSTEM + persona(input.dj) + "\n\n" + brief));
-        if (!again || !isTurn(input.slots[again.slot] || "", again)) return;
+        const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", SYSTEM + persona(input.dj) + "\n\n" + brief));
+        if (!again || !isTurn(input.slots[again.patches[0].slot] || "", again.patches[0])) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
-      const before = input.slots[p.slot] || "", code = applyPatch(before, p), bad = validate({ slot: p.slot, code }) || (missing(code, p, active) ? `uses ${missing(code, p, active)}, which this DJ hasn't been granted` : null) || (got.some((g) => g.slot === p.slot && g.code === code) ? "same as another option" : null);
-      if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: bad, ms: Date.now() - t0 }); return; }
-      const o: Suggestion = { slot: p.slot, code, why: p.why, evidence: p.evidence, diff: describe(before, p) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition, expect: p.expect! };
+      const parts: Part[] = [];
+      for (const patch of p.patches) {
+        const before = input.slots[patch.slot] || "", code = applyPatch(before, patch);
+        const bad = validate({ slot: patch.slot, code }) || (missing(code, patch, active) ? `uses ${missing(code, patch, active)}, which this DJ hasn't been granted` : null);
+        if (bad) { onEvent("rejected", { agent: input.dj.id, angle, reason: p.patches.length > 1 ? `${patch.slot}: ${bad}` : bad, ms: Date.now() - t0 }); return; }
+        parts.push({ slot: patch.slot, code, diff: describe(before, patch) });
+      }
+      // a whole move has to stay readable from the back of a room, however many slots it touches
+      if (parts.reduce((n, x) => n + x.code.length, 0) > 600 * MAX_SLOTS / 2) { onEvent("rejected", { agent: input.dj.id, angle, reason: "too long to read on a projector", ms: Date.now() - t0 }); return; }
+      if (got.some((g) => g.parts.length === parts.length && g.parts.every((x, k) => x.slot === parts[k].slot && x.code === parts[k].code))) { onEvent("rejected", { agent: input.dj.id, angle, reason: "same as another option", ms: Date.now() - t0 }); return; }
+      const o: Suggestion = { slot: parts[0].slot, code: parts[0].code, parts, why: p.why, evidence: p.evidence, diff: describeMove(parts) + (p.forBars ? ` · for ${p.forBars} bar${p.forBars > 1 ? "s" : ""}` : "") + (p.transition ? ` · with a ${p.transition}` : ""), angle, ms: Date.now() - t0, forBars: p.forBars, transition: p.transition, expect: p.expect! };
       got.push(o); onOption(o);
     } catch (e: any) { onEvent("rejected", { agent: input.dj.id, angle, reason: String(e.message).slice(0, 80), ms: Date.now() - t0 }); }
   })).then(() => { if (!got.length) throw new Error("no angle produced a usable idea"); return got; });

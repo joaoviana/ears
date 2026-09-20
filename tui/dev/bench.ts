@@ -91,16 +91,23 @@ e.on("ready", async () => {
       try { await ask({ dj, skills: [], slots, report, note: "", history: cond.includes("shots") ? history : history.map((h) => ({ ...h, outcome: undefined })), context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` }, (o) => { got ??= o; }, (kind) => { if (kind === "rejected") refused++; }); } catch {}
       const o = got as Suggestion | null, d0 = distance(before.taps, target.taps);
       if (!o) { keep({ cond, seed, round, calibrated, ms: null, refused, slot: "-", call: "-", master: "no idea", tap: "no idea", tapDelta: null, dist_before: d0, dist_after: d0, why: "" }); console.log(`  r${round}  no usable idea`); continue; }
-      let ok = true; const onEval = (r: any) => { if (r.id === o.slot && !r.ok) ok = false; }; e.on("evald", onEval);
-      e.eval(o.code, o.slot); await nextBar(); await wait(barLen * 0.5); e.off("evald", onEval);
-      const after = await window2(); if (ok) slots[o.slot] = o.code;
+      // a move may touch up to three slots; they are all evaluated before the next window is taken
+      const parts = o.parts?.length ? o.parts : [{ slot: o.slot, code: o.code, diff: o.diff }];
+      const touched = parts.map((x) => x.slot);
+      let ok = true; const onEval = (r: any) => { if (touched.includes(r.id) && !r.ok) ok = false; }; e.on("evald", onEval);
+      for (const x of parts) e.eval(x.code, x.slot);
+      await nextBar(); await wait(barLen * 0.5); e.off("evald", onEval);
+      const after = await window2(); if (ok) for (const x of parts) slots[x.slot] = x.code;
       const gm = ok ? grade(o.expect, metricDelta(before.master, after.master) as any, masterNoise.floor(o.expect.metric)) : null;
-      const gt = ok ? grade(o.expect, mixDiff(before.taps, { ...before.taps, [o.slot]: after.taps[o.slot] }, [before.master, after.master]), tapNoise[o.slot].floor(o.expect.metric)) : null;
+      // the dry mix rebuilt with every slot the move touched substituted in; one slot is the old behaviour exactly
+      const swapped = { ...before.taps }; for (const x of parts) swapped[x.slot] = after.taps[x.slot];
+      const worstFloor = Math.max(...touched.map((k) => tapNoise[k].floor(o.expect.metric)));
+      const gt = ok ? grade(o.expect, mixDiff(before.taps, swapped, [before.master, after.master]), worstFloor) : null;
       history.push({ slot: o.slot, why: o.why, verdict: "y", id: round, outcome: gt ? forPrompt(o.expect, gt) : "the engine refused this code" });
-      attempts.push({ metric: o.expect.metric, slot: o.slot, grade: gt?.grade ?? "ungraded" });
+      attempts.push({ metric: o.expect.metric, slot: touched.join("+"), grade: gt?.grade ?? "ungraded" });
       const d1 = distance(after.taps, target.taps);
-      keep({ cond, seed, round, calibrated, ms: o.ms, refused, slot: o.slot, call: `${o.expect.metric} ${o.expect.dir}`, master: gm?.grade ?? "engine refused", tap: gt?.grade ?? "engine refused", tapDelta: gt?.delta ?? null, dist_before: d0, dist_after: d1, why: o.why });
-      console.log(`  ${clock()} r${round}  ${(o.ms / 1000).toFixed(1)}s ${o.slot} calls ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} master ${String(gm?.grade).toUpperCase().padEnd(5)} tap ${String(gt?.grade).toUpperCase().padEnd(5)} ${(gt?.text ?? "").padEnd(34).slice(0, 34)} dist ${d0.toFixed(2)}→${d1.toFixed(2)}  ${o.why.slice(0, 52)}`);
+      keep({ cond, seed, round, calibrated, ms: o.ms, refused, slot: touched.join("+"), call: `${o.expect.metric} ${o.expect.dir}`, master: gm?.grade ?? "engine refused", tap: gt?.grade ?? "engine refused", tapDelta: gt?.delta ?? null, dist_before: d0, dist_after: d1, why: o.why });
+      console.log(`  ${clock()} r${round}  ${(o.ms / 1000).toFixed(1)}s ${touched.join("+").padEnd(8)} calls ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} master ${String(gm?.grade).toUpperCase().padEnd(5)} tap ${String(gt?.grade).toUpperCase().padEnd(5)} ${(gt?.text ?? "").padEnd(34).slice(0, 34)} dist ${d0.toFixed(2)}→${d1.toFixed(2)}  ${o.why.slice(0, 52)}`);
       before = after;
     }
   }
