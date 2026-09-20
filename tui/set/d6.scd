@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \vox, \dur, 1/2, \buf, ~v.("note-3"), \chop, Pseq([0, 0.5, 0, 0.25, 0.75, 0], inf), \len, 0.25, \note, Pseq([3, 5, 10, 7, 3, 0], inf), \rate, 0.9, \amp, ~x.("--X---x-X--x----", 0.4))
+~d.(\d6, \instrument, \fm, \dur, 1/2, \midinote, Prand([67, 71, 74, 79, 83, 86, \r, \r], inf), \ctranspose, Pseq([5, -5, 4, -3], inf).stutter(8), \ratio, 2, \index, Pwhite(0.6, 1.8), \dec, Pwhite(0.18, 0.4), \amp, 0.1, \pan, Pwhite(-0.6, 0.6), \send, 0.9)

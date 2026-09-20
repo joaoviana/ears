@@ -247,10 +247,10 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const sig = (q: typeof p) => { const g = (k: string) => q.patches[0].set.find((x) => x.key.replace(/^\\/, "") === k)?.value ?? ""; return `${g("instrument") || "same"} ${g("dur") || "same"}`.trim(); };
       if (angle === "turn" && (input.turns || []).includes(sig(p))) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: `that left turn (${sig(p)}) has already been used this set; asking for a different axis`, ms: Date.now() - t0 });
-        if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
+        if (Date.now() - t0 <= RETRY_BY) {
         const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: "${sig(p)}" is a move you have already made in this set. Take a genuinely different axis.`, sys, RETRY_DEADLINE));
-        if (!again || (input.turns || []).includes(sig(again))) return;
-        Object.assign(p, again, { expect: again.expect ?? p.expect });
+        if (again && !(input.turns || []).includes(sig(again))) Object.assign(p, again, { expect: again.expect ?? p.expect });
+        }   // out of time: a repeated axis still beats no option at all
       }
       // Three angles answer at once, so the first to arrive owns its slot and a late twin is asked again elsewhere.
       // Two of three options landing on d6 is not three options, whatever the metrics say.
@@ -258,10 +258,10 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       if (claimed().includes(p.patches[0].slot)) {
         const taken = claimed().join(" and ");
         onEvent("rejected", { agent: input.dj.id, angle, reason: `another angle already has ${p.patches[0].slot}; asking again elsewhere`, ms: Date.now() - t0 });
-        if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
+        if (Date.now() - t0 <= RETRY_BY) {
         const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: another angle is already changing ${taken}. The performer needs three DIFFERENT choices, so make your move somewhere else. Keep your angle.`, sys, RETRY_DEADLINE));
-        if (!again || claimed().includes(again.patches[0].slot)) return;
-        Object.assign(p, again, { expect: again.expect ?? p.expect });
+        if (again && !claimed().includes(again.patches[0].slot)) Object.assign(p, again, { expect: again.expect ?? p.expect });
+        }   // out of time: two ideas for one slot still beats one idea
       }
       const parts: Part[] = [];
       for (const patch of p.patches) {

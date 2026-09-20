@@ -181,9 +181,15 @@ function App() {
     setSay(`new base · seed ${seed} · ${b.bpm} bpm · ${b.key} · ${b.about}`); if (st.current.booted) { announce(`SEED ${seed}`, [237, 230, 216]); queueScene({}); }
   };
 
-  const offer = (o: Suggestion, agent: string, context: Context) => {
+  const offer = (o: Suggestion, agent: string, context: Context, seen?: Record<string, string>) => {
     const s = st.current;
-    const bad = evidence.check(context) || (s.options && s.options.length >= 3 ? "booth is full; wait for a verdict" : null);
+    // A revision covers the whole session, so one edit anywhere used to invalidate every idea in flight -- a whole
+    // round came back with nothing but "stale revision". An idea is only stale if a slot IT touches has moved since.
+    const touched = (o.parts ?? [{ slot: o.slot }]).map((x) => x.slot);
+    const untouched = !!seen && touched.every((k) => (seen[k] ?? "").trim() === (evidence.slots[k] || "").trim());
+    const stale = evidence.check(context);
+    if (stale && untouched) context = { ...context, based_on_revision: evidence.revision };
+    const bad = (untouched ? null : stale) || (s.options && s.options.length >= 3 ? "booth is full; wait for a verdict" : null);
     if (bad) { bus.current.send("rejected", agent, { request_id: context.request_id, reason: bad }); return; }
     const opt: Option = { ...o, ...context, id: ++s.seq, agent };
     if (!s.options?.length) { s.by = agent; s.autoAt = s.bar + 2; }
@@ -197,9 +203,10 @@ function App() {
     if (g.remote) { setSay(`waiting for ${dj.name.toLowerCase()} to propose over the wire`); return; }   // outside agents speak when they like
     refreshState();
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
+    const seen = { ...evidence.slots };   // what the agent was shown, to judge staleness per slot rather than per session
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
     ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
-      (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context);
+      (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context, seen);
         if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
           turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
         if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered

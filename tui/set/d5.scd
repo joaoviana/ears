@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \supersaw, \dur, 4, \midinote, Pseq([[51, 54, 61, 65], [54, 58, 65, 68], [56, 59, 66, 70], [58, 61, 68, 71]], inf), \detune, 0.5, \cutoff, Pwhite(500, 900), \env, Pwhite(1800, 3400), \res, 0.3, \att, 0.581, \sus, 1.161, \rel, 0.968, \spread, 1, \send, 0.85, \duck, 0.55, \amp, 0.2)
+~d.(\d5, \instrument, \fm, \dur, 1/4, \amp, ~x.(["--X--X----X-----", "--X--X----X--X--"], 0.24), \midinote, Pseq([[60, 64, 71, 74], [62, 66, 72, 76], [59, 62, 69, 72], [64, 67, 74, 78]], inf).stutter(16), \ratio, 1, \index, Pwhite(0.9, 1.6), \dec, 0.7, \send, 0.81)
