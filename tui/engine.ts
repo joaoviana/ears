@@ -2,7 +2,7 @@
 import dgram from "dgram";
 import fs from "fs";
 import path from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess, execSync } from "child_process";
 import { EventEmitter } from "events";
 import * as osc from "osc-min";
 
@@ -25,8 +25,30 @@ export class Engine extends EventEmitter {
     return this.clock.map(scSeconds, latency, observedSeconds);
   }
 
+  /**
+   * A stale scsynth on our audio port makes sclang wait forever and the screen sits on "booting SuperCollider..."
+   * with nothing to go on. It happens whenever a previous run's language process died without taking its audio
+   * server with it -- killing sclang does not kill scsynth. Say so, and clear it, rather than hanging.
+   */
+  private clearStaleServer() {
+    const port = Number(process.env.EARS_SC_PORT || 57110);
+    try {
+      // lsof cannot see another process's UDP socket on macOS without privileges -- it returns nothing while the
+      // server is plainly there. scsynth puts its port on its own command line, so match that instead.
+      const pids = execSync(`pgrep -f "scsynth -u ${port}" 2>/dev/null || true`, { encoding: "utf8" }).trim().split("\n").filter(Boolean);
+      if (!pids.length) return;
+      this.emit("log", `an audio server from an earlier run is still on port ${port}; clearing it`);
+      for (const pid of pids) { try { process.kill(Number(pid)); } catch {} }
+      for (let i = 0; i < 25; i++) {
+        try { if (!execSync(`pgrep -f "scsynth -u ${port}" 2>/dev/null || true`, { encoding: "utf8" }).trim()) break; execSync("sleep 0.2"); } catch { break; }
+      }
+    } catch {}
+  }
+
+
   start(mute = false) {
     if (!SCLANG) throw new Error("SuperCollider not found. See offline/README.md");
+    this.clearStaleServer();
     this.sock.on("message", (buf) => this.onMessage(buf));
     this.sock.bind(Number(process.env.EARS_PORT || 57200), "127.0.0.1");
     this.sc = spawn(SCLANG, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
