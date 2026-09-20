@@ -206,7 +206,7 @@ function App() {
     const s = st.current;
     if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { if (ARMED) dj.skills = SKILLS.map((k) => k.id); s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote, pending: [] as string[] }].slice(-3); s.turn = s.booth.length - 1; }
     discardOptions("DJ changed"); ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); greet.current = { who: dj.name, rgb: accent(dj.palette), text: dj.greeting, until: st.current.bar + 8 }; if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
-    setSay(""); s.askAt = s.bar + 2;   // the greeting is pinned above the options by `greet`
+    setSay(""); s.askAt = s.bar + 1;   // the greeting is pinned above the options by `greet`
   };
   const submit = (raw: string) => {
     const text = raw.trim(), mode = typing, s = st.current; setTyping(null);
@@ -247,7 +247,7 @@ function App() {
     for (const x of parts) evaluateSlot(x.slot, x.code, o.agent, { ...o, slot: x.slot, code: x.code, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
-    s.options = null; s.round++; s.turn++; s.askAt = s.bar + 1; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
+    s.options = null; s.round++; s.turn++; s.askAt = s.bar; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
   const skip = (by = "human") => {
     const s = st.current; if (!s.options) return;
