@@ -203,7 +203,11 @@ function App() {
     const untouched = !!seen && touched.every((k) => (seen[k] ?? "").trim() === (evidence.slots[k] || "").trim());
     const stale = evidence.check(context);
     if (stale && untouched) context = { ...context, based_on_revision: evidence.revision };
-    const bad = (untouched ? null : stale) || (s.options && s.options.length >= 3 ? "booth is full; wait for a verdict" : null);
+    // 'stale revision' told us nothing about WHY, nine times in ten rounds. Name the slot that moved and what it
+    // was, so the log says whether this is the guard working or the guard misfiring.
+    const moved = seen ? touched.filter((k) => (seen[k] ?? "").trim() !== (evidence.slots[k] || "").trim()) : [];
+    const why = untouched ? null : stale ? (moved.length ? `${moved.join(" and ")} changed since this idea was formed; read_room and reconsider` : `${stale} (no snapshot of what the agent saw)`) : null;
+    const bad = why || (s.options && s.options.length >= 3 ? "booth is full; wait for a verdict" : null);
     if (bad) { bus.current.send("rejected", agent, { request_id: context.request_id, reason: bad }); return; }
     const opt: Option = { ...o, ...context, id: ++s.seq, agent };
     if (!s.options?.length) { s.by = agent; s.autoAt = s.bar + 2; }
