@@ -15,7 +15,7 @@ import { roster, save, avatar, accent, type DJ } from "./djs.ts";
 import { makeBase, type Base, type Mood } from "./seed.ts";
 import { Bus, pretty, type Msg } from "./bus.ts";
 import { Evidence, type Context } from "./evidence.ts";
-import { applyPatch, describe } from "./patch.ts";
+import { applyPatch, describe, parseSlot } from "./patch.ts";
 import { validate } from "./agent.ts";
 import { SKILLS, skill, earned, missing, ensureVox, phrasesIn, recordNote } from "./skills.ts";
 import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, attributable, parseExpect, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
@@ -44,6 +44,9 @@ const { text: TEXT, dim: DIM, faint: FAINT } = NEUTRAL;
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const arg = (f: string) => process.argv.includes(f);
 const MUTE = arg("--mute"), AUTO = !arg("--manual"), DEMO = arg("--demo"), KEEP = arg("--keep");
+// fills need 1 taken idea, vocals 2, drops 3. A showcase gets maybe four rounds, so the loudest moves are
+// gated behind a counter it cannot reach. --skills hands every DJ the lot on arrival.
+const ARMED = arg("--skills");
 const MOOD0 = ((): Mood => { const i = process.argv.indexOf("--mood"), v = i > 0 ? process.argv[i + 1] : "vibey"; return v === "dark" || v === "any" ? v : "vibey"; })();
 const STYLE0 = (() => { const i = process.argv.indexOf("--style"); return i > 0 ? process.argv[i + 1] : undefined; })();
 const SEED = (() => { const i = process.argv.indexOf("--seed"); return i > 0 ? Number(process.argv[i + 1]) : Math.floor(Math.random() * 9000) + 1000; })();
@@ -144,6 +147,7 @@ function App() {
 
   // What the `add` angle is given instead of the problem list: the parts nobody has touched. A ranked report names one
   // worst thing and every angle then solves that one thing; this is the other half of the room.
+  const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
   const quietLine = () => {
     const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
       .map((k) => ({ k, bars: s.bar - (authors.current[k]?.bar ?? 0) })).filter((x) => x.bars >= 8).sort((a, b) => b.bars - a.bars);
@@ -186,8 +190,11 @@ function App() {
     refreshState();
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
-      (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context); if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered
+    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+      (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context);
+        if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
+          turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
+        if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered
       (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
       .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })
       .finally(() => { busy.current = false; setThinking(""); if (st.current.round !== round && !st.current.options?.length) think(); });   // something changed mid-round (a note, a grant): go again now, with it
@@ -195,7 +202,7 @@ function App() {
   const enter = (dj: DJ, remote = false) => {
     bus.current.send("enter", "host", { agent: dj.id, name: dj.name, remote });
     const s = st.current;
-    if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote, pending: [] as string[] }].slice(-3); s.turn = s.booth.length - 1; }
+    if (s.booth.some((g) => g.dj.id === dj.id)) { s.turn = s.booth.findIndex((g) => g.dj.id === dj.id); } else { if (ARMED) dj.skills = SKILLS.map((k) => k.id); s.booth = [...s.booth, { dj, since: Date.now(), offered: 0, taken: 0, level: "suggest" as const, remote, pending: [] as string[] }].slice(-3); s.turn = s.booth.length - 1; }
     discardOptions("DJ changed"); ride("riser", 1); queueScene({ look: dj.look, palette: dj.palette }); announce(dj.name, accent(dj.palette), 3, dj.id); greet.current = { who: dj.name, rgb: accent(dj.palette), text: dj.greeting, until: st.current.bar + 8 }; if (voiceRef.current && VOICES.length && !MUTE) setTimeout(() => { try { spawn("say", ["-v", voiceOf(dj.id), "-r", "165", dj.greeting], { stdio: "ignore" }); } catch {} }, barAt.current.len);   // speaks on the drop
     setSay(""); s.askAt = s.bar + 2;   // the greeting is pinned above the options by `greet`
   };

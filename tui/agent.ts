@@ -172,7 +172,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
@@ -212,14 +212,37 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     try {
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach + (k.id === "vocals" && sampleNames().length ? ` REAL RECORDED VOICES are available and sound far better than a rendered phrase: use them by name, e.g. ~v.("${sampleNames()[sampleNames().length - 1]}"). Names: ${sampleNames().slice(-12).join(", ")}.` : "")).join("\n");
       const prompt = promptFor(angle);
-      const p = parseMove(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
+      const used = angle === "turn" && input.turns?.length
+        ? `\n\nLEFT TURNS ALREADY USED IN THIS SET: ${input.turns.join("; ")}. Those axes are spent — if you have just done triplets against a straight grid, that one is used up. Take a different axis: a different instrument family, an octave jump, silence where it has been busy, a new harmonic centre, half-time or double-time, or a rhythm family nobody has used.`
+        : "";
+      const sys = SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief + used;
+      const p = parseMove(await claudeText(prompt, sys));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }
       if (p.patches.length > MAX_SLOTS) { onEvent("rejected", { agent: input.dj.id, angle, reason: `a move touches at most ${MAX_SLOTS} slots; this one touches ${p.patches.length}`, ms: Date.now() - t0 }); return; }
       if (angle === "turn" && !isTurn(input.slots[p.patches[0].slot] || "", p.patches[0])) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
-        const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", SYSTEM + persona(input.dj) + "\n\n" + brief));
+        const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", sys));
         if (!again || !isTurn(input.slots[again.patches[0].slot] || "", again.patches[0])) return;
+        Object.assign(p, again, { expect: again.expect ?? p.expect });
+      }
+      // A left turn that repeats an axis is not a left turn. `isTurn` passes anything that changes `dur`, so the same
+      // "everything is straight, so: triplets" came back round after round and looked like variety.
+      const sig = (q: typeof p) => { const g = (k: string) => q.patches[0].set.find((x) => x.key.replace(/^\\/, "") === k)?.value ?? ""; return `${g("instrument") || "same"} ${g("dur") || "same"}`.trim(); };
+      if (angle === "turn" && (input.turns || []).includes(sig(p))) {
+        onEvent("rejected", { agent: input.dj.id, angle, reason: `that left turn (${sig(p)}) has already been used this set; asking for a different axis`, ms: Date.now() - t0 });
+        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: "${sig(p)}" is a move you have already made in this set. Take a genuinely different axis.`, sys));
+        if (!again || (input.turns || []).includes(sig(again))) return;
+        Object.assign(p, again, { expect: again.expect ?? p.expect });
+      }
+      // Three angles answer at once, so the first to arrive owns its slot and a late twin is asked again elsewhere.
+      // Two of three options landing on d6 is not three options, whatever the metrics say.
+      const claimed = () => got.map((g) => g.slot);
+      if (claimed().includes(p.patches[0].slot)) {
+        const taken = claimed().join(" and ");
+        onEvent("rejected", { agent: input.dj.id, angle, reason: `another angle already has ${p.patches[0].slot}; asking again elsewhere`, ms: Date.now() - t0 });
+        const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: another angle is already changing ${taken}. The performer needs three DIFFERENT choices, so make your move somewhere else. Keep your angle.`, sys));
+        if (!again || claimed().includes(again.patches[0].slot)) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
       }
       const parts: Part[] = [];
