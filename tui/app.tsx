@@ -141,6 +141,14 @@ function App() {
   };
   const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { wipe: WIPES[Math.floor(Math.random() * WIPES.length)], look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
 
+  // What the `add` angle is given instead of the problem list: the parts nobody has touched. A ranked report names one
+  // worst thing and every angle then solves that one thing; this is the other half of the room.
+  const quietLine = () => {
+    const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
+      .map((k) => ({ k, bars: s.bar - (authors.current[k]?.bar ?? 0) })).filter((x) => x.bars >= 8).sort((a, b) => b.bars - a.bars);
+    if (!stale.length) return "Everything has been touched in the last 8 bars.";
+    return `Nothing has changed in ${stale.slice(0, 4).map((x) => `${x.k} for ${x.bars} bars`).join(", ")}.`;
+  };
   const author = (slot: string, code: string, a: { name: string; rgb: number[] }) => {
     const before = new Set(tokens(st.current.slots[slot] || ""));
     authors.current[slot] = { ...a, bar: st.current.bar, fresh: new Set(tokens(code).filter((t) => !before.has(t))) };
@@ -177,7 +185,7 @@ function App() {
     refreshState();
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context); if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered
       (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
       .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })

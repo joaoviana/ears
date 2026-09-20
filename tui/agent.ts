@@ -165,14 +165,33 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; note: string; history: Past[] }
+
+/**
+ * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
+ * A ranked report names one biggest problem, so handing the same text to three angles bought three variations of one
+ * idea — the screen showed `low`, `low`, `low`. Withholding is the only thing that works: an angle told to ignore the
+ * report does not ignore it.
+ */
+function reportFor(angle: string, input: AskInput): string {
+  const empty = Object.entries(input.slots).filter(([, v]) => !v.trim()).map(([k]) => k);
+  if (angle === "turn") return "NO LISTENING REPORT FOR THIS ANGLE. You are not fixing anything. Read the code and choose by what it is, not by how it measures.";
+  if (angle === "add") return [
+    "WHAT IS MISSING (this angle does not get the problem list; the mix-fixing angle has that one)",
+    empty.length ? `Empty slots, nobody is using them: ${empty.join(", ")}` : "Every slot has something in it.",
+    input.quiet || "",
+    "", "The measurements, for reference only — do NOT simply correct the worst line, that is another angle's job:",
+    input.report.replace(/^THE BIGGEST PROBLEM:.*$/im, "").replace(/^Then:.*$/im, "").trim(),
+  ].filter(Boolean).join("\n");
+  return input.report;
+}
 
 /** Fires every angle at once and hands each idea over the moment it validates. Resolves when all are in. */
 export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent: (kind: string, detail: Record<string, unknown>) => void = () => {}): Promise<Suggestion[]> {
-  const prompt = [
+  const promptFor = (angle: string) => [
     "TEMPO AND KEY", input.context, "",
     "CURRENT CODE", ...Object.entries(input.slots).map(([k, v]) => `-- ${k}\n${v.trim() || "(empty)"}`),
-    "", "LISTENING REPORT", input.report,
+    "", "LISTENING REPORT", reportFor(angle, input),
     "", "PERFORMER NOTE", input.note || "(none)",
     "", "WHAT HAPPENED TO EARLIER IDEAS (yours; lines marked [name] are another DJ's)", input.history.length ? input.history.slice(-8).map((h) => { const mine = !h.agent || h.agent === input.dj.id; return `${mine ? "" : `[${h.agent}] `}${h.verdict === "y" ? "taken " : "skipped"} ${h.slot}: ${h.why}${h.outcome && mine ? `\n        ${h.outcome}` : ""}`; }).join("\n") : "(none)",
   ].join("\n");
@@ -185,6 +204,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
       const active = input.skills || [], taught = SKILLS.filter((k) => active.includes(k.id)).map((k) => k.teach + (k.id === "vocals" && sampleNames().length ? ` REAL RECORDED VOICES are available and sound far better than a rendered phrase: use them by name, e.g. ~v.("${sampleNames()[sampleNames().length - 1]}"). Names: ${sampleNames().slice(-12).join(", ")}.` : "")).join("\n");
+      const prompt = promptFor(angle);
       const p = parseMove(await claudeText(prompt, SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }

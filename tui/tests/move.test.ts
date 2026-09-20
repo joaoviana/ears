@@ -1,6 +1,6 @@
 import test from "node:test"; import assert from "node:assert/strict";
 import { parseMove, MAX_SLOTS } from "../agent.ts";
-import { applyPatch, describeMove } from "../patch.ts";
+import { applyPatch, describeMove, pair } from "../patch.ts";
 
 const ONE = `SLOT d3
 SET cutoff = 600
@@ -91,4 +91,13 @@ test("more slots than a room can read is refused, not truncated", () => {
   const m = parseMove(["d1", "d2", "d3", "d4"].map((s) => `SLOT ${s}\nSET amp = 0.1`).join("\n") + "\nEXPECT loudness up\nWHY everything at once")!;
   assert.equal(m.patches.length, 4);
   assert.ok(m.patches.length > MAX_SLOTS, "ask() rejects this rather than dropping a slot silently");
+});
+
+test("a change late in a long row is visible on the projector, not cut off before it", () => {
+  const a = '~x.(["----X-------X---", "----X-------X---", "----X-------X---", "----X---X---X-x-"], 0.5)';
+  const b = '~x.(["----X-------X---", "----X-------X---", "----X-------X---", "--x-X---X-xxX-x-"], 0.5)';
+  const [x, y] = pair(a, b);
+  assert.notEqual(x, y, "two rows that differ must not render identically");
+  assert.ok(x.includes("X---X---X-x-") || y.includes("x-X---X-xxX"), `window landed on the difference: ${x} -> ${y}`);
+  assert.deepEqual(pair("600", "350"), ["600", "350"]);                       // short values are untouched
 });
