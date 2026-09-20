@@ -555,7 +555,7 @@ function App() {
   })() : null;
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
-    ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
+    ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip the round"], ["tab", "point t / k / x / o at the next DJ"], ["t", "tell the booth something (every DJ answers it)"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
     ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["W", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
