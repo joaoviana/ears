@@ -1,1 +1,1 @@
-~d.(\d2, \instrument, \hat, \dur, Pseq([0.295, 0.205], inf), \amp, ~x.(["X-xX-xX-X-xX-xXx", "X-xX-xX-X-xXxXXx"], 0.26), \dec, Pwrand([0.03, 0.1], [0.85, 0.15], inf), \pan, Pwhite(-0.4, 0.4))
+~d.(\d2, \instrument, \hat, \dur, Pseq([0.265, 0.235], inf), \amp, Pseq([0.07, 0.04, 0.12, 0.05], inf) * Pwhite(0.8, 1.15), \dec, Pwrand([0.025, 0.05, 0.11], [0.6, 0.3, 0.1], inf), \hp, 6800, \pan, Pbrown(-0.4, 0.4, 0.08))

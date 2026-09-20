@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \fm, \dur, 1/4, \amp, ~x.(["--X--X----X-----", "--X--X----X--X--"], 0.1), \midinote, Pseq([[59, 62, 69, 73], [56, 59, 66, 69], [61, 64, 71, 74], [66, 69, 76, 80]], inf).stutter(16), \ratio, 1, \index, Pwhite(0.9, 1.6), \dec, 0.7, \send, 0.45)
+~d.(\d5, \instrument, \fm, \dur, Pseq([0.265, 0.235], inf), \amp, ~x.(["X--X--X---X--X--", "X--X--X---X-X-X-"], 0.13), \midinote, Pseq([72, 76, 79, 76, 76, 79, 83, 79, 77, 81, 84, 81, 79, 83, 86, 83], inf).stutter(4), \ratio, 3.5, \index, 0.9, \dec, 0.22, \pan, Pwhite(-0.4, 0.4), \send, 0.35)

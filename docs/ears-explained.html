@@ -1,112 +1,142 @@
 <meta charset="utf-8">
 <title>EARS Explained</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <style>
 /* dark-first: bare :root is the dark set, light is the alternate */
 :root{
-  --bg:#15141c; --surface:#1d1b27; --surface2:#242231; --line:#3d3b4a;
-  --text:#e8e6f0; --dim:#a19eb2; --faint:#6b687c;
-  --human:#c6f24e; --agent:#ff5fd2; --host:#c7b8ff; --engine:#8fd3ff; --warn:#ff8a5c; --gold:#ffd166;
-  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
-  --body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --bg:#000; --surface:#0a0a0a; --surface2:#151515; --line:#242424;
+  --text:#ededed; --dim:#a1a1a1; --faint:#6e6e6e;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --human:#79ffe1; --agent:#a78bfa; --host:#3291ff; --engine:#f7b955; --warn:#ff6369; --gold:#ffcf74;
+  --display:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
-    --bg:#f5f3fa; --surface:#ffffff; --surface2:#ebe8f4; --line:#d3cfe2;
-    --text:#1b1926; --dim:#56536a; --faint:#8b879e;
-    --human:#4a7300; --agent:#b3148a; --host:#5a45c4; --engine:#0f6aa8; --warn:#b5451a; --gold:#8a6400;
+    --bg:#fff; --surface:#fafafa; --surface2:#f4f4f4; --line:#eaeaea;
+    --text:#171717; --dim:#666; --faint:#8f8f8f;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+    --human:#0b7a63; --agent:#6d28d9; --host:#0062d1; --engine:#8a5200; --warn:#c81e1e; --gold:#7a5000;
   }
 }
 :root[data-theme="light"]{
-  --bg:#f5f3fa; --surface:#ffffff; --surface2:#ebe8f4; --line:#d3cfe2;
-  --text:#1b1926; --dim:#56536a; --faint:#8b879e;
-  --human:#4a7300; --agent:#b3148a; --host:#5a45c4; --engine:#0f6aa8; --warn:#b5451a; --gold:#8a6400;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --bg:#fff; --surface:#fafafa; --surface2:#f4f4f4; --line:#eaeaea;
+  --text:#171717; --dim:#666; --faint:#8f8f8f;
+  --human:#0b7a63; --agent:#6d28d9; --host:#0062d1; --engine:#8a5200; --warn:#c81e1e; --gold:#7a5000;
 }
 :root[data-theme="dark"]{
-  --bg:#15141c; --surface:#1d1b27; --surface2:#242231; --line:#3d3b4a;
-  --text:#e8e6f0; --dim:#a19eb2; --faint:#6b687c;
-  --human:#c6f24e; --agent:#ff5fd2; --host:#c7b8ff; --engine:#8fd3ff; --warn:#ff8a5c; --gold:#ffd166;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --bg:#000; --surface:#0a0a0a; --surface2:#151515; --line:#242424;
+  --text:#ededed; --dim:#a1a1a1; --faint:#6e6e6e;
+  --human:#79ffe1; --agent:#a78bfa; --host:#3291ff; --engine:#f7b955; --warn:#ff6369; --gold:#ffcf74;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font:400 16px/1.6 var(--body);margin:0}
-.wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:0 96px}
-a{color:var(--host)} a:focus-visible,summary:focus-visible{outline:2px solid var(--agent);outline-offset:2px}
-code,pre,kbd{font-family:var(--mono);font-size:.875em}
-code{background:var(--surface2);padding:.08em .35em;border-radius:4px}
-kbd{display:inline-block;min-width:1.7em;text-align:center;padding:.05em .4em;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--surface);color:var(--text)}
-p{margin:0;max-width:68ch} p+p{margin-top:.8em}
-h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
-h1{font-size:clamp(3rem,9vw,5.6rem);font-weight:800;line-height:.95;letter-spacing:.08em}
-h1 span{background:linear-gradient(90deg,var(--agent),var(--host) 55%,var(--engine));-webkit-background-clip:text;background-clip:text;color:transparent}
-h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;line-height:1.1}
-h3{font-size:1.08rem;font-weight:700;margin-top:4px}
-.lede{font-size:1.18rem;line-height:1.5;color:var(--text);max-width:60ch}
-.gist{color:var(--dim);font-size:1.02rem;max-width:64ch}
-.eyebrow{font:500 .74rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-header.hero{padding-block:56px 28px;display:flex;flex-direction:column;gap:18px}
-nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-block:1px solid var(--line);margin-inline:-20px;padding:8px 20px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
-nav.toc a{font:500 .8rem/1 var(--mono);color:var(--dim);text-decoration:none;margin-right:16px;padding:4px 0;display:inline-block}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:400 15px/1.65 var(--body);margin:0;letter-spacing:-.005em;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:0 120px}
+a{color:var(--text);text-decoration:none;border-bottom:1px solid var(--line);transition:border-color .15s}
+a:hover{border-color:var(--text)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--host);outline-offset:3px;border-radius:2px}
+code,pre,kbd{font-family:var(--mono);font-size:.86em;letter-spacing:0}
+code{background:var(--surface2);padding:.1em .38em;border-radius:5px;color:var(--text)}
+kbd{display:inline-block;min-width:1.7em;text-align:center;padding:.1em .42em;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--dim);font-size:.78em;font-weight:500}
+p{margin:0;max-width:70ch;color:var(--dim)} p+p{margin-top:.9em}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;color:var(--text)}
+h1{font-size:clamp(2.8rem,8vw,4.4rem);font-weight:600;line-height:1;letter-spacing:-.05em}
+h1 span{color:var(--text)}
+h2{font-size:clamp(1.45rem,3vw,1.95rem);font-weight:600;line-height:1.15;letter-spacing:-.035em}
+h3{font-size:.97rem;font-weight:600;letter-spacing:-.012em;margin-top:2px}
+.lede{font-size:1.1rem;line-height:1.55;color:var(--text);max-width:62ch;letter-spacing:-.018em}
+.gist{color:var(--dim);font-size:.97rem;max-width:66ch}
+.eyebrow{font:500 .72rem/1.5 var(--mono);letter-spacing:.02em;color:var(--faint)}
+header.hero{padding-block:72px 12px;display:flex;flex-direction:column;gap:20px}
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--line);margin-inline:-20px;padding:0 20px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+nav.toc::-webkit-scrollbar{display:none}
+nav.toc a{font:400 .8rem/1 var(--body);color:var(--faint);text-decoration:none;border:0;margin-right:20px;padding:13px 0;display:inline-block;letter-spacing:-.01em}
 nav.toc a:hover{color:var(--text)}
-section{padding-top:64px;display:flex;flex-direction:column;gap:18px;scroll-margin-top:46px}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px 32px}
-.cols>div{display:flex;flex-direction:column;gap:8px}
-.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.roles div{padding:14px 16px;background:var(--surface);border-right:1px solid var(--line);font-size:.92rem;color:var(--dim)}
-.roles b{display:block;font:700 1rem var(--display);margin-bottom:2px}
+section{padding-top:88px;display:flex;flex-direction:column;gap:16px;scroll-margin-top:52px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px 36px}
+.cols>div{display:flex;flex-direction:column;gap:7px}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.roles div{padding:16px 18px;border-right:1px solid var(--line);font-size:.88rem;color:var(--dim)}
+.roles div:last-child{border-right:0}
+.roles b{display:block;font:600 .95rem var(--display);letter-spacing:-.015em;margin-bottom:3px}
 .c-human{color:var(--human)} .c-agent{color:var(--agent)} .c-host{color:var(--host)} .c-engine{color:var(--engine)} .c-warn{color:var(--warn)} .c-dim{color:var(--dim)} .c-faint{color:var(--faint)} .c-gold{color:var(--gold)}
-figure{margin:6px 0 0;display:flex;flex-direction:column;gap:10px}
+figure{margin:8px 0 0;display:flex;flex-direction:column;gap:12px}
 .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .scroll svg{display:block;width:100%;min-width:760px;height:auto}
-figcaption{font-size:.88rem;color:var(--dim);max-width:78ch}
-pre{margin:0;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow-x:auto;line-height:1.55;color:var(--text)}
-table{border-collapse:collapse;width:100%;font-size:.92rem}
+figcaption{font-size:.86rem;color:var(--dim);max-width:78ch}
+pre{margin:0;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow-x:auto;line-height:1.6;color:var(--text);font-size:.8rem}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
 .tscroll{overflow-x:auto}
-th{text-align:left;font:500 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:6px 12px 6px 0;border-bottom:1px solid var(--line)}
-td{padding:7px 12px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
-td:first-child{white-space:nowrap}
-ul{margin:0;padding-left:1.1em;max-width:68ch} li+li{margin-top:.35em}
+th{text-align:left;font:500 .68rem/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--faint);padding:0 14px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--dim)}
+td b,td strong{color:var(--text)}
+td:first-child{white-space:nowrap;color:var(--text)}
+ul{margin:0;padding-left:1.15em;max-width:70ch;color:var(--dim)} li+li{margin-top:.4em}
 .steps{list-style:none;padding:0;display:grid;gap:0;max-width:none;counter-reset:s}
-.steps li{counter-increment:s;display:grid;grid-template-columns:2.2rem 1fr;gap:4px 10px;padding:12px 0;border-bottom:1px solid var(--line);margin:0}
-.steps li::before{content:counter(s);font:700 1.1rem var(--display);color:var(--agent)}
-.steps b{font-weight:600} .steps .no{grid-column:2;color:var(--dim);font-size:.9rem}
-.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px 28px}
-.keys h3{color:var(--agent);font-size:.95rem;margin-bottom:6px}
-.keys dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:.9rem;align-items:baseline}
+.steps li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:4px 12px;padding:14px 0;border-bottom:1px solid var(--line);margin:0}
+.steps li::before{content:counter(s);font:400 .78rem/1.7 var(--mono);color:var(--faint)}
+.steps b{font-weight:600;color:var(--text);font-size:.95rem} .steps .no{grid-column:2;color:var(--dim);font-size:.88rem}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:26px 30px}
+.keys h3{color:var(--faint);font:500 .68rem/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.keys dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:.86rem;align-items:baseline}
 .keys dt{white-space:nowrap} .keys dd{margin:0;color:var(--dim)}
-.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
-.panel{border:1px solid var(--line);border-radius:10px;padding:16px 18px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.panel{border:1px solid var(--line);border-radius:10px;padding:18px 20px;background:var(--surface);display:flex;flex-direction:column;gap:9px}
 .panel h3{margin:0}
 .yes h3{color:var(--human)} .nope h3{color:var(--warn)}
 .swatches{display:flex;flex-wrap:wrap;gap:10px}
-.sw{display:flex;align-items:center;gap:8px;font:500 .8rem var(--mono);color:var(--dim)}
-.sw i{display:block;width:44px;height:16px;border-radius:4px}
+.sw{display:flex;align-items:center;gap:8px;font:400 .78rem var(--mono);color:var(--dim)}
+.sw i{display:block;width:44px;height:14px;border-radius:4px}
 .lane{letter-spacing:.06em}
+/* charts: series slots from the validated categorical ramp, fixed order, never cycled */
+.viz{position:relative}
+.viz svg{display:block;width:100%;min-width:700px;height:auto}
+.viz-tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:.78rem;line-height:1.5;white-space:nowrap;z-index:3;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.viz-tip[data-on="1"]{opacity:1}
+.viz-tip .k{display:flex;align-items:center;gap:7px;color:var(--dim)}
+.viz-tip .k i{display:block;width:12px;height:2px;border-radius:1px;flex:none}
+.viz-tip .k b{color:var(--text);font-variant-numeric:tabular-nums;font-weight:600;margin-left:auto;padding-left:14px}
+.viz-tip .h{color:var(--text);font-weight:600;margin-bottom:5px}
+.viz-legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.8rem;color:var(--dim)}
+.viz-legend span{display:flex;align-items:center;gap:7px}
+.viz-legend i{display:block;width:12px;height:12px;border-radius:3px;flex:none}
+.viz-legend.lines i{height:3px;border-radius:2px;width:16px}
+.hit{fill:transparent;cursor:crosshair}
+.viz svg .s1{fill:var(--s1)} .viz svg .s2{fill:var(--s2)} .viz svg .s3{fill:var(--s3)} .viz svg .s4{fill:var(--s4)}
+.viz svg .v{fill:var(--text);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.viz svg [class^="ln-"]{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.viz svg .ln-s1{stroke:var(--s1)} .viz svg .ln-s2{stroke:var(--s2)} .viz svg .ln-s3{stroke:var(--s3)} .viz svg .ln-s4{stroke:var(--s4)}
+.viz svg [class^="dot-"]{stroke:var(--surface);stroke-width:2}
+.viz svg .dot-s1{fill:var(--s1)} .viz svg .dot-s2{fill:var(--s2)} .viz svg .dot-s3{fill:var(--s3)} .viz svg .dot-s4{fill:var(--s4)}
+.viz svg .cross{stroke:var(--faint);stroke-width:1}
 /* results */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,208px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.stats>div{background:var(--surface);padding:18px 16px;display:flex;flex-direction:column;gap:7px}
-.stats b{font:800 clamp(1.6rem,4vw,2.3rem)/1 var(--display);letter-spacing:-.02em;color:var(--agent);display:block}
-.stats b em{font-style:normal;font-size:.55em;color:var(--faint);font-weight:500;padding-inline:.12em}
-.stats p{font-size:.9rem;color:var(--dim);line-height:1.45;max-width:none}
-.stats i{font:500 .68rem var(--mono);font-style:normal;letter-spacing:.09em;text-transform:uppercase;color:var(--host);margin-top:auto}
-tr.best td{background:var(--surface2)} tr.best td:first-child{font-weight:600;color:var(--human)}
-.fin{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
-.fin>div{border:1px solid var(--line);border-left-width:3px;border-radius:0 10px 10px 0;background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:8px}
-.fin>div:nth-child(1){border-left-color:var(--agent)} .fin>div:nth-child(2){border-left-color:var(--gold)} .fin>div:nth-child(3){border-left-color:var(--engine)}
-.fin h3{margin:0} .fin p{font-size:.93rem}
-.fin .num{font:700 .72rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
-footer{margin-top:72px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,208px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stats>div{background:var(--surface);padding:20px 18px;display:flex;flex-direction:column;gap:8px}
+.stats b{font:600 clamp(1.7rem,4vw,2.2rem)/1 var(--display);letter-spacing:-.045em;color:var(--text);display:block}
+.stats b em{font-style:normal;font-size:.5em;color:var(--faint);font-weight:400;padding-inline:.14em;letter-spacing:-.01em}
+.stats p{font-size:.86rem;color:var(--dim);line-height:1.5;max-width:none}
+.stats i{font:400 .7rem var(--mono);font-style:normal;letter-spacing:0;color:var(--faint);margin-top:auto}
+tr.best td{background:var(--surface)} tr.best td:first-child{font-weight:600}
+.fin{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:14px}
+.fin>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:18px 20px;display:flex;flex-direction:column;gap:9px}
+.fin h3{margin:0} .fin p{font-size:.88rem}
+.fin .num{font:400 .68rem var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+footer{margin-top:96px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:.82rem}
 /* svg vocabulary */
-svg text{font-family:var(--body);font-size:12px;fill:var(--text)}
-svg .m{font-family:var(--mono);font-size:10.5px;fill:var(--dim)}
+svg text{font-family:var(--body);font-size:12px;fill:var(--text);letter-spacing:-.01em}
+svg .m{font-family:var(--mono);font-size:10.5px;fill:var(--dim);letter-spacing:0}
 svg .t{font-weight:600} svg .d{fill:var(--dim)} svg .sm{font-size:11px}
 svg .box{fill:var(--surface2);stroke:var(--line);stroke-width:1}
-svg .bound{fill:none;stroke:var(--faint);stroke-width:1.2;stroke-dasharray:5 4}
-svg .ln{fill:none;stroke:var(--dim);stroke-width:1.4}
+svg .bound{fill:none;stroke:var(--line);stroke-width:1;stroke-dasharray:4 4}
+svg .ln{fill:none;stroke:var(--faint);stroke-width:1.2}
 svg .grid{stroke:var(--line);stroke-width:1}
 .sh{stroke:var(--human)!important} .sa{stroke:var(--agent)!important} .so{stroke:var(--host)!important} .se{stroke:var(--engine)!important} .sw2{stroke:var(--warn)!important}
 .fh{fill:var(--human)!important} .fa{fill:var(--agent)!important} .fo{fill:var(--host)!important} .fe{fill:var(--engine)!important} .fw{fill:var(--warn)!important} .fd{fill:var(--dim)!important}
-@media (max-width:520px){.roles div{border-right:0;border-bottom:1px solid var(--line)}}
+@media (max-width:520px){.roles div{border-right:0;border-bottom:1px solid var(--line)} section{padding-top:64px}}
 </style>
 
 <div class="wrap">
@@ -115,7 +145,7 @@ svg .grid{stroke:var(--line);stroke-width:1}
   <div class="eyebrow">soundcheck/tui · reference host for the EARS protocol · Founder House, London, 23 Sept 2026</div>
   <h1><span>EARS</span></h1>
   <p class="lede">A live-coded techno set in a terminal. The human writes SuperCollider patterns. Claude-powered DJs cannot hear and cannot touch the code: they read a measured listening report and propose small patches. The human takes or skips, every change lands on a bar line, and every message is on screen.</p>
-  <p class="gist">Every proposal has to predict its own effect, and the host grades it two bars later. Across 392 graded ideas, that report takes an agent from <b class="c-agent">20%</b> to <b class="c-human">46%</b> accuracy about what its own change will do. <a href="#proof">How that was measured →</a></p>
+  <p class="gist">Every proposal has to predict what it will do to the sound, and the host grades that prediction two bars later. Over 392 graded ideas, agents given the report were right 46% of the time; from the code alone, 20%. <a href="#proof">How it was measured</a>.</p>
   <div class="roles">
     <div><b class="c-human">Human</b>Performs, gives verdicts, grants and revokes autonomy.</div>
     <div><b class="c-agent">Agent (a DJ)</b>Reads text, returns text. Two message types, no tools.</div>
@@ -264,8 +294,8 @@ svg .grid{stroke:var(--line);stroke-width:1}
 
 <section id="hears">
   <div class="eyebrow">Sensing</div>
-  <h2>How an agent that cannot hear, hears</h2>
-  <p class="gist">An <code>ears</code> synth on the master bus streams numbers 15 times a second, and each of the six slots plays to its own bus with its own analyser before the shared effects, so the host can also say <em>which voice</em> moved. Every 2 bars it averages them, compares each to a reference, and writes one plain word per line. That text is the agent's entire sense of hearing.</p>
+  <h2>What the agent gets instead of ears</h2>
+  <p class="gist">An <code>ears</code> synth on the master bus streams numbers 15 times a second, and each of the six slots plays to its own bus with its own analyser before the shared effects, so the host can also say <em>which voice</em> moved. Every 2 bars it averages them, compares each to a reference, and writes one plain word per line. That text is all it knows about the sound.</p>
   <figure>
     <div class="scroll">
     <svg viewBox="0 0 990 270" role="img" aria-label="Five measurement bands on a log frequency axis with the word used when each is below or above the reference.">
@@ -285,7 +315,7 @@ svg .grid{stroke:var(--line);stroke-width:1}
       <text x="60" y="258" class="sm d">Band shapes are schematic: two cascaded low-passes at 80 Hz, band-passes at 150, 700 and 3000 Hz, two cascaded high-passes at 7 kHz.</text>
     </svg>
     </div>
-    <figcaption>Seven more lines follow the bands. <b>centroid</b> (bright / dark past ±25%), <b>onsets per beat</b> (sparse / busy past ±0.8), <b>envelope</b> level (quiet / hot past ±2.5 dB) and <b>peak/envelope</b>, the crest (squashed / spiky past ±3 dB). Then three the benchmark asked for: <b>width</b>, side over mid in dB (narrow / wide); <b>groove</b>, how far the average hit lands from the grid, taken from the engine's own event times rather than from audio; and <b>headroom</b>, measured <em>before</em> the limiter, because after it the peak is pinned by design and always reads "clipping". Frames with NaN, a peak above 8 or the wrong band count are dropped, not averaged.</figcaption>
+    <figcaption>Seven more lines follow the bands: <b>centroid</b> (bright / dark past ±25%), <b>onsets per beat</b> (sparse / busy past ±0.8), <b>envelope</b> level (quiet / hot past ±2.5 dB) and <b>peak/envelope</b>, the crest (squashed / spiky past ±3 dB). Then three the benchmark added: <b>width</b>, side over mid in dB; <b>groove</b>, how far the average hit lands from the grid, taken from the engine's own event times rather than from audio; and <b>headroom</b>, measured before the limiter, since after it the peak is pinned by design and always reads as clipping. Frames with NaN, a peak above 8 or the wrong band count are dropped rather than averaged.</figcaption>
   </figure>
   <pre>vs reference "this track as it should sound"
 sub  &lt;80Hz    -10.0 dB   -2.1  ok
@@ -300,57 +330,84 @@ peak/env       10.1 dB   -0.6  ok
 width          -6.4 dB   +2.6  ok
 groove       18 ms off   +0.7  ok
 headroom       -2.7 dB         limiting</pre>
-  <p class="c-dim" style="font-size:.88rem">Real output, seed 41, four bars of a deliberately damaged mix (<code>tui/dev/one-brief.ts</code>). The reference here is how this same base sounded when it started, which is what the live host uses now; <kbd>r</kbd> re-saves it mid-set and <code>npm run ears:ref</code> records one muted. <b>This shape of report is the one the benchmark found wanting</b> — twelve numbers of equal weight, and the agent chases the loudest of them. What replaced it is below.</p>
+  <p class="c-dim" style="font-size:.88rem">Real output, seed 41, four bars of a deliberately damaged mix (<code>tui/dev/one-brief.ts</code>). The reference is how this same base sounded when it started. <kbd>r</kbd> re-saves it mid-set; <code>npm run ears:ref</code> records one muted. This is the v0 shape of report, twelve numbers of equal weight. The benchmark found a problem with it, and <a href="#proof">what replaced it</a> is below.</p>
 </section>
 
 <section id="proof">
   <div class="eyebrow">Evidence · four runs · 392 graded ideas</div>
-  <h2>Does any of this help, or is the report decoration?</h2>
-  <p class="gist">The fair worry about a listening report is that the agent would have said the same thing from the code alone. So the same DJ was run against the same broken mixes four different ways, and every idea had to call its shot before the host applied it.</p>
+  <h2>Does the report help?</h2>
+  <p class="gist">A reasonable objection to a listening report is that the agent could have said the same thing from the code. To test it, the same DJ was run against the same broken mixes four ways, and every idea had to predict its own effect before the host applied it.</p>
 
   <div class="stats">
-    <div><b>20% <em>→</em> 46%</b><p>of ideas whose predicted effect actually happened: code only, versus the full protocol.</p><i>n = 112 · p = 0.003</i></div>
-    <div><b>2 <em>of</em> 392</b><p>ideas that moved the sound the <em>opposite</em> way to the call. Nearly every failure is a move too small to measure.</p><i>timid, not wrong</i></div>
-    <div><b>0.94 <em>vs</em> 1.05</b><p>how close the full protocol got to restoring the clean mix, against the code-only DJ. 0 is back where it was.</p><i>the first run it also repaired better</i></div>
-    <div><b>4.5 s</b><p>per idea with the ranked report, against 5.6 s with the flat one. Ranking is cheaper to read.</p><i>better and faster</i></div>
+    <div><b>20% <em>→</em> 46%</b><p>of predictions that came true. Code only, then the full protocol.</p><i>n = 112 · p = 0.003</i></div>
+    <div><b>2 <em>of</em> 392</b><p>ideas that moved the sound the opposite way to the prediction. 269 moved the right thing by too little to measure.</p><i>the common failure is FLAT</i></div>
+    <div><b>0.94 <em>vs</em> 1.05</b><p>how close each got to restoring the clean mix. 0 is fully restored.</p><i>run 4, the first to beat blind</i></div>
+    <div><b>4.5 s</b><p>per idea with the ranked report; 5.6 s with the flat one.</p><i>shorter prompt, faster reply</i></div>
   </div>
 
   <div class="cols">
-    <div><h3>The experiment</h3><p>One DJ (THE RESIDENT), one idea per round, taken automatically, on a second muted engine. Four seeded bases are measured clean — that measurement is the target — then deliberately damaged: the kick buried, the hats 2.6× too loud, the low voice's filter 3.2× open. The damage is folded into the numbers rather than appended as <code>* 2.6</code>, so the source is not an answer key and the code-only condition is genuinely blind. Seven rounds per seed per condition. <code>npm run ears:bench</code>.</p></div>
-    <div><h3>The two questions</h3><p><b>Can it predict?</b> Every proposal carries <code>EXPECT air down</code>. Two bars later the host measures what moved and grades <b class="c-human">HIT</b>, <b class="c-warn">MISS</b> or <b class="c-dim">FLAT</b> — FLAT meaning the move was smaller than the noise floor, and the floor is <em>measured</em> from four windows of the unchanged music, not assumed.</p><p><b>Can it repair?</b> Distance from the clean base, in tolerances: 1.5 dB per band, 0.15 octave of brightness, 1 dB of level. Two windows of the <em>unchanged</em> base sit about 1.1 apart, so anything near 1.1 is as close as this measurement can see.</p></div>
+    <div><h3>The setup</h3><p>One DJ (THE RESIDENT), one idea per round, taken automatically, on a second muted engine. Four seeded bases are measured clean; that measurement is the target. Then each is damaged: the kick buried, the hats 2.6× too loud, the low voice's filter 3.2× open. The damage is folded into the numbers rather than appended as <code>* 2.6</code>, so the source is not an answer key and the code-only condition is really blind. Seven rounds per seed per condition. <code>npm run ears:bench</code>.</p></div>
+    <div><h3>What is measured</h3><p><b>Prediction.</b> Every proposal carries <code>EXPECT air down</code>. Two bars later the host measures what moved and grades it <b class="c-human">HIT</b>, <b class="c-warn">MISS</b> or <b class="c-dim">FLAT</b>. FLAT means the move was smaller than the noise floor, which is measured from four windows of the unchanged music rather than assumed.</p><p><b>Repair.</b> Distance from the clean base, in tolerances: 1.5 dB per band, 0.15 octave of brightness, 1 dB of level. Two windows of the unchanged base sit about 1.1 apart, so 1.1 is roughly the resolution limit.</p></div>
   </div>
 
   <div class="tscroll"><table>
     <tr><th>Condition</th><th>What the DJ is given</th></tr>
-    <tr><td><b>blind</b></td><td>The six slots of code. Nothing else. "Still call your shot."</td></tr>
-    <tr><td><b>ears</b></td><td>+ the listening report: nine measurements, flat, all the same weight.</td></tr>
+    <tr><td><b>blind</b></td><td>The six slots of code, and nothing else.</td></tr>
+    <tr><td><b>ears</b></td><td>+ the listening report: twelve measurements, listed flat.</td></tr>
     <tr><td><b>ears + shots</b></td><td>+ its own graded record of what earlier calls did.</td></tr>
-    <tr><td><b class="c-human">brief + shots</b></td><td>The report rewritten for a reader instead of a meter: ranked worst-first, naming which voice drifted and which two voices are fighting, stating what counts as a measurable move, and saying what has already failed.</td></tr>
+    <tr><td><b class="c-human">brief + shots</b></td><td>The same measurements, ranked worst-first, with the voice that drifted, the voices masking each other, the size of a measurable move, and what has already failed.</td></tr>
   </table></div>
 
   <figure>
-    <div class="scroll">
-    <svg viewBox="0 0 960 300" role="img" aria-label="Bar chart of how often each condition's prediction came true in run four. Blind 18 percent measured on the edited voice's own tap and 25 percent on the master mix; ears 29 and 50; ears plus shots 39 and 54; brief plus shots 46 and 61.">
-      <g class="grid"><line x1="190" y1="36" x2="190" y2="258"/><line x1="365" y1="36" x2="365" y2="258"/><line x1="540" y1="36" x2="540" y2="258"/><line x1="715" y1="36" x2="715" y2="258"/><line x1="890" y1="36" x2="890" y2="258"/></g>
-      <g class="m" text-anchor="middle"><text x="190" y="278">0%</text><text x="365" y="278">25%</text><text x="540" y="278">50%</text><text x="715" y="278">75%</text><text x="890" y="278">100%</text></g>
-      <g class="m"><rect x="190" y="12" width="11" height="11" class="fa"/><text x="208" y="22">graded on the edited voice's own tap</text><rect x="500" y="12" width="11" height="11" class="fo"/><text x="518" y="22">graded on the whole master mix</text></g>
-      <g text-anchor="end" font-weight="600"><text x="178" y="58">blind</text><text x="178" y="116">ears</text><text x="178" y="174">ears + shots</text><text x="178" y="232" class="fh">brief + shots</text></g>
-      <g class="m d" text-anchor="end"><text x="178" y="74">code only</text><text x="178" y="132">flat report</text><text x="178" y="190">+ own record</text><text x="178" y="248">ranked report</text></g>
-      <g opacity=".85">
-        <rect x="190" y="40" width="126" height="16" rx="2" class="fa"/><rect x="190" y="60" width="175" height="16" rx="2" class="fo"/>
-        <rect x="190" y="98" width="203" height="16" rx="2" class="fa"/><rect x="190" y="118" width="350" height="16" rx="2" class="fo"/>
-        <rect x="190" y="156" width="273" height="16" rx="2" class="fa"/><rect x="190" y="176" width="378" height="16" rx="2" class="fo"/>
+    <div class="viz-legend"><span><i style="background:var(--s1)"></i>graded on the edited voice&#8217;s own tap</span><span><i style="background:var(--s2)"></i>graded on the whole master mix</span></div>
+    <div class="scroll viz" id="viz1">
+    <svg viewBox="0 0 960 344" role="img" aria-label="Grouped bar chart of how often each condition's prediction came true in run four. Blind 18 percent on the edited voice's own tap and 25 percent on the master mix; ears 29 and 50; ears plus shots 39 and 54; brief plus shots 46 and 61.">
+      <g class="grid"><line x1="200" y1="50" x2="200" y2="308"/><line x1="370" y1="50" x2="370" y2="308"/><line x1="540" y1="50" x2="540" y2="308"/><line x1="710" y1="50" x2="710" y2="308"/><line x1="880" y1="50" x2="880" y2="308"/></g>
+      <text x="200" y="326" text-anchor="middle" class="m">0%</text><text x="370" y="326" text-anchor="middle" class="m">25%</text><text x="540" y="326" text-anchor="middle" class="m">50%</text><text x="710" y="326" text-anchor="middle" class="m">75%</text><text x="880" y="326" text-anchor="middle" class="m">100%</text>
+      <g>
+        <text x="188" y="74" text-anchor="end" font-weight="600">blind</text>
+        <text x="188" y="91" text-anchor="end" class="m">code only</text>
+        <path class="s1" d="M200 58 H318.4 A4 4 0 0 1 322.4 62 V74 A4 4 0 0 1 318.4 78 H200 Z"/>
+        <path class="s2" d="M200 80 H366.0 A4 4 0 0 1 370.0 84 V96 A4 4 0 0 1 366.0 100 H200 Z"/>
+        <text x="332" y="73" class="v">18%</text>
+        <text x="380" y="95" class="v">25%</text>
+        <rect class="hit" x="190" y="54" width="890" height="24" data-tip="blind|per-slot tap|18%|s1" data-x="322" data-y="64"/>
+        <rect class="hit" x="190" y="78" width="890" height="24" data-tip="blind|master mix|25%|s2" data-x="370" data-y="88"/>
       </g>
-      <rect x="190" y="214" width="322" height="16" rx="2" class="fa"/><rect x="190" y="234" width="427" height="16" rx="2" class="fo"/>
-      <g class="m" style="font-size:12px">
-        <text x="324" y="53">18%</text><text x="373" y="73">25%</text>
-        <text x="401" y="111">29%</text><text x="548" y="131">50%</text>
-        <text x="471" y="169">39%</text><text x="576" y="189">54%</text>
-        <text x="520" y="227" class="fh" font-weight="600">46%</text><text x="625" y="247" class="fh" font-weight="600">61%</text>
+      <g>
+        <text x="188" y="136" text-anchor="end" font-weight="600">ears</text>
+        <text x="188" y="153" text-anchor="end" class="m">flat report</text>
+        <path class="s1" d="M200 120 H393.2 A4 4 0 0 1 397.2 124 V136 A4 4 0 0 1 393.2 140 H200 Z"/>
+        <path class="s2" d="M200 142 H536.0 A4 4 0 0 1 540.0 146 V158 A4 4 0 0 1 536.0 162 H200 Z"/>
+        <text x="407" y="135" class="v">29%</text>
+        <text x="550" y="157" class="v">50%</text>
+        <rect class="hit" x="190" y="116" width="890" height="24" data-tip="ears|per-slot tap|29%|s1" data-x="397" data-y="126"/>
+        <rect class="hit" x="190" y="140" width="890" height="24" data-tip="ears|master mix|50%|s2" data-x="540" data-y="150"/>
+      </g>
+      <g>
+        <text x="188" y="198" text-anchor="end" font-weight="600">ears + shots</text>
+        <text x="188" y="215" text-anchor="end" class="m">+ its own record</text>
+        <path class="s1" d="M200 182 H461.2 A4 4 0 0 1 465.2 186 V198 A4 4 0 0 1 461.2 202 H200 Z"/>
+        <path class="s2" d="M200 204 H563.2 A4 4 0 0 1 567.2 208 V220 A4 4 0 0 1 563.2 224 H200 Z"/>
+        <text x="475" y="197" class="v">39%</text>
+        <text x="577" y="219" class="v">54%</text>
+        <rect class="hit" x="190" y="178" width="890" height="24" data-tip="ears + shots|per-slot tap|39%|s1" data-x="465" data-y="188"/>
+        <rect class="hit" x="190" y="202" width="890" height="24" data-tip="ears + shots|master mix|54%|s2" data-x="567" data-y="212"/>
+      </g>
+      <g>
+        <text x="188" y="260" text-anchor="end" font-weight="600">brief + shots</text>
+        <text x="188" y="277" text-anchor="end" class="m">ranked report</text>
+        <path class="s1" d="M200 244 H508.8 A4 4 0 0 1 512.8 248 V260 A4 4 0 0 1 508.8 264 H200 Z"/>
+        <path class="s2" d="M200 266 H610.8 A4 4 0 0 1 614.8 270 V282 A4 4 0 0 1 610.8 286 H200 Z"/>
+        <text x="523" y="259" class="v">46%</text>
+        <text x="625" y="281" class="v">61%</text>
+        <rect class="hit" x="190" y="240" width="890" height="24" data-tip="brief + shots|per-slot tap|46%|s1" data-x="513" data-y="250"/>
+        <rect class="hit" x="190" y="264" width="890" height="24" data-tip="brief + shots|master mix|61%|s2" data-x="615" data-y="274"/>
       </g>
     </svg>
+    <div class="viz-tip" id="tip1" aria-hidden="true"></div>
     </div>
-    <figcaption>Run 4, the one with all four new observation categories live. The two graders disagree about the absolute level and agree about the order, which is the point: the per-slot tap asks "did <em>that voice</em> move", the master asks "did the room move". Only the blind condition produced any MISS in this run — three of them.</figcaption>
+    <figcaption>Run 4, with all four new observation categories live. The two graders disagree on the absolute rate and agree on the order. The per-slot tap asks whether that voice moved; the master asks whether the room moved. Only the blind condition produced a MISS in this run, three of them. Every value is in the table below.</figcaption>
   </figure>
 
   <div class="tscroll"><table>
@@ -360,9 +417,25 @@ headroom       -2.7 dB         limiting</pre>
     <tr><td>ears + shots</td><td>39% (11 / 0 / 17)</td><td>54% (15 / 0 / 13)</td><td>2.81 → 1.20</td><td>46%</td><td>5.6</td></tr>
     <tr class="best"><td>brief + shots</td><td>46% (13 / 0 / 15)</td><td>61% (17 / 0 / 11)</td><td>2.86 → <b>0.94</b></td><td>64%</td><td>4.5</td></tr>
   </table></div>
-  <p class="c-dim" style="font-size:.88rem">28 ideas per condition, none refused. "Best" is the closest each seed came to its clean base, averaged. 1.1 is the floor of what this measurement can resolve, so 0.94 and 1.05 are both "as good as it gets"; the protocol reaching it while also predicting best is the result that took four runs to get.</p>
+  <p class="c-dim" style="font-size:.88rem">28 ideas per condition, none refused. "Best" is the closest each seed came to its clean base, averaged. Since 1.1 is about the resolution limit, 0.94 and 1.05 are both effectively restored; what changed in run 4 is that the protocol got there while also predicting best.</p>
 
-  <h3>Reproduced four times, and every fix is visible in the numbers</h3>
+  <h3>Four runs, and what each one fixed</h3>
+  <figure>
+    <div class="viz-legend lines"><span><i style="background:var(--s1)"></i>blind</span><span><i style="background:var(--s2)"></i>ears</span><span><i style="background:var(--s3)"></i>ears + shots</span><span><i style="background:var(--s4)"></i>brief + shots</span></div>
+    <div class="scroll viz" id="viz2">
+    <svg viewBox="0 0 960 344" role="img" aria-label="Line chart of prediction accuracy across four benchmark runs. Blind 11, 18, 21, 18 percent. Ears 29, 32, 29, 29. Ears plus shots 39, 43, 32, 39. Brief plus shots did not exist until run 3, then 46 and 46.">
+      <g class="grid"><line x1="140" y1="300" x2="823" y2="300"/><line x1="140" y1="254" x2="823" y2="254"/><line x1="140" y1="208" x2="823" y2="208"/><line x1="140" y1="162" x2="823" y2="162"/><line x1="140" y1="116" x2="823" y2="116"/><line x1="140" y1="70" x2="823" y2="70"/></g>
+      <text x="128" y="304" text-anchor="end" class="m">0%</text><text x="128" y="258" text-anchor="end" class="m">10%</text><text x="128" y="212" text-anchor="end" class="m">20%</text><text x="128" y="166" text-anchor="end" class="m">30%</text><text x="128" y="120" text-anchor="end" class="m">40%</text><text x="128" y="74" text-anchor="end" class="m">50%</text><text x="150" y="326" text-anchor="middle" class="m">run 1</text><text x="373" y="326" text-anchor="middle" class="m">run 2</text><text x="596" y="326" text-anchor="middle" class="m">run 3</text><text x="819" y="326" text-anchor="middle" class="m">run 4</text>
+      <line class="cross" id="cross2" x1="0" y1="60" x2="0" y2="310" opacity="0"/>
+      <path class="ln-s1" d="M150 249.4 L373 217.2 L596 203.4 L819 217.2"/><path class="ln-s2" d="M150 166.6 L373 152.8 L596 166.6 L819 166.6"/><path class="ln-s3" d="M150 120.6 L373 102.2 L596 152.8 L819 120.6"/><path class="ln-s4" d="M596 88.4 L819 88.4"/>
+      <circle class="dot-s1" cx="150" cy="249.4" r="4"/><circle class="dot-s1" cx="373" cy="217.2" r="4"/><circle class="dot-s1" cx="596" cy="203.4" r="4"/><circle class="dot-s1" cx="819" cy="217.2" r="4"/><circle class="dot-s2" cx="150" cy="166.6" r="4"/><circle class="dot-s2" cx="373" cy="152.8" r="4"/><circle class="dot-s2" cx="596" cy="166.6" r="4"/><circle class="dot-s2" cx="819" cy="166.6" r="4"/><circle class="dot-s3" cx="150" cy="120.6" r="4"/><circle class="dot-s3" cx="373" cy="102.2" r="4"/><circle class="dot-s3" cx="596" cy="152.8" r="4"/><circle class="dot-s3" cx="819" cy="120.6" r="4"/><circle class="dot-s4" cx="596" cy="88.4" r="4"/><circle class="dot-s4" cx="819" cy="88.4" r="4"/>
+      <text x="833" y="221.2" class="v">blind 18%</text><text x="833" y="170.6" class="v">ears 29%</text><text x="833" y="124.6" class="v">ears + shots 39%</text><text x="833" y="92.4" class="v">brief + shots 46%</text>
+      <rect class="hit" x="39" y="60" width="222" height="250" data-run="0"/><rect class="hit" x="262" y="60" width="222" height="250" data-run="1"/><rect class="hit" x="485" y="60" width="222" height="250" data-run="2"/><rect class="hit" x="708" y="60" width="222" height="250" data-run="3"/>
+    </svg>
+    <div class="viz-tip" id="tip2" aria-hidden="true"></div>
+    </div>
+    <figcaption>Each run is an independent replication with one thing changed, not a point in time; the lines connect them so the ordering is visible. It holds in all four: more of the protocol is always better at prediction. What changed before each run, and the exact figures, are in the table below.</figcaption>
+  </figure>
   <div class="tscroll"><table>
     <tr><th>Run</th><th>What changed before it</th><th>blind</th><th>ears</th><th>+ shots</th><th>brief</th></tr>
     <tr><td>1</td><td>First attempt. The damage was appended to the source as <code>* 2.6</code>, so "blind" could read the answer.</td><td>11%</td><td>29%</td><td>39%</td><td>–</td></tr>
@@ -370,32 +443,32 @@ headroom       -2.7 dB         limiting</pre>
     <tr><td>3</td><td>The ranked brief added as a fourth condition.</td><td>21%</td><td>29%</td><td>32%</td><td><b>46%</b></td></tr>
     <tr><td>4</td><td>Masking, stereo width, groove and headroom added to what the host can measure.</td><td>18%</td><td>29%</td><td>39%</td><td><b>46%</b></td></tr>
   </table></div>
-  <p class="c-dim" style="font-size:.88rem">Prediction accuracy on the per-slot grader. Four seeds × seven rounds per cell. The ordering holds in every run; the size of the gap does not, which is what a sample of 28 looks like.</p>
+  <p class="c-dim" style="font-size:.88rem">Prediction accuracy on the per-slot grader, four seeds × seven rounds per cell. The ordering holds in every run. The size of the gap moves around, which is what 28 samples looks like.</p>
 
-  <h3>Three things the runs taught, which are now in the code</h3>
+  <h3>Three findings, now in the code</h3>
   <div class="fin">
     <div>
       <span class="num">Finding 1 · fixation</span>
-      <h3>One loud number eats the whole agent</h3>
-      <p>Given nine measurements of equal weight, the DJ called <code>air</code> 11 times in 28 rounds: loud hats are the loudest thing in the report, so it chased that symptom while the buried kick stayed buried. Ranking the problems by how far each is from the target moved its top call to <code>loudness</code>, 12 times of 28 — which is where the damage actually lived — and it repaired best.</p>
-      <p class="c-dim" style="font-size:.88rem">Ranking does not spread an agent's attention. It redirects it. <code>brief.ts</code></p>
+      <h3>The agent chases the loudest number</h3>
+      <p>Given twelve measurements of equal weight, the DJ called <code>air</code> 11 times in 28 rounds. Loud hats are the largest number in the report, so it kept working on them while the buried kick stayed buried. Ranking the problems by distance from the target moved its top call to <code>loudness</code>, 12 of 28, which is where the damage was, and it repaired best.</p>
+      <p class="c-dim" style="font-size:.88rem">Same numbers, different order. <code>brief.ts</code></p>
     </div>
     <div>
       <span class="num">Finding 2 · timidity</span>
-      <h3>Agents are not wrong, they are shy</h3>
-      <p>Across 392 graded ideas, exactly <b>2</b> moved the sound opposite to the prediction. 269 were FLAT: the right thing moved, too little to measure. So the report now states the measured noise floor in the units the call will be graded in — "a change to air smaller than 1.8 dB cannot be measured" — and tells the agent to make a move big enough to see.</p>
-      <p class="c-dim" style="font-size:.88rem">The fix for a shy agent is a number, not an adjective. <code>shots.ts</code></p>
+      <h3>Most failures are moves that are too small</h3>
+      <p>Across 392 graded ideas, 2 moved the sound opposite to the prediction and 269 were FLAT: the right thing moved, by too little to measure. The report now states the measured noise floor in the units the call will be graded in, such as "a change to air smaller than 2.0 dB cannot be measured", and asks for a move big enough to register.</p>
+      <p class="c-dim" style="font-size:.88rem">Floors are per metric and per slot. <code>shots.ts</code></p>
     </div>
     <div>
-      <span class="num">Finding 3 · the one blind spot</span>
-      <h3>Brightness is the thing they get backwards</h3>
-      <p>Of the eight MISSes in all four runs, seven were a call of <code>brightness down</code> or <code>high down</code>. Closing a filter reliably makes a voice darker and just as reliably fails to make the <em>mix</em> darker, because the other five voices did not move. This is exactly the error a whole-mix analyser cannot catch, and the reason every slot now plays to its own bus with its own analyser.</p>
-      <p class="c-dim" style="font-size:.88rem">Six taps before the shared effects. <code>engine.scd</code> · <code>slotears.ts</code></p>
+      <span class="num">Finding 3 · brightness</span>
+      <h3>Brightness calls are where it goes wrong</h3>
+      <p>Seven of the eight MISSes across all four runs were a call of <code>brightness down</code> or <code>high down</code>. Closing a filter darkens that voice but often leaves the mix as bright as it was, because the other five voices did not move. A whole-mix analyser cannot see the difference, which is why each slot now plays to its own bus with its own analyser.</p>
+      <p class="c-dim" style="font-size:.88rem">Six taps, before the shared effects. <code>engine.scd</code> · <code>slotears.ts</code></p>
     </div>
   </div>
 
-  <h3>The report that won, on the same four bars</h3>
-  <p class="gist">This is the mix printed flat <a href="#hears">two sections up</a> — same seed, same damage, same measurements, nothing added. Only the order and the sentences are different, and that difference is the 20% → 46%.</p>
+  <h3>The same four bars, ranked</h3>
+  <p class="gist">This is the mix printed flat <a href="#hears">two sections up</a>: same seed, same damage, same measurements, nothing added. Only the order and the wording differ.</p>
   <pre>Measured against this track as it should sound, worst first.
 
 <b class="c-warn">THE BIGGEST PROBLEM: limiting (headroom -2.7 dB)</b>
@@ -429,15 +502,15 @@ Full measurements:
   width         -6.4 dB     +2.6  ok
   groove      18 ms off     +0.7  ok
   headroom      -2.7 dB    limiting</pre>
-  <p class="c-dim" style="font-size:.9rem">Five things a flat table cannot say: <b>which problem to fix first</b> (clipping outranks a band, a band outranks a colour); <b>which voice drifted</b>, from the per-slot taps, against how this base sounded when it started; <b>which two voices are fighting for a band at the same moments</b>, which is what "muddy" and "boxy" usually are and no master-bus number can express; <b>how big a move has to be</b> to register at all; and <b>what this agent has already tried that did not work</b>. The last one is the cure for fixation.</p>
+  <p class="c-dim" style="font-size:.9rem">Five things the flat table leaves out: which problem to fix first (clipping outranks a band, a band outranks a colour); which voice drifted, from the per-slot taps, against how the base started; which two voices fill one band at the same moments, which is usually what "muddy" means; how big a move has to be to register; and what this agent has already tried without effect. The last one is what stops the fixation in finding 1.</p>
 
   <div class="panel nope" style="border-left:3px solid var(--warn)">
     <h3>What this cannot tell you</h3>
     <ul>
-      <li>Four seeds, one DJ, one model. 28 ideas per cell is a small sample: read the ordering, not the decimals.</li>
-      <li>Grading is observational on a live mix, not a controlled re-render. The per-slot figure rebuilds the dry mix with every other voice held at its "before" measurement; the edited voice still carries its own randomness, and shared effects sit outside it.</li>
-      <li>The gap between <code>ears + shots</code> and <code>brief + shots</code> is not significant on its own (p = 0.25). The gap between code-only and the full protocol is (p = 0.003).</li>
-      <li>"Repair" means distance from a measurement of the clean base, not whether the music got better. Nobody heard any of it.</li>
+      <li>Four seeds, one DJ, one model, 28 ideas per cell. Read the ordering, not the decimals.</li>
+      <li>Grading is observational on a live mix, not a controlled re-render. The per-slot figure rebuilds the dry mix with every other voice held at its "before" measurement. The edited voice still carries its own randomness, and shared effects sit outside it.</li>
+      <li>The step from <code>ears + shots</code> to <code>brief + shots</code> is not significant on its own (p = 0.25). The gap from code-only to the full protocol is (p = 0.003).</li>
+      <li>"Repair" means distance from a measurement of the clean base, not whether the music got better. None of it was heard.</li>
     </ul>
   </div>
   <p class="c-dim" style="font-size:.9rem">Full write-up and every round of every run: <code>docs/does-the-protocol-help.md</code> and <code>docs/bench/</code>.</p>
@@ -445,8 +518,8 @@ Full measurements:
 
 <section id="safe">
   <div class="eyebrow">Containment</div>
-  <h2>From model text to a bar line: five refusals</h2>
-  <p class="gist">The model never writes code. It writes a few lines of patch; the host builds the expression, and anything that fails is a <code>rejected</code> message the human never sees as an option.</p>
+  <h2>Five checks between the model and the speakers</h2>
+  <p class="gist">The model never writes code. It writes a few lines of patch, the host builds the expression, and anything that fails becomes a <code>rejected</code> message rather than an option on screen.</p>
   <div class="split">
     <pre><span class="c-faint"># what the model returns (plain text, a few dozen tokens)</span>
 <span class="c-agent">SLOT</span> d4
@@ -478,8 +551,8 @@ cutoff 1500 → 600 · res 2.2 → 2.8 · − pan</pre>
 
 <section id="grants">
   <div class="eyebrow">Autonomy</div>
-  <h2>Takeover and skills are grants, not abilities</h2>
-  <p class="gist">The agent never learns a new message. When you grant something, the host starts acting differently on its behalf, the grant is on the wire, and you can take it back mid-set.</p>
+  <h2>Takeover and skills are grants</h2>
+  <p class="gist">The agent never learns a new message. Granting something changes how the host acts on its behalf. The grant goes on the wire, and you can take it back mid-set.</p>
   <div class="cols">
     <div><h3>Takeover</h3><p><kbd>o</kbd> gives the active DJ <code>auto</code>; <kbd>O</kbd> gives it to everyone in the booth. Two bars after ideas appear, the host takes one for the DJ, rotating style → fix → bold, and rides a two-bar build into the bold ones. <kbd>n</kbd> vetoes inside the window. <kbd>o</kbd> again takes control back. Each such verdict is logged <code>by: "grant:auto"</code>.</p></div>
     <div><h3>Skills</h3><p>A DJ starts with the basic vocabulary and is not told the rest exists. Taken ideas unlock skills (<code>unlock</code> on the wire); the glyph under the face blinks <code>k!</code>; <kbd>k</kbd> activates it (<code>grant {skill}</code>), <kbd>K</kbd> gives any skill now. Activated skills persist as <code>skills:</code> in the DJ's markdown, so revoking is editing one line.</p></div>
@@ -526,7 +599,7 @@ cans: small  body: laptop
 
 <section id="code">
   <div class="eyebrow">The screen</div>
-  <h2>The live thing is the code</h2>
+  <h2>The code pane</h2>
   <p class="gist">Six slots, one line each. The lane above a line is lit by hits that actually sounded: SuperCollider reports every event's exact beat, so step = beat position × 4, not a guess from the source.</p>
   <pre class="lane"><b>d1</b> <span class="c-dim">■···■···■···■·</span><b>█</b><span class="c-faint">·</span>  <span class="c-dim">seed 4821 · bar 0</span>
    <span class="c-dim">~d.(\d1, \instrument, \kick, \dur, 1/4, \amp, ~x.(["</span>█···█···█···█···<span class="c-dim">", …], 0.9),</span> \tune, 44 <span class="c-faint">…</span>
@@ -543,7 +616,7 @@ cans: small  body: laptop
 
 <section id="sound">
   <div class="eyebrow">Sound</div>
-  <h2>Ten instruments, fifteen styles, one guarded master</h2>
+  <h2>Ten instruments, fifteen styles</h2>
   <p class="gist">Every voice is one <code>~d.(\dN, \instrument, …)</code> Pbind wrapped in a Pdef quantised to 4 beats. Convention: d1 kick, d2 hats, d3 clap or perc, d4 bass, d5 chords, d6 lead.</p>
   <div class="tscroll"><table>
     <tr><th>Instrument</th><th>What it is</th><th>Main arguments</th></tr>
@@ -630,7 +703,7 @@ cans: small  body: laptop
 
 <section id="visuals">
   <div class="eyebrow">Visuals</div>
-  <h2>A shader whose framebuffer is text</h2>
+  <h2>Visuals: a shader that draws into text</h2>
   <p class="gist">Every cell gets a 24-bit colour from a cosine palette. Looks and palettes are chosen by name, so a DJ can bring one but never writes drawing code.</p>
   <div class="cols">
     <div><h3>Real audio, not envelopes</h3><p>A <code>scope</code> synth low-passes the master at 5.5 kHz and writes it into a 512-frame ring buffer at a quarter of the sample rate: 43 ms at 48 kHz. The TUI fetches it 20 times a second and runs its own 512-point FFT into 32 log bands (<code>audio.ts</code>). <code>orbit</code>, <code>ring</code>, <code>terrain</code> and <code>waterfall</code> draw that signal.</p></div>
@@ -651,7 +724,7 @@ cans: small  body: laptop
 
 <section id="wire">
   <div class="eyebrow">Protocol</div>
-  <h2>The wire: a complete account of who did what</h2>
+  <h2>The wire</h2>
   <p class="gist">Everything between host, agents and human is one JSON line with the envelope <code>v, t, bar, type, from</code>. The log pane (<kbd>e</kbd>), <code>tui/logs/latest.jsonl</code> and the socket on <code>localhost:57400</code> read the same stream. It is the proof that nothing reaches the speakers without validation and a verdict.</p>
   <div class="tscroll"><table>
     <tr><th>From</th><th>Types</th><th>Meaning</th></tr>
@@ -661,7 +734,7 @@ cans: small  body: laptop
     <tr><td class="c-human">human</td><td><code>verdict grant note</code></td><td>take or skip, <code>by</code> human or <code>grant:auto</code>; a level or a skill; an instruction that outranks the report. Every option that lost gets its own verdict, so the log is a complete account</td></tr>
     <tr><td class="c-agent">agent</td><td><code>proposal note</code></td><td>The only two. There is no message that applies anything</td></tr>
   </table></div>
-  <p>Since the benchmark, a proposal is not allowed on the wire without a prediction: <code>expect {metric, dir}</code>, refused otherwise, for outside agents as much as for the built-in DJs. Two bars after it lands the host answers with an <code>outcome</code>, graded against a noise floor it measured rather than assumed, and on the edited slot's own tap when it has one. That is what makes the log a scoreboard instead of a diary — see <a href="#proof">does it help?</a>.</p>
+  <p>Since the benchmark, a proposal without a prediction is refused: <code>expect {metric, dir}</code>, for outside agents as much as for the built-in DJs. Two bars after it lands the host answers with an <code>outcome</code>, graded against a measured noise floor and on the edited slot's own tap where there is one. That is what makes the log gradeable; see <a href="#proof">does it help?</a>.</p>
   <pre><span class="c-faint">bar  +s     type         from      </span>
 <span class="c-faint"> 3   0.00</span>  <span class="c-engine">observation</span>  ears      high dull · air closed · centroid dark
 <span class="c-faint"> 4   0.00</span>  <span class="c-dim">request</span>      resident  fix · sonnet   <span class="c-faint">(+ style, bold, same ms)</span>
@@ -714,8 +787,8 @@ cans: small  body: laptop
 
 <section id="verified">
   <div class="eyebrow">Honesty</div>
-  <h2>What is verified, and what nobody has heard</h2>
-  <p class="gist">The assistant that built this cannot hear either. Everything below the line "verified" was checked by measurement on a second, muted engine (its own ports, its own set folder). Nothing on this page claims the music is any good.</p>
+  <h2>What is verified, and what is not</h2>
+  <p class="gist">The assistant that built this cannot hear. Everything under "verified" was checked by measurement on a second, muted engine with its own ports and set folder. Nothing on this page claims the music is any good.</p>
   <div class="split">
     <div class="panel yes"><h3>Verified by measurement, muted</h3><ul>
       <li>Engine boots headless; slots evaluate and hot-swap on the bar.</li>
@@ -725,8 +798,8 @@ cans: small  body: laptop
       <li>Round timings: the example session shows ideas 3.5 to 5.0 s after the ask; 392 benchmark ideas average 3.7 to 5.6 s.</li>
       <li>Quit leaves no scsynth behind.</li>
       <li>The master-chain fault was found by its numbers (limiter pinned) and fixed by design.</li>
-      <li><b>That the report helps.</b> Four benchmark runs, 392 graded ideas, same DJ, same damage, four conditions. <a href="#proof">The numbers</a>.</li>
-      <li>Per-slot grading: a louder hat raises <code>air</code> on its own tap while the other five voices are held still.</li></ul></div>
+      <li>That the report helps: four runs, 392 graded ideas, same DJ, same damage, four conditions. <a href="#proof">The numbers</a>.</li>
+      <li>Per-slot grading, by unit test: a louder hat raises <code>air</code> on its own tap while the other five voices are held still.</li></ul></div>
     <div class="panel nope"><h3>Not verified</h3><ul>
       <li>How any of it sounds through speakers. Its builder has never heard a note.</li>
       <li>Audio-to-visual latency by eye.</li>
@@ -772,5 +845,68 @@ npm run test:ears             <span class="c-faint"># 28 host tests: grading, no
   <p><code>soundcheck</code> began as one brief (Detroit techno, 130 BPM, F minor) played by Strudel, Tone.js, Faust, Glicol and a SuperCollider render, level-matched, keys <kbd>1</kbd> to <kbd>5</kbd>, so the stack would be chosen by listening instead of by reading docs. <code>DECISION.md</code> recommended Strudel for the date, with a Faust or Tone rack as the upgrade, and called SuperCollider the highest ceiling and the highest venue risk. EARS is what happened when the ceiling won: SuperCollider direct, in a terminal, with the agent moved from author to advisor. That document carries the same caveat as this page: verified for signal, levels and errors; never heard by the one who wrote it.</p>
 </section>
 
-<footer>Every statement here traces to <code>soundcheck/tui/*</code>, <code>ears-protocol/SPEC.md</code>, <code>examples/session.jsonl</code> and the four runs in <code>docs/bench/</code>, as of 20 Sept 2026. Where the README and the code disagree, this page follows the code. The reports on this page are real output from a muted engine; the benchmark numbers are every round of every run, not a selection. Nothing here is a claim about how any of it sounds.</footer>
+<footer>Everything here traces to <code>soundcheck/tui/*</code>, <code>ears-protocol/SPEC.md</code>, <code>examples/session.jsonl</code> and the four runs in <code>docs/bench/</code>, as of 20 Sept 2026. Where the README and the code disagree, this page follows the code. The reports are real output from a muted engine. The benchmark numbers are every round of every run, not a selection.</footer>
 </div>
+
+<script>
+(() => {
+  const at = (viz, svg, x, y) => {                     // viewBox coords -> container px
+    const a = svg.getBoundingClientRect(), b = viz.getBoundingClientRect(), k = a.width / 960;
+    return [a.left - b.left + x * k, a.top - b.top + y * k];
+  };
+  const row = (colour, label, value) => {              // labels are data: textContent, never innerHTML
+    const d = document.createElement("div"); d.className = "k";
+    const i = document.createElement("i"); i.style.background = `var(--${colour})`;
+    const n = document.createElement("span"); n.textContent = label;
+    const v = document.createElement("b"); v.textContent = value;
+    d.append(i, n, v); return d;
+  };
+  const show = (tip, x, y) => {                       // never let the readout leave the card
+    tip.dataset.on = "1"; tip.style.left = "0px"; tip.style.top = "0px";
+    const t = tip.getBoundingClientRect(), box = tip.parentElement.getBoundingClientRect();
+    const top = y - t.height - 10 < 4 ? y + 14 : y - t.height - 10;
+    tip.style.left = Math.max(4, Math.min(x - t.width / 2, box.width - t.width - 4)) + "px";
+    tip.style.top = top + "px";
+  };
+  const hide = (tip) => { tip.dataset.on = "0"; };
+
+  // one bar = one hit target, with its own tooltip
+  const viz1 = document.getElementById("viz1"), tip1 = document.getElementById("tip1");
+  if (viz1) {
+    const svg = viz1.querySelector("svg");
+    for (const hit of viz1.querySelectorAll(".hit")) {
+      hit.setAttribute("tabindex", "0");
+      const draw = () => {
+        const [cond, grader, value, colour] = hit.dataset.tip.split("|");
+        tip1.replaceChildren(Object.assign(document.createElement("div"), { className: "h", textContent: cond }), row(colour, grader, value));
+        const [x, y] = at(viz1, svg, +hit.dataset.x, +hit.dataset.y);
+        show(tip1, x, y);
+      };
+      hit.addEventListener("pointerenter", draw); hit.addEventListener("focus", draw);
+      hit.addEventListener("pointerleave", () => hide(tip1)); hit.addEventListener("blur", () => hide(tip1));
+    }
+  }
+
+  // the crosshair finds the run; one tooltip lists every series at it
+  const viz2 = document.getElementById("viz2"), tip2 = document.getElementById("tip2"), cross = document.getElementById("cross2");
+  if (viz2) {
+    const svg = viz2.querySelector("svg"), X = [150, 373, 596, 819], Y = (v) => 300 - v * 4.6;
+    const SER = [["blind", "s1", [11, 18, 21, 18]], ["ears", "s2", [29, 32, 29, 29]],
+                 ["ears + shots", "s3", [39, 43, 32, 39]], ["brief + shots", "s4", [null, null, 46, 46]]];
+    for (const hit of viz2.querySelectorAll(".hit")) {
+      hit.setAttribute("tabindex", "0");
+      const draw = () => {
+        const i = +hit.dataset.run, top = Math.min(...SER.map(([, , v]) => v[i] == null ? 999 : Y(v[i])));
+        tip2.replaceChildren(Object.assign(document.createElement("div"), { className: "h", textContent: "run " + (i + 1) }));
+        for (const [name, colour, vals] of SER) tip2.append(row(colour, name, vals[i] == null ? "not yet built" : vals[i] + "%"));
+        cross.setAttribute("x1", X[i]); cross.setAttribute("x2", X[i]); cross.setAttribute("opacity", "1");
+        const [x, y] = at(viz2, svg, X[i], top - 6);
+        show(tip2, x, y);
+      };
+      hit.addEventListener("pointerenter", draw); hit.addEventListener("focus", draw);
+      const off = () => { hide(tip2); cross.setAttribute("opacity", "0"); };
+      hit.addEventListener("pointerleave", off); hit.addEventListener("blur", off);
+    }
+  }
+})();
+</script>
