@@ -211,21 +211,38 @@ function App() {
   const think = () => {
     const s = st.current;
     if (busy.current || s.options?.length || !s.report) return;
-    const g = s.booth[s.turn % s.booth.length], dj = g.dj, round = ++s.round, noteSent = s.note;
-    if (g.remote) { setSay(`waiting for ${dj.name.toLowerCase()} to propose over the wire`); return; }   // outside agents speak when they like
+    const here = s.booth.filter((x) => !x.remote);
+    if (!here.length) { setSay("waiting for the wire"); return; }
+    const round = ++s.round, noteSent = s.note;
     refreshState();
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
-    const seen = { ...evidence.slots };   // what the agent was shown, to judge staleness per slot rather than per session
-    busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, aim: aimAt(), wild: wild.current, layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
-      (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context, seen);
-        if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
-          turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
-        if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },   // a showcase is owed until an idea that really uses the skill has been offered
-      (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
-      .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; g.offered++; prefetch(); }, (e) => { if (st.current.round === round) { setSay(String(e.message)); s.askAt = s.bar + 4; } })
-      .finally(() => { busy.current = false; setThinking(""); if (st.current.round !== round && !st.current.options?.length) think(); });   // something changed mid-round (a note, a grant): go again now, with it
+    const seen = { ...evidence.slots };   // what the agents were shown, to judge staleness per slot rather than per session
+    const w = WILD[Math.max(0, Math.min(WILD.length - 1, wild.current))];
+    // One idea each, at once. A booth of three used to be one DJ answering three angles -- same brain, same Never list,
+    // three variations. Now each guest gets one angle and the options on screen come from characters who disagree.
+    const lead = here[s.turn % here.length], solo = here.length === 1;
+    busy.current = true;
+    setThinking(solo ? `${lead.dj.name.toLowerCase()} is listening` : `${here.length} djs are listening`);
+    const asked = here.map((g, n) => {
+      const dj = g.dj, angle = solo ? undefined : w.angles[(s.turn + n) % w.angles.length];
+      return ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots },
+            report: s.report, quiet: quietLine(), turns: turns.current, aim: aimAt(), wild: wild.current, angle,
+            layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)),
+            note: s.note, history: s.history, context: `${bpmRef.current} BPM, key ${base.current?.key ?? ""} (bass root midinote ${base.current?.root ?? 0})` },
+          (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context, seen);
+            if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
+              turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
+            if (showcase.current?.agent === dj.id && skill(showcase.current.skill).uses(o.code, o)) showcase.current = null; setThinking(""); setSay(""); },
+          (kind, d) => bus.current.send(kind === "ask" ? "request" : "rejected", dj.id, d))
+        .then(() => { g.offered++; }, () => {});
+    });
+    Promise.all(asked)
+      .then(() => { if (st.current.round === round && s.note === noteSent) s.note = ""; prefetch(); })
+      .finally(() => { busy.current = false; setThinking("");
+        if (!st.current.options?.length) setSay("nobody had an idea that passed; asking again");
+        if (st.current.round !== round && !st.current.options?.length) think(); });
   };
+
   /** Ask the DJ who is up next, while the current options are still being read. Nothing reaches the screen here. */
   const prefetch = () => {
     const s = st.current;
@@ -598,14 +615,14 @@ function App() {
             );
           })}
         </Pane>
-        <Pane grad={grad} title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : `${who.name.toLowerCase()} offers`} note={typing ? "enter to send · esc to cancel" : s.options?.length ? (s.booth.find((g) => g.dj.id === s.options![0].agent)?.level === "auto" ? `takes its own in ${Math.max(0, s.autoAt - s.bar)} bar${s.autoAt - s.bar === 1 ? "" : "s"} · n vetoes · o takes control back` : "1 2 3 take · ⇧ with a build · n skip · t tell") : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
+        <Pane grad={grad} title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : (st.current.booth.filter((x) => !x.remote).length > 1 ? `the booth offers` : `${who.name.toLowerCase()} offers`)} note={typing ? "enter to send · esc to cancel" : s.options?.length ? (s.booth.find((g) => g.dj.id === s.options![0].agent)?.level === "auto" ? `takes its own in ${Math.max(0, s.autoAt - s.bar)} bar${s.autoAt - s.bar === 1 ? "" : "s"} · n vetoes · o takes control back` : "1 2 3 take · ⇧ with a build · n skip · t tell") : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
           {shotCard.current && s.bar < shotCard.current.until && !typing ? <Text wrap="truncate">{fgc(shotCard.current.rgb)}{"\x1b[1m"}{shotCard.current.who}{"\x1b[22m"}{RESET} <Text color={DIM}>called</Text> <Text color={TEXT}>{shotCard.current.call}</Text> <Text color={DIM}>· measured</Text> <Text color={TEXT}>{shotCard.current.text}</Text>  <Text bold color={shotCard.current.grade === "hit" ? A : shotCard.current.grade === "miss" ? B : DIM}>{shotCard.current.grade === "hit" ? "● HIT" : shotCard.current.grade === "miss" ? "✗ MISS" : shotCard.current.grade === "flat" ? "○ FLAT" : "· ungraded"}</Text></Text> : null}
           {greet.current && s.bar < greet.current.until && !typing ? <Text wrap="truncate">{fgc(greet.current.rgb)}{"\x1b[1m"}{greet.current.who}{"\x1b[22m"}{RESET} <Text color={TEXT}>“{greet.current.text}”</Text></Text> : null}
           {typing ? <Box><Text color={A}>{typing === "summon" ? "a DJ who " : "› "}</Text><TextInput key={typing} placeholder={typing === "summon" ? "plays acid, a bit unhinged…" : "more dub, less bright…"} onSubmit={submit} /></Box>
             : s.options?.length ? <>
               {s.options.map((o, i) => (
                 <Box key={o.id} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
-                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
+                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text>{(() => { const gg = s.booth.find((x) => x.dj.id === o.agent); return gg && s.booth.filter((x) => !x.remote).length > 1 ? <Text>{fgc(accent(gg.dj.palette))}{gg.dj.name.toLowerCase()}{RESET} </Text> : null; })()}<Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
                   {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.diff}</Text></Text>}
                   {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
                 </Box>

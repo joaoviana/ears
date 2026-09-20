@@ -198,7 +198,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; /** 0 tame .. 3 unhinged */ wild?: number; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; /** 0 tame .. 3 unhinged */ wild?: number; /** ask this one angle only: one idea per DJ, so a booth of three is three voices rather than one brain */ angle?: string; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
@@ -247,6 +247,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
   const sk = input.showcase ? SKILLS.find((k) => k.id === input.showcase) : null;
   const angles: [string, string][] = sk
     ? [["showcase", `YOUR ANGLE: showcase. The performer wants to hear your ${sk.name} skill NOW. This idea MUST use it, exactly as the skill text describes${sk.id === "vocals" ? ": SLOT d6 REPLACE (or an empty slot if there is one), instrument \\vox, a two-or-three-word phrase in your character via ~v.(\"...\"), with chop, len, rate and an ~x amp row" : sk.id === "fills" ? ": a one-bar drum fill or stutter with a FOR 1 line" : ": your boldest move with a WITH build line"}. Do not offer anything else.`], ...Object.entries(ANGLES).slice(0, 2)]
+    : input.angle ? [[input.angle, ANGLES[input.angle] ?? ANGLES.fix] as [string, string]]
     : (WILD[Math.max(0, Math.min(WILD.length - 1, input.wild ?? 1))].angles as readonly string[]).map((a, i, all) =>
         [all.indexOf(a) === i ? a : `${a}${i}`, ANGLES[a]] as [string, string]);
   return Promise.all(angles.slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
