@@ -247,7 +247,7 @@ function App() {
     for (const x of parts) evaluateSlot(x.slot, x.code, o.agent, { ...o, slot: x.slot, code: x.code, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
-    s.options = null; s.round++; s.turn++; s.askAt = s.bar + 2; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
+    s.options = null; s.round++; s.turn++; s.askAt = s.bar + 1; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
   const skip = (by = "human") => {
     const s = st.current; if (!s.options) return;

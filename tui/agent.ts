@@ -62,20 +62,19 @@ SET cutoff = 900
 EXPECT sub up
 WHY Hats step back and the bass leans into the kick, so the floor opens up.
 EVIDENCE d2 is +12 dB louder than it should be
-Use a second or third slot when the idea genuinely needs it: one voice makes room and another fills it, two parts answer each other, a new layer arrives and something ducks to let it in. Do not spread an unrelated tweak across slots to look busy. One slot is still the right answer for a mix correction.
+Use a second slot when the idea needs it: one voice makes room and another fills it. One slot is still right for a mix correction.
 
-LAYERING. Two voices on the same steps in different registers is one thicker part, not two parts — a sub under a bass, a rim doubling a clap, a pluck an octave over a lead, a second hat on the same row with a different decay. It is the cheapest way to make something sound bigger without anything new happening, and a MOVE can do it in one go: set the doubling voice and duck or thin what it doubles. The report tells you which voices already share a rhythm and which are carrying a part alone; a part that is alone is the one to thicken. Repeating a part and adding to it each time round is how a track builds: same figure, one more voice.
+LAYERING. Two voices on the same steps in different registers is one thicker part: a sub under a bass, a rim on a clap, a pluck an octave over a lead. It is the cheapest way to sound bigger, and one MOVE does it — set the doubling voice, duck what it doubles. The report says which parts are alone; those are the ones to thicken.
 
-ADD, DON'T ONLY TRIM. Across 392 graded ideas, 69% of them turned something down and only one ever changed how much music was playing. Turning things down is not DJing; a room notices what arrives, not what leaves. Before you reach for a cut, ask whether the fix is something MISSING: a counter-rhythm against a straight part, an answer in the gaps of a busy one, a second voice an octave up, an empty slot nobody has filled, a chord that moves where everything is static, ghost notes where a row is all rests. If a voice is too loud against another, consider bringing the quiet one up instead of pulling the loud one down.
+ADD, DON'T ONLY TRIM. A room notices what arrives, not what leaves. Before reaching for a cut, ask whether the fix is something MISSING: a counter-rhythm against a straight part, an answer in the gaps of a busy one, an empty slot nobody has filled, ghost notes where a row is all rests. If one voice is too loud against another, bringing the quiet one up is usually the better half of the fix.
 EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>". Two bars after your change lands, the host measures it and grades you HIT, MISS or FLAT (no detectable effect). Your record is shown to the room and comes back to you.
 
 WHAT THE HOST MEASURES, AND WHAT ACTUALLY MOVES IT. Find your change in a "moved by" line and call THAT metric.
 ${METRIC_TABLE}
-The commonest mistake is naming the wrong one: bringing a buried kick back is sub up and loudness up, not punch up. A small parameter nudge usually measures FLAT, so if you want a metric to move, move it properly.
+Naming the wrong one is the commonest mistake: a buried kick coming back is sub up and loudness up, not punch up.
 
 Rules:
 - If the performer wrote a note, it is an instruction: every angle answers it, in your style. It outranks the report and your own plans (only your Never list outranks it; if they conflict, say so in WHY and offer the nearest thing).
-- Do not repeat an idea the performer already skipped.
 - "why" is one sentence, under 14 words, in your own voice. "evidence" quotes the report line you acted on, or names your style rule.
 - Stay in character: your Never list is absolute.`;
 
@@ -103,6 +102,9 @@ export function validate(s: { slot: string; code: string }): string | null {
   return null;
 }
 
+// A round is only as fast as its slowest angle, and every retry is another full call on a 2.6s floor. An angle
+// that has already spent this long gives up its retry and offers nothing: two good options beat three late ones.
+const RETRY_BY = Number(process.env.EARS_RETRY_BY || 2600);
 const MODEL = process.env.EARS_MODEL || "sonnet";   // at low effort: a patch needs taste, not deliberation (haiku hangs on this prompt)
 
 function claude<T>(prompt: string, system: string, schema: object, timeout = 70000): Promise<T> {
@@ -112,7 +114,7 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
     let out = "", err = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));
-    const timer = setTimeout(() => { p.kill(); reject(new Error("agent timed out")); }, timeout);
+    const timer = setTimeout(() => { p.kill(); reject(new Error(`no answer within ${(timeout / 1000).toFixed(0)}s`)); }, timeout);
     p.on("close", () => {
       clearTimeout(timer);
       try { const res = JSON.parse(out); resolve(res.structured_output ?? JSON.parse(res.result)); }
@@ -121,13 +123,17 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
   });
 }
 
-function claudeText(prompt: string, system: string, timeout = 40000): Promise<string> {
+// Options render the moment each one validates, so a straggler costs one option rather than everyone's time.
+// 40 s was a safety net for a batch job; on a stage the round is over long before that. Latency varies by a few
+// seconds run to run for identical work, so this caps the tail rather than removing it.
+const DEADLINE = Number(process.env.EARS_DEADLINE || 9000);
+function claudeText(prompt: string, system: string, timeout = DEADLINE): Promise<string> {
   return new Promise((resolve, reject) => {
     const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", MODEL, ...(process.env.EARS_EFFORT === "default" ? [] : ["--effort", process.env.EARS_EFFORT || "low"]), "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));
-    const timer = setTimeout(() => { p.kill(); if (process.env.EARS_DEBUG_AGENT) console.error("TIMEOUT sys=" + system.length + " prompt=" + prompt.length + " out=[" + out.slice(0, 300) + "] err=[" + err.slice(0, 300) + "]"); reject(new Error("agent timed out")); }, timeout);
+    const timer = setTimeout(() => { p.kill(); if (process.env.EARS_DEBUG_AGENT) console.error("TIMEOUT sys=" + system.length + " prompt=" + prompt.length + " out=[" + out.slice(0, 300) + "] err=[" + err.slice(0, 300) + "]"); reject(new Error(`no answer within ${(timeout / 1000).toFixed(0)}s`)); }, timeout);
     p.on("close", () => { clearTimeout(timer); out.trim() ? resolve(out) : reject(new Error(err.slice(0, 120) || "agent returned nothing")); });
   });
 }
@@ -225,6 +231,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       if (p.patches.length > MAX_SLOTS) { onEvent("rejected", { agent: input.dj.id, angle, reason: `a move touches at most ${MAX_SLOTS} slots; this one touches ${p.patches.length}`, ms: Date.now() - t0 }); return; }
       if (angle === "turn" && !isTurn(input.slots[p.patches[0].slot] || "", p.patches[0])) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
+        if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
         const again = parseMove(await claudeText(prompt + "\n\nYOUR LAST ANSWER WAS REFUSED: it was a tweak. A left turn must be SLOT dN REPLACE and must change that slot's instrument, its rhythm (dur or ~x rows) or its register by an octave. Try again, further out.", sys));
         if (!again || !isTurn(input.slots[again.patches[0].slot] || "", again.patches[0])) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
@@ -234,6 +241,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const sig = (q: typeof p) => { const g = (k: string) => q.patches[0].set.find((x) => x.key.replace(/^\\/, "") === k)?.value ?? ""; return `${g("instrument") || "same"} ${g("dur") || "same"}`.trim(); };
       if (angle === "turn" && (input.turns || []).includes(sig(p))) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: `that left turn (${sig(p)}) has already been used this set; asking for a different axis`, ms: Date.now() - t0 });
+        if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
         const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: "${sig(p)}" is a move you have already made in this set. Take a genuinely different axis.`, sys));
         if (!again || (input.turns || []).includes(sig(again))) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
@@ -244,6 +252,7 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       if (claimed().includes(p.patches[0].slot)) {
         const taken = claimed().join(" and ");
         onEvent("rejected", { agent: input.dj.id, angle, reason: `another angle already has ${p.patches[0].slot}; asking again elsewhere`, ms: Date.now() - t0 });
+        if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }
         const again = parseMove(await claudeText(prompt + `\n\nYOUR LAST ANSWER WAS REFUSED: another angle is already changing ${taken}. The performer needs three DIFFERENT choices, so make your move somewhere else. Keep your angle.`, sys));
         if (!again || claimed().includes(again.patches[0].slot)) return;
         Object.assign(p, again, { expect: again.expect ?? p.expect });
