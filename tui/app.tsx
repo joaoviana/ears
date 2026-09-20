@@ -155,6 +155,8 @@ function App() {
   // as the current options are all in, and the answers wait here until a verdict frees the screen.
   const prefetching = useRef(false);
   const bank = useRef<{ dj: DJ; opts: Suggestion[]; slots: Record<string, string> } | null>(null);
+  const marks = useRef<Set<number>>(new Set());   // options picked to land together (alt+1/2/3, enter to commit)
+  const stacked = useRef<number[]>([]);
   const wild = useRef(1);   // 0 tame .. 3 unhinged; w cycles it
   const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
   /** One voice per angle: the worst drift for fix, something empty or undoubled for add, anything else for turn. */
@@ -295,7 +297,24 @@ function App() {
     greet.current = { who: `${g.dj.name} · ${k.glyph} ${k.name}`, rgb: accent(g.dj.palette), text: `${k.blurb}. Watch the next options: they'll use it`, until: s.bar + 12 };
     s.turn = s.booth.indexOf(g); showcase.current = { agent: g.dj.id, skill: id }; discardOptions("skill changed"); s.round++; setSay(""); think();
   };
-  const take = (i: number, by = "human") => {
+  /** Land several marked options on one bar line. Slots must not overlap: two writes to one slot is the overwrite
+   *  race the revision guard exists to stop, and the second would silently win. Grading says both landed together. */
+  const takeStack = (by = "human") => {
+    const s = st.current, ids = [...marks.current];
+    const picked = (s.options ?? []).filter((o) => ids.includes(o.id));
+    if (picked.length < 2) { marks.current = new Set(); const one = (s.options ?? []).findIndex((o) => o.id === ids[0]); if (one >= 0) take(one, by); return; }
+    const slots = picked.flatMap((o) => (o.parts ?? [{ slot: o.slot }]).map((x) => x.slot));
+    const clash = slots.find((k, n) => slots.indexOf(k) !== n);
+    if (clash) { setSay(`both of those rewrite ${clash} — take one, then the other`); return; }
+    marks.current = new Set();
+    stacked.current = picked.map((o) => o.id);   // so each one's outcome can say it did not land alone
+    for (const o of picked) { const at = (st.current.options ?? []).findIndex((x) => x.id === o.id); if (at >= 0) take(at, by, true); }
+    const s2 = st.current;
+    (s2.options ?? []).forEach((x) => { s2.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "a stack was taken" }); });
+    s2.options = null; s2.round++; s2.turn++; s2.askAt = s2.bar; if (drain()) s2.askAt = s2.bar + 99;
+    setSay(`${picked.length} ideas landed together on the next bar`);
+  };
+  const take = (i: number, by = "human", more = false) => {
     const s = st.current, o = s.options?.[i] as (Option & { riding?: boolean }) | undefined; if (!o) return;
     if (by === "grant:auto" && s.booth.find(g => g.dj.id === o.agent)?.level !== "auto") { setSay("automatic take cancelled: grant revoked"); return; }
     if (!DEMO && !eng.current?.ready) { setSay("engine is still booting; take this option once ready"); return; }
@@ -313,9 +332,10 @@ function App() {
     for (const x of parts) writeSlot(x.slot, x.code);
     bus.current.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "take", by });
     // a move that touches more than one slot cannot be attributed to one tap: it is graded on the room
-    if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: parts.length > 1 ? "" : o.slot, expect: o.expect });
+    if (o.expect) shots.current.set(o.id, { agent: o.agent, name: who.name, rgb: accent(who.palette), slot: parts.length > 1 ? "" : o.slot, stacked: more, expect: o.expect });
     for (const x of parts) evaluateSlot(x.slot, x.code, o.agent, { ...o, slot: x.slot, code: x.code, proposal: o.id, expected_change: o.expect ? `${o.expect.metric} ${o.expect.dir}` : undefined });
     s.history.push({ slot: o.slot, why: o.why, verdict: "y", id: o.id });
+    if (more) { s.options = s.options!.filter((x) => x.id !== o.id); return; }   // a stack keeps the round open
     s.options!.filter((_, k) => k !== i).forEach((x) => { s.history.push({ slot: x.slot, why: x.why, verdict: "n", agent: x.agent }); bus.current.send("verdict", "host", { proposal: x.id, request_id: x.request_id, decision: "skip", by, reason: "another option was taken" }); });
     s.options = null; s.round++; s.turn++; s.askAt = s.bar; if (drain()) s.askAt = s.bar + 99; setSay(`${by === "human" ? "taken" : who.name + " took it"}: ${o.why}  · submitted to the engine`);
   };
@@ -357,7 +377,7 @@ function App() {
       const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
       const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out, true);
       attempts.current.push({ metric: shot.expect.metric, slot: shot.slot || "the move", grade: out.grade }); if (attempts.current.length > 12) attempts.current.shift();
-      b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: (sd ? slotNoise.current[shot.slot] ?? noise.current : noise.current).ready(shot.expect.metric), scope: { kind: scope, per_voice: !!sd, estimate: sd ? "dry-slot contribution: other slots held at their before-measurement; not a controlled re-render" : undefined }, basis: "live master mix; observational, not causal", confounds: m.confounds });
+      b.send("outcome", "host", { stacked: !!shot.stacked, proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: (sd ? slotNoise.current[shot.slot] ?? noise.current : noise.current).ready(shot.expect.metric), scope: { kind: scope, per_voice: !!sd, estimate: sd ? "dry-slot contribution: other slots held at their before-measurement; not a controlled re-render" : undefined }, basis: "live master mix; observational, not causal", confounds: m.confounds });
       shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text + (sd ? `  (${shot.slot} alone)` : ""), grade: out.grade, until: st.current.bar + 8 };
     });
     b.on("inbound", (m: Msg) => {
@@ -472,6 +492,10 @@ function App() {
     if (input === "D") { all.current = roster(); setOverlay("roster"); return; }
     if (key.tab && s.booth.length > 1) { s.turn++; discardOptions("active DJ changed"); s.askAt = s.bar + 1; setSay(`${active().name} steps up`); return; }
     if (input === "q") { eng.current.stop(); setTimeout(() => { Promise.resolve(closeSession.current()).finally(() => { exit(); process.exit(0); }); }, 600); }
+    if (key.meta && "123".includes(input)) { const o = s.options?.[Number(input) - 1]; if (o) {
+      marks.current.has(o.id) ? marks.current.delete(o.id) : marks.current.add(o.id);
+      setSay(marks.current.size ? `${marks.current.size} marked · enter lands them together` : "nothing marked"); } return; }
+    if (key.return && marks.current.size) { takeStack(); return; }
     if (input === "y" || input === "1") take(0);
     if (input === "2") take(1);
     if ("!@#".includes(input) && input && s.options?.["!@#".indexOf(input)]) { const o = s.options["!@#".indexOf(input)]; setSay("building into it…"); ride("build", 2, () => take(s.options?.indexOf(o) ?? -1)); }
@@ -555,7 +579,7 @@ function App() {
   })() : null;
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
-    ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip the round"], ["tab", "point t / k / x / o at the next DJ"], ["t", "tell the booth something (every DJ answers it)"], ["a", "ask for options now"]]],
+    ["the booth", [["1 2 3", "take an option"], ["alt+1/2/3", "mark to stack"], ["enter", "land every marked option together"], ["! @ #", "take it with a build"], ["n", "skip the round"], ["tab", "point t / k / x / o at the next DJ"], ["t", "tell the booth something (every DJ answers it)"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
     ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["W", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
@@ -622,7 +646,7 @@ function App() {
             : s.options?.length ? <>
               {s.options.map((o, i) => (
                 <Box key={o.id} flexDirection="column" marginTop={i && !tight ? 1 : 0}>
-                  <Text wrap="truncate"><Text color={A} bold> {i + 1} </Text>{(() => { const gg = s.booth.find((x) => x.dj.id === o.agent); return gg && s.booth.filter((x) => !x.remote).length > 1 ? <Text>{fgc(accent(gg.dj.palette))}{gg.dj.name.toLowerCase()}{RESET} </Text> : null; })()}<Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
+                  <Text wrap="truncate"><Text color={A} bold>{marks.current.has(o.id) ? " ● " : ` ${i + 1} `}</Text>{(() => { const gg = s.booth.find((x) => x.dj.id === o.agent); return gg && s.booth.filter((x) => !x.remote).length > 1 ? <Text>{fgc(accent(gg.dj.palette))}{gg.dj.name.toLowerCase()}{RESET} </Text> : null; })()}<Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}{SKILLS.filter((k) => k.uses(o.code, o)).map((k) => <Text key={k.id} color={B} bold>  {k.glyph} {k.name.toLowerCase()}</Text>)}<Text color={FAINT}>   {o.angle}{o.ms ? ` · ${(o.ms / 1000).toFixed(1)}s` : ""}{o.agent !== who.id ? ` · ${o.agent}` : ""}</Text></Text>
                   {!tight && <Text wrap="truncate-end"><Text color={DIM}>      {o.diff}</Text></Text>}
                   {!tight && <Text wrap="truncate"><Text color={FAINT}>      ↳ {o.evidence}</Text></Text>}
                 </Box>
