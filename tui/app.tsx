@@ -483,7 +483,7 @@ function App() {
     }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
-    if (input === "w") { wild.current = (wild.current + 1) % WILD.length; const w = WILD[wild.current];
+    if (input === "W") { wild.current = (wild.current + 1) % WILD.length; const w = WILD[wild.current];
       discardOptions("the booth changed gear"); st.current.askAt = st.current.bar;
       bus.current.send("mode", "human", { wild: wild.current, name: w.name, angles: w.angles, slots: w.slots, effort: w.effort, push: w.push });
       setSay(`booth is ${w.name.toUpperCase()}: ${w.say}`); return; }
@@ -538,7 +538,7 @@ function App() {
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
-    ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["w", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
+    ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["W", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];
 

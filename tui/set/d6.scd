@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \acid, \dur, 1/4, \amp, 0.5, \cutoff, Pseq([400, 600, 900, 1400], inf).stutter(16), \res, 0.92, \env, 4000, \dec, 0.18, \send, 0.2, \midinote, Pseq([43, \r, 55, 43, \r, 43, 55, \r, 43, 46, \r, 55, 43, \r, 50, 53], inf), \ctranspose, Pseq([0, 4, 5, -5], inf).stutter(16))
+~d.(\d6, \instrument, \pluck, \dur, 1/2, \amp, 0.3, \dec, 1.2, \tone, 0.5, \send, 0.3, \midinote, Pseq([80, \r, \r, 83, \r, \r, 87, \r, 80, \r, \r, 78, \r, \r, 75, \r], inf))

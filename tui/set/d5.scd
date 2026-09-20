@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \choir, \dur, 4, \midinote, Pseq([[55, 59, 65, 69], [59, 62, 69, 72], [60, 64, 71, 74], [62, 65, 72, 76]], inf), \vowel, Pseq([0, 3, 0, 4], inf), \sus, 1.475, \att, 0.4, \rel, 0.738, \bright, 1.1, \duck, 0.8, \amp, 0.24)
+~d.(\d5, \instrument, \supersaw, \dur, 4, \midinote, Pseq([[56, 59, 66, 70], [59, 63, 70, 73], [61, 65, 71, 75], [63, 66, 73, 77]], inf), \detune, 0.5, \cutoff, Pwhite(500, 900), \env, Pwhite(1800, 3400), \res, 0.3, \att, 0.571, \sus, 1.143, \rel, 0.952, \spread, 1, \send, 0.85, \duck, 0.55, \amp, 0.2)
