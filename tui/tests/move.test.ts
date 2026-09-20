@@ -101,3 +101,26 @@ test("a change late in a long row is visible on the projector, not cut off befor
   assert.ok(x.includes("X---X---X-x-") || y.includes("x-X---X-xxX"), `window landed on the difference: ${x} -> ${y}`);
   assert.deepEqual(pair("600", "350"), ["600", "350"]);                       // short values are untouched
 });
+
+test("a rewrite only has to name the instrument, the notes and the rhythm", () => {
+  const m = parseMove(`SLOT d6 REPLACE
+SET instrument = \\pluck
+SET dur = 1/4
+SET midinote = Pseq([67, 72, 74], inf)
+EXPECT density up
+WHY a pluck answers the gaps`)!;
+  const code = applyPatch("", m.patches[0]);
+  for (const k of ["amp", "dec", "tone", "send"]) assert.ok(code.includes("\\" + k + ", "), `${k} should come from the instrument's defaults — got ${code}`);
+  assert.match(code, /\\midinote, Pseq\(\[67, 72, 74\], inf\)/);
+});
+
+test("anything the agent does set beats the default", () => {
+  const m = parseMove("SLOT d1 REPLACE\nSET instrument = \\kick\nSET amp = 0.4\nEXPECT loudness down\nWHY quieter kick")!;
+  assert.match(applyPatch("", m.patches[0]), /\\amp, 0\.4/);
+  assert.doesNotMatch(applyPatch("", m.patches[0]), /\\amp, 0\.9/);
+});
+
+test("an unknown instrument gets no defaults rather than the wrong ones", () => {
+  const m = parseMove("SLOT d1 REPLACE\nSET instrument = \\theremin\nSET dur = 1\nEXPECT air up\nWHY nope")!;
+  assert.equal(applyPatch("", m.patches[0]), "~d.(\\d1, \\instrument, \\theremin, \\dur, 1)");
+});

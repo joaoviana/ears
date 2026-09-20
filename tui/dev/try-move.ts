@@ -34,7 +34,7 @@ for (let r = 0; r < rounds; r++) {
     (o) => {
       ideas++; slots += o.parts.length; if (o.expect.dir === "up") up++;
       if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value])); turns.push(`${k.instrument ?? "same"} ${k.dur ?? "same"}`); }
-      console.log(`${o.angle.padEnd(6)} ${String(o.parts.length)} slot${o.parts.length > 1 ? "s" : ""}  ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} ${o.why}`);
+      console.log(`${o.angle.padEnd(6)} ${(o.ms / 1000).toFixed(1)}s  ${String(o.parts.length)} slot${o.parts.length > 1 ? "s" : ""}  ${(o.expect.metric + " " + o.expect.dir).padEnd(16)} ${o.why}`);
       for (const p of o.parts) console.log(`         ${p.slot}  ${p.diff.slice(0, 120)}`);
     },
     (kind, d) => { if (kind === "rejected") console.log(`rejected (${d.angle}): ${d.reason}`); }).catch((e) => console.log("  " + e.message));

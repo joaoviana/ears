@@ -22,8 +22,34 @@ export function parseSlot(code: string): { key: string; value: string }[] {
   return pairs;
 }
 
+// A rewrite used to mean writing every key, which is most of what a slow angle spends its time typing — and output
+// length is the entire cost of a suggestion (a 6.9k system prompt costs the same as "You are a DJ"; a long reply
+// costs four seconds more). SuperCollider's own SynthDef defaults cannot cover it, because Pbind's default event
+// always sends \amp, so an unset amp becomes 0.1 rather than the instrument's own. So the host fills them.
+export const DEFAULTS: Record<string, Record<string, string>> = {
+  kick:     { amp: "0.9", tune: "44", dec: "0.36", drive: "1.6", punch: "190" },
+  hat:      { amp: "0.2", dec: "0.03", hp: "8500" },
+  clap:     { amp: "0.5", send: "0.5" },
+  snare:    { amp: "0.35", freq: "190", dec: "0.16", snap: "0.6", send: "0.2" },
+  rim:      { amp: "0.25", freq: "1700", dec: "0.035" },
+  bass:     { amp: "0.7", cutoff: "600", res: "2.4", dec: "0.17", duck: "0.4" },
+  sub:      { amp: "0.6", dec: "0.5", duck: "0.5" },
+  reese:    { amp: "0.35", detune: "0.6", cutoff: "700", res: "2.2", dec: "0.7", rate: "0.3", duck: "0.4" },
+  acid:     { amp: "0.5", cutoff: "500", res: "0.8", env: "2500", dec: "0.18", send: "0.1" },
+  stab:     { amp: "0.3", cutoff: "1800", dec: "0.16", send: "0.6" },
+  supersaw: { amp: "0.22", detune: "0.3", cutoff: "400", env: "2200", res: "0.3", att: "0.01", sus: "0.3", rel: "0.25", spread: "0.8", send: "0.6" },
+  fm:       { amp: "0.2", ratio: "2", index: "3", dec: "0.4", send: "0.5" },
+  pluck:    { amp: "0.3", dec: "1.2", tone: "0.5", send: "0.3" },
+  perc:     { amp: "0.3", freq: "180", dec: "0.14", send: "0.3", click: "0.3" },
+  pad:      { amp: "0.2", cutoff: "1600", att: "0.8", sus: "2", rel: "2", send: "0.6", duck: "0.7" },
+  choir:    { amp: "0.24", vowel: "0", att: "0.5", sus: "2", rel: "1.5", bright: "1", send: "0.6", duck: "0.7" },
+  noise:    { amp: "0.12", freq: "2000", att: "0.4", dec: "1.2", bw: "0.5", sweep: "1", send: "0.5" },
+};
+
 export function applyPatch(code: string, p: Patch): string {
-  let pairs = p.replace ? [] : parseSlot(code);
+  const inst = p.set.find((x) => x.key.replace(/^\\/, "") === "instrument")?.value.replace(/^\\/, "").trim();
+  // on a rewrite, seed the instrument's own sensible values; anything the agent sets wins over them
+  let pairs = p.replace ? Object.entries((inst && DEFAULTS[inst]) || {}).map(([key, value]) => ({ key, value })) : parseSlot(code);
   const drop = new Set((p.remove || []).map((k) => k.replace(/^\\/, "")));
   pairs = pairs.filter((x) => !drop.has(x.key));
   for (const s of p.set) { const key = s.key.replace(/^\\/, ""), at = pairs.findIndex((x) => x.key === key); at >= 0 ? (pairs[at] = { key, value: s.value.trim() }) : pairs.push({ key, value: s.value.trim() }); }
