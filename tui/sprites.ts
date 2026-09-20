@@ -3,7 +3,7 @@
 // half-blocks (one text cell = two pixels, foreground over background). Because it's geometry and not a bitmap, it
 // moves continuously: the head bobs with the kick, ears twitch on the hats, eyes blink and glance, the mouth opens
 // as wide as the clap is loud.
-export const SPECIES = ["cat", "dog", "fox", "owl", "bear", "rabbit", "frog", "robot", "alien", "skull"];
+export const SPECIES = ["cat", "dog", "fox", "wolf", "owl", "bear", "rabbit", "bat", "moth", "frog", "axolotl", "robot", "alien", "skull"];
 export interface FaceState { kick: number; snare: number; hat: number; active: boolean; shades: boolean; blink: boolean; t?: number; bar?: number; cans?: boolean }
 type RGB = number[];
 type Test = (x: number, y: number) => boolean;
@@ -16,6 +16,9 @@ const both = (a: Test, b: Test): Test => (x, y) => a(x, y) && b(x, y);
 const minus = (a: Test, b: Test): Test => (x, y) => a(x, y) && !b(x, y);
 const mix = (a: RGB, b: RGB, k: number): RGB => a.map((v, i) => v + (b[i] - v) * k);
 const WHITE = [246, 244, 250], INK = [22, 20, 30];
+// Everything was drawn to the edge of the frame, so ears met the border and every species read as the same blob.
+// Sampling a slightly wider square shrinks the drawing and leaves air around it, which is what a silhouette needs.
+const ZOOM = 1.2;
 
 function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
   const L: Layer[] = [], add = (t: Test, rgb: RGB, flat = false) => L.push({ in: t, rgb, flat });
@@ -56,7 +59,7 @@ function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
     case "bear": {
       for (const d of [-1, 1]) { add(ell(d * 0.5, -0.46 - ear * 0.3, 0.2, 0.2), body); add(ell(d * 0.5, -0.45 - ear * 0.3, 0.11, 0.11), second); }
       cans(); add(ell(0, 0.08, 0.66, 0.58), body); add(ell(0, 0.32, 0.3, 0.24), light);
-      eyes(0.25, -0.04, 0.075, 0.085, 0.7); add(ell(0, 0.22, 0.1, 0.065), INK, true); add(box(0, 0.33, 0.008, 0.05, 0.004), INK, true); add(ell(0, 0.42, 0.1, open), INK, true);
+      eyes(0.25, -0.05, 0.105, 0.115, 0.68); add(ell(0, 0.22, 0.11, 0.07), INK, true); add(box(0, 0.33, 0.008, 0.05, 0.004), INK, true); add(ell(0, 0.42, 0.1, open), INK, true);
       break; }
     case "rabbit": {
       for (const d of [-1, 1]) { add(ell(d * (0.26 + ear), -0.62, 0.13, 0.44, d * (0.12 + ear)), body); add(ell(d * (0.26 + ear), -0.6, 0.06, 0.34, d * (0.12 + ear)), second); }
@@ -69,6 +72,34 @@ function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
       for (const d of [-1, 1]) { add(ell(d * 0.36, -0.37, 0.16, 0.16 * lid), WHITE, true); add(ell(d * 0.36 + glance, -0.37, 0.09, 0.05 * lid + 0.02), INK, true); }
       add(both(minus(ell(0, 0.08, 0.56, 0.26 + open), ell(0, 0.04, 0.58, 0.24)), (_x, y) => y > 0.12), INK, true); if (s.snare > 0.4) add(ell(0, 0.34, 0.12, s.snare * 0.07), second, true);
       for (const d of [-1, 1]) add(ell(d * 0.07, 0.04, 0.02, 0.015), dark, true);
+      break; }
+    case "wolf": {
+      for (const d of [-1, 1]) { add(tri(d * 0.58, -0.2, d * (0.5 + ear), -1.0, d * 0.14, -0.4), body); add(tri(d * 0.5, -0.32, d * (0.46 + ear), -0.8, d * 0.24, -0.44), dark); }
+      cans(); add(ell(0, 0.0, 0.58, 0.44), body);
+      add(tri(-0.46, 0.06, 0.46, 0.06, 0, 0.86), body);                                     // the long muzzle is the whole silhouette
+      add(tri(-0.19, 0.26, 0.19, 0.26, 0, 0.82), mix(body, WHITE, 0.45));
+      eyes(0.28, -0.1, 0.1, 0.075, 0.6, false, 0.32);
+      add(ell(0, 0.68, 0.085, 0.06), INK, true); add(ell(0, 0.54, 0.05, open * 0.8), INK, true);
+      break; }
+    case "bat": {
+      for (const d of [-1, 1]) { add(tri(d * 0.3, -0.22, d * (0.98 + ear), -0.92, d * 0.6, -0.02), body); add(tri(d * 0.38, -0.28, d * (0.84 + ear), -0.76, d * 0.55, -0.12), second); }
+      cans(); add(ell(0, 0.14, 0.48, 0.44), body); add(ell(0, 0.34, 0.25, 0.17), light);
+      eyes(0.2, 0.04, 0.11, 0.12, 0.55);
+      add(tri(-0.06, 0.26, 0.06, 0.26, 0, 0.34), second, true); add(ell(0, 0.46, 0.1, open), INK, true);
+      for (const d of [-1, 1]) add(tri(d * 0.04, 0.44, d * 0.1, 0.44, d * 0.07, 0.58), WHITE, true);   // fangs
+      break; }
+    case "moth": {
+      for (const d of [-1, 1]) for (let k = 0; k < 6; k++) { const t = k / 5; add(ell(d * (0.18 + t * 0.6), -0.4 - t * 0.46, 0.115 - t * 0.035, 0.045), mix(second, body, t * 0.8)); }
+      cans(); add(ell(0, 0.12, 0.56, 0.48), body);
+      for (const d of [-1, 1]) { add(ell(d * 0.26, -0.02, 0.27, 0.28), mix(body, INK, 0.6)); add(ell(d * 0.26 + glance, -0.02, 0.13, 0.14 * lid), mix(second, WHITE, 0.45), true); if (!s.blink) add(ell(d * 0.26 + glance - 0.05, -0.08, 0.04, 0.04), WHITE, true); }
+      add(ell(0, 0.4, 0.36, 0.17), light); add(ell(0, 0.44, 0.09, open), INK, true);
+      break; }
+    case "axolotl": {
+      for (const d of [-1, 1]) for (const k of [0, 1, 2]) { const a = -0.34 + k * 0.3; add(ell(d * (0.74 + ear * 0.6), a, 0.21, 0.075, d * (0.32 - k * 0.32)), second); add(ell(d * 0.6, a, 0.1, 0.05), mix(second, WHITE, 0.35)); }
+      cans(); add(ell(0, 0.12, 0.58, 0.48), body); add(ell(0, 0.3, 0.4, 0.23), light);
+      eyes(0.3, -0.14, 0.08, 0.085, 0.78);
+      add(both(minus(ell(0, 0.12, 0.4, 0.3 + open), ell(0, 0.06, 0.42, 0.28)), (_x, y) => y > 0.22), INK, true);   // a wide permanent smile
+      for (const d of [-1, 1]) add(ell(d * 0.4, 0.26, 0.1, 0.055), mix(second, WHITE, 0.3), true);
       break; }
     case "robot": {
       add(box(0, -0.78, 0.015, 0.14, 0.01), dark); add(ell(0, -0.92, 0.06, 0.06), mix(second, WHITE, s.hat * 0.7), true);
@@ -103,7 +134,7 @@ export function face(species: string, body: RGB, second: RGB, s: FaceState, cols
   for (let j = 0; j < H; j++) for (let i = 0; i < cols; i++) {
     let r = 0, g = 0, b = 0, n = 0;
     for (const [ox, oy] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
-      const x0 = ((i + ox) / cols) * 2 - 1, y0 = ((j + oy) / H) * 2 - 1 - bob, x = x0 * ct + y0 * sn, y = -x0 * sn + y0 * ct;
+      const x0 = (((i + ox) / cols) * 2 - 1) * ZOOM, y0 = ((((j + oy) / H) * 2 - 1) - bob) * ZOOM, x = x0 * ct + y0 * sn, y = -x0 * sn + y0 * ct;
       const hit = layers.find((l) => l.in(x, y)); if (!hit) continue;
       const shade = hit.flat ? 1 : Math.max(0.62, Math.min(1.12, 0.92 - (x * 0.22 + y * 0.3)));   // lit from the top left
       r += hit.rgb[0] * shade; g += hit.rgb[1] * shade; b += hit.rgb[2] * shade; n++;

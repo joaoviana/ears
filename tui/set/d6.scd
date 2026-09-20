@@ -1,1 +1,1 @@
-~d.(\d6, \instrument, \supersaw, \dur, 1/4, \midinote, Pseq([69, 78, 76, 60, 57, 64], inf), \ctranspose, Pseq([2, -5, 0, 0], inf).stutter(4), \detune, 0.35, \cutoff, 300, \env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \res, 0.392, \att, 0, \sus, 0.09, \rel, 0.12, \spread, 0.9, \send, 0.7, \amp, 0.13)
+~d.(\d6, \instrument, \vox, \dur, 1/4, \buf, ~v.("note-2"), \chop, Pseq([0, 0.3, 0.6, 0.3], inf), \len, 0.25, \rate, 1, \note, Pseq([0, 3, 7, 3, 10, 7], inf), \pan, Pwhite(-0.6, 0.6), \send, 0.5, \amp, ~x.("--X---x-----X-x-", 0.45))
