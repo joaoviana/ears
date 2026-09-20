@@ -133,9 +133,9 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
 // regularly need 10-12 s, so the cap turned slow options into absent ones while the header still promised three.
 // Options stream in as they validate, so a late one costs nothing that a missing one does not cost more.
 const DEADLINE = Number(process.env.EARS_DEADLINE || 16000);
-function claudeText(prompt: string, system: string, timeout = DEADLINE): Promise<string> {
+function claudeText(prompt: string, system: string, timeout = DEADLINE, effort = process.env.EARS_EFFORT || "low"): Promise<string> {
   return new Promise((resolve, reject) => {
-    const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", MODEL, ...(process.env.EARS_EFFORT === "default" ? [] : ["--effort", process.env.EARS_EFFORT || "low"]), "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
+    const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", MODEL, ...(effort === "default" ? [] : ["--effort", effort]), "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));
@@ -151,6 +151,18 @@ function claudeText(prompt: string, system: string, timeout = DEADLINE): Promise
  */
 export type Parsed = { patches: Patch[]; why: string; evidence: string; forBars?: number; transition?: "build" | "wash"; expect?: Expect };
 export const MAX_SLOTS = 3;
+
+/**
+ * How far out the booth is allowed to go. The CLI has no temperature, so this is built from the things the host
+ * controls: which angles get asked, how many voices one move may touch, how hard the model thinks, and how big a
+ * change has to be before it counts. Every level is enforced, not merely described.
+ */
+export const WILD = [
+  { name: "tame",      angles: ["fix", "fix", "add"],   slots: 1, effort: "low",    push: 1, say: "corrections only, one voice at a time" },
+  { name: "house",     angles: ["fix", "add", "turn"],  slots: 3, effort: "low",    push: 1, say: "a fix, something new, and one left turn" },
+  { name: "loose",     angles: ["add", "turn", "fix"],  slots: 3, effort: "medium", push: 2, say: "bigger moves, thinks harder, leans on arriving" },
+  { name: "unhinged",  angles: ["turn", "turn", "add"], slots: 3, effort: "medium", push: 4, say: "two left turns a round, nothing is safe" },
+] as const;
 export function parseMove(text: string): Parsed | null {
   const p: Parsed = { patches: [], why: "", evidence: "" };
   let cur: Patch | null = null;
@@ -186,7 +198,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; /** 0 tame .. 3 unhinged */ wild?: number; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
@@ -197,6 +209,12 @@ export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: r
 // Collisions were 13 of 19 refusals, nearly all on d6, and a retry fires 8-10s too late to help. Steering each
 // angle at a different voice up front costs nothing and is the host's job: it is the one that knows which slot
 // drifted, which is empty and which nobody doubles.
+function pushLine(input: AskInput): string {
+  const w = WILD[Math.max(0, Math.min(WILD.length - 1, input.wild ?? 1))];
+  if (w.push <= 1) return "";
+  return `\n\nTHE ROOM WANTS A BIGGER MOVE. Whatever the report says the smallest measurable change is, make yours at least ${w.push}x that. A change nobody notices is worse than no change${w.push >= 4 ? ", and this is not the round to be careful: take the idea that frightens you slightly" : ""}.`;
+}
+
 function aimLine(angle: string, input: AskInput): string {
   const slot = input.aim?.[angle];
   return slot ? `\n\nSTART FROM ${slot.toUpperCase()}. The other two angles are being pointed at different voices so the performer gets a real choice; work on ${slot} unless the idea genuinely belongs somewhere else, and say why in WHY if you move.` : "";
@@ -229,7 +247,8 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
   const sk = input.showcase ? SKILLS.find((k) => k.id === input.showcase) : null;
   const angles: [string, string][] = sk
     ? [["showcase", `YOUR ANGLE: showcase. The performer wants to hear your ${sk.name} skill NOW. This idea MUST use it, exactly as the skill text describes${sk.id === "vocals" ? ": SLOT d6 REPLACE (or an empty slot if there is one), instrument \\vox, a two-or-three-word phrase in your character via ~v.(\"...\"), with chop, len, rate and an ~x amp row" : sk.id === "fills" ? ": a one-bar drum fill or stutter with a FOR 1 line" : ": your boldest move with a WITH build line"}. Do not offer anything else.`], ...Object.entries(ANGLES).slice(0, 2)]
-    : Object.entries(ANGLES);
+    : (WILD[Math.max(0, Math.min(WILD.length - 1, input.wild ?? 1))].angles as readonly string[]).map((a, i, all) =>
+        [all.indexOf(a) === i ? a : `${a}${i}`, ANGLES[a]] as [string, string]);
   return Promise.all(angles.slice(0, Number(process.env.EARS_ANGLES || 3)).map(async ([angle, brief]) => {
     onEvent("ask", { agent: input.dj.id, angle, model: MODEL });
     try {
@@ -238,11 +257,12 @@ export function ask(input: AskInput, onOption: (o: Suggestion) => void, onEvent:
       const used = angle === "turn" && input.turns?.length
         ? `\n\nLEFT TURNS ALREADY USED IN THIS SET: ${input.turns.join("; ")}. Those axes are spent — if you have just done triplets against a straight grid, that one is used up. Take a different axis: a different instrument family, an octave jump, silence where it has been busy, a new harmonic centre, half-time or double-time, or a rhythm family nobody has used.`
         : "";
-      const sys = SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief + aimLine(angle, input) + used;
-      const p = parseMove(await claudeText(prompt, sys));
+      const sys = SYSTEM + persona(input.dj) + (taught ? "\n\nSKILLS THE PERFORMER HAS UNLOCKED FOR YOU (use them when they serve the idea, not every time):\n" + taught : "") + "\n\n" + brief + aimLine(angle, input) + pushLine(input) + used;
+      const p = parseMove(await claudeText(prompt, sys, DEADLINE, WILD[Math.max(0, Math.min(WILD.length - 1, input.wild ?? 1))].effort));
       if (!p) { onEvent("rejected", { agent: input.dj.id, angle, reason: "not in patch form", ms: Date.now() - t0 }); return; }
       if (!p.expect) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no called shot: an idea must say what it expects to change (EXPECT <metric> <up|down|same>)", ms: Date.now() - t0 }); return; }
-      if (p.patches.length > MAX_SLOTS) { onEvent("rejected", { agent: input.dj.id, angle, reason: `a move touches at most ${MAX_SLOTS} slots; this one touches ${p.patches.length}`, ms: Date.now() - t0 }); return; }
+      const cap = WILD[Math.max(0, Math.min(WILD.length - 1, input.wild ?? 1))].slots;
+      if (p.patches.length > cap) { onEvent("rejected", { agent: input.dj.id, angle, reason: `a move touches at most ${cap} slot${cap > 1 ? "s" : ""} at this level; this one touches ${p.patches.length}`, ms: Date.now() - t0 }); return; }
       if (angle === "turn" && !isTurn(input.slots[p.patches[0].slot] || "", p.patches[0])) {
         onEvent("rejected", { agent: input.dj.id, angle, reason: "a left turn must change the instrument, the rhythm or the register, not a parameter; asking again", ms: Date.now() - t0 });
         if (Date.now() - t0 > RETRY_BY) { onEvent("rejected", { agent: input.dj.id, angle, reason: "no time left in the round to ask again", ms: Date.now() - t0 }); return; }

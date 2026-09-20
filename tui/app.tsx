@@ -8,7 +8,7 @@ import path from "path";
 import chokidar from "chokidar";
 import { Engine, ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, asText, type Profile, type Line } from "./report.ts";
-import { ask, summon, type Suggestion, type Past } from "./agent.ts";
+import { ask, summon, type Suggestion, type Past, WILD } from "./agent.ts";
 import { render as field, LOOKS, PALETTE_NAMES, WIPES, UI, NEUTRAL, type Pulse, type Ramp, type Scene, type Banner } from "./ascii.ts";
 import { feed, fake } from "./audio.ts";
 import { roster, save, avatar, accent, type DJ } from "./djs.ts";
@@ -155,6 +155,7 @@ function App() {
   // as the current options are all in, and the answers wait here until a verdict frees the screen.
   const prefetching = useRef(false);
   const bank = useRef<{ dj: DJ; opts: Suggestion[]; slots: Record<string, string> } | null>(null);
+  const wild = useRef(1);   // 0 tame .. 3 unhinged; w cycles it
   const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
   /** One voice per angle: the worst drift for fix, something empty or undoubled for add, anything else for turn. */
   const aimAt = (): Record<string, string> => {
@@ -216,7 +217,7 @@ function App() {
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
     const seen = { ...evidence.slots };   // what the agent was shown, to judge staleness per slot rather than per session
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, aim: aimAt(), layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, aim: aimAt(), wild: wild.current, layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context, seen);
         if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
           turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
@@ -482,6 +483,10 @@ function App() {
     }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
+    if (input === "w") { wild.current = (wild.current + 1) % WILD.length; const w = WILD[wild.current];
+      discardOptions("the booth changed gear"); st.current.askAt = st.current.bar;
+      bus.current.send("mode", "human", { wild: wild.current, name: w.name, angles: w.angles, slots: w.slots, effort: w.effort, push: w.push });
+      setSay(`booth is ${w.name.toUpperCase()}: ${w.say}`); return; }
     if (input === "b") { mood.current = mood.current === "vibey" ? "dark" : mood.current === "dark" ? "any" : "vibey"; setSay(`bases are now ${mood.current === "vibey" ? "vibey: melodic, euphoric, deep house, nu disco, balearic, french touch" : mood.current === "dark" ? "the archive: detroit, dub techno, acid, electro, two-step, minimal, progressive, halftime, house, afro house, sunny garage" : "anything goes"}. g rolls one`); }
     if (input === "u") ride("build", 2);
     if (input === "w") ride("wash", 2);
@@ -533,7 +538,7 @@ function App() {
   const KEYS: [string, [string, string][]][] = [
     ["the booth", [["1 2 3", "take an option"], ["! @ #", "take it with a build"], ["n", "skip, next DJ steps up"], ["tab", "next DJ, no questions"], ["t", "tell the active DJ something"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
-    ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
+    ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["w", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
   ];
 
