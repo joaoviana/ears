@@ -20,6 +20,8 @@ import { validate } from "./agent.ts";
 import { SKILLS, skill, earned, missing, ensureVox, phrasesIn, recordNote } from "./skills.ts";
 import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, attributable, parseExpect, METRICS, type Expect, type Tally, type Differences, type Metric } from "./shots.ts";
 import { SlotEars, slotDifference, PER_SLOT_METRICS, type SlotWindow } from "./slotears.ts";
+import { brief as writeBrief, slotDrift, type Attempt } from "./brief.ts";
+import { maskingLines } from "./masking.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -124,6 +126,8 @@ function App() {
   const shots = useRef(new Map<number, { agent: string; name: string; rgb: number[]; slot: string; expect: Expect }>()), noise = useRef(new NoiseFloor());
   // per-slot hearing: judge a call about the hats on the hats, not on a master mix the kick dominates
   const slotEars = useRef(new SlotEars()), slotNoise = useRef<Record<string, NoiseFloor>>({}), slotWins = useRef<{ key: string; from: number; to: number; w: Record<string, SlotWindow> }[]>([]);
+  // what each voice measured when this base started: the reference slot drift is judged against
+  const slotRef = useRef<Record<string, SlotWindow> | null>(null), needSlotRef = useRef(false), attempts = useRef<Attempt[]>([]);
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
@@ -147,6 +151,7 @@ function App() {
   };
   const newBase = (seed: number) => {
     const b = (base.current = makeBase(seed, mood.current)), sd = { name: `seed ${seed}`, rgb: SEEDC };
+    needSlotRef.current = true; slotRef.current = null; attempts.current = [];
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     for (const k of SLOTS) { author(k, b.slots[k], sd); authors.current[k].fresh = new Set();   // a whole new base isn't a 'change' to highlight
       writeSlot(k, b.slots[k]); evaluateSlot(k, b.slots[k], "seed"); }
@@ -259,6 +264,7 @@ function App() {
         : { grade: "ungraded" as const, delta: null, unit: "", floor: 0, text: m.status === "measured" ? "another change overlapped this one" : String((m.confounds as string[])?.[0] ?? "no clean before/after window") };
       const g = st.current.booth.find((x) => x.dj.id === shot.agent); if (g) { g.calls ??= emptyTally(); g.calls[out.grade]++; }
       const h = st.current.history.find((x) => x.id === m.proposal); if (h) h.outcome = forPrompt(shot.expect, out, true);
+      attempts.current.push({ metric: shot.expect.metric, slot: shot.slot, grade: out.grade }); if (attempts.current.length > 12) attempts.current.shift();
       b.send("outcome", "host", { proposal: m.proposal, execution_id: m.execution_id, comparison: m.id, agent: shot.agent, slot: shot.slot, expected: shot.expect, grade: out.grade, delta: out.delta, unit: out.unit, noise_floor: out.floor, floor_calibrated: (sd ? slotNoise.current[shot.slot] ?? noise.current : noise.current).ready(shot.expect.metric), scope: { kind: scope, per_voice: !!sd, estimate: sd ? "dry-slot contribution: other slots held at their before-measurement; not a controlled re-render" : undefined }, basis: "live master mix; observational, not causal", confounds: m.confounds });
       shotCard.current = { who: shot.name, rgb: shot.rgb, call: describeExpect(shot.expect), text: out.text + (sd ? `  (${shot.slot} alone)` : ""), grade: out.grade, until: st.current.bar + 8 };
     });
@@ -307,7 +313,14 @@ function App() {
       const s = st.current; barAt.current = { at, len }; s.bar = n; bus.current.bar = n; ears.current.bar();
       setTimeout(() => (pulse.current.barN = n), Math.max(0, at - Date.now()));
       if (s.pending && n - s.lastWipeBar >= 2) { s.next = s.pending; s.pending = null; s.wipeAt = at; s.lastWipeBar = n; }   // a change in the music is a change on screen, on the bar
-      if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); s.report = asText(l, "detroit"); { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; evidence.observe(p, summary, s.report, summary === lastSummary.current); lastSummary.current = summary; } const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
+      if (n % 2 === 0) { const p = ears.current.take(); if (p) { last.current = p; const l = compare(p, ref); setLines(l); {
+        const win = p.capture ?? null, hereNow = win ? slotEars.current.all(win.start_ms, win.end_ms) : {};
+        if (needSlotRef.current && Object.keys(hereNow).length >= 3) { slotRef.current = hereNow; needSlotRef.current = false; }   // first clean window after a new base
+        const floors = Object.fromEntries(METRICS.map((k) => [k, (slotNoise.current[slotDrift(hereNow, slotRef.current ?? hereNow)[0]?.slot ?? "d1"] ?? noise.current).floor(k)]));
+        s.report = writeBrief(l, slotRef.current ? "how this base sounded when it started" : "detroit",
+          slotRef.current ? slotDrift(hereNow, slotRef.current) : [], floors, attempts.current,
+          win ? maskingLines(slotEars.current.bandFrames(win.start_ms, win.end_ms)) : []);
+      } { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; evidence.observe(p, summary, s.report, summary === lastSummary.current); lastSummary.current = summary; } const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       bus.current.bar = n;
       for (const r of s.reverts.filter((r) => n >= r.atBar)) { if (read(r.slot).trim() !== r.appliedCode) { bus.current.send("note", "host", { text: `Skipped ${r.slot} fill restore: a newer edit is on disk` }); continue; } writeSlot(r.slot, r.code); evaluateSlot(r.slot, r.code, "fill over"); }
       s.reverts = s.reverts.filter((r) => n < r.atBar);
@@ -398,7 +411,7 @@ function App() {
     if (input === "u") ride("build", 2);
     if (input === "w") ride("wash", 2);
     if (input === "m") { eng.current.volume(muted ? 1 : 0); setMuted(!muted); }
-    if (input === "r" && last.current) { fs.mkdirSync(path.dirname(REF), { recursive: true }); fs.writeFileSync(REF, JSON.stringify(last.current, null, 2)); setRef(last.current); setLog("saved what you just heard as the reference"); }
+    if (input === "r" && last.current) { needSlotRef.current = true; slotRef.current = null; fs.mkdirSync(path.dirname(REF), { recursive: true }); fs.writeFileSync(REF, JSON.stringify(last.current, null, 2)); setRef(last.current); setLog("saved what you just heard as the reference"); }
   });
 
   const W = Math.max(90, stdout.columns || 120), H = stdout.rows || 48, s = st.current, p = pulse.current, now = Date.now();

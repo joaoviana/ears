@@ -20,6 +20,8 @@ export class SlotEars {
     const pw = xs.map((x) => x.f.rms * x.f.rms), tot = pw.reduce((a, b) => a + b, 0);
     return { power: tot / xs.length, bands: [0, 1, 2, 3, 4].map((i) => xs.reduce((a, x) => a + x.f.bands[i] * x.f.bands[i], 0) / xs.length), centroid: tot > 0 ? xs.reduce((a, x, j) => a + x.f.centroid * pw[j], 0) / tot : 0, frames: xs.length };
   }
+  /** the raw per-slot band frames in a window, for masking: it needs the movement, not the average */
+  bandFrames(from: number, to: number) { return [...this.frames.values()].flat().filter((x) => x.at >= from && x.at <= to).map((x) => ({ slot: x.f.slot, bands: x.f.bands })); }
   all(from: number, to: number): Record<string, SlotWindow> { const out: Record<string, SlotWindow> = {}; for (const slot of this.frames.keys()) { const w = this.window(slot, from, to); if (w) out[slot] = w; } return out; }
 }
 

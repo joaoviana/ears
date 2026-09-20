@@ -81,9 +81,10 @@ export function compare(now: Profile, ref: Profile | null): Line[] {
   const l = ref ? now.rms - ref.rms : null;
   lines.push({ label: "envelope", value: `${now.rms.toFixed(1)} dB`, delta: l, word: l === null ? "" : word(l, "quiet", "hot", 2.5) });
   lines.push({ label: "peak/env", value: `${now.crest.toFixed(1)} dB`, delta: ref ? now.crest - ref.crest : null, word: ref ? word(now.crest - ref.crest, "squashed", "spiky", 3) : "" });
-  const w = ref ? now.width - ref.width : null;
+  const num = (x: number | undefined) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const rw = ref ? num(ref.width) : null, w = rw === null ? null : now.width - rw;
   lines.push({ label: "width", value: `${now.width.toFixed(1)} dB`, delta: w, word: w === null ? "" : word(w, "narrow", "wide", 3) });
-  const t = ref ? now.offGrid - ref.offGrid : null;
+  const rg = ref ? num(ref.offGrid) : null, t = rg === null ? null : now.offGrid - rg;
   lines.push({ label: "groove", value: `${(now.offGrid * 1000).toFixed(0)} ms off`, delta: t === null ? null : t * 1000, word: t === null ? "" : Math.abs(t) < 0.004 ? "ok" : t > 0 ? "loose" : "stiff" });   // delta in ms, like the value
   // headroom is absolute, not a comparison: under 1 dB is about to clip whatever the reference did
   // measured before the limiter, so this is how hard the limiter is having to work, not the output ceiling

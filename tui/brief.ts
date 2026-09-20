@@ -19,7 +19,7 @@ export interface Attempt { metric: string; slot: string; grade: string }
 const dB = (p: number) => 10 * Math.log10(Math.max(p, 1e-12));
 const METRIC_OF: Record<string, Metric> = { "sub  <80Hz": "sub", "low  150Hz": "low", "mid  700Hz": "mid", "high 3kHz": "high", "air  >7kHz": "air", centroid: "brightness", "onsets/beat": "density", envelope: "loudness", "peak/env": "punch", width: "width", groove: "groove" };
 /** how far off a line is, in units of its own tolerance, so metrics can be compared with each other */
-const severity = (l: Line) => (l.label === "headroom" ? (l.word === "slamming the limiter" ? 9 : l.word === "limiting" ? 3 : 0) : l.delta === null ? 0 : Math.abs(l.delta) / (l.label === "centroid" ? 25 : l.label === "onsets/beat" ? 0.8 : l.label === "envelope" ? 2.5 : l.label === "groove" ? 0.004 : 3));   // clipping outranks everything
+const severity = (l: Line) => (l.delta !== null && !Number.isFinite(l.delta) ? 0 : (l.label === "headroom" ? (l.word === "slamming the limiter" ? 9 : l.word === "limiting" ? 3 : 0) : l.delta === null ? 0 : Math.abs(l.delta) / (l.label === "centroid" ? 25 : l.label === "onsets/beat" ? 0.8 : l.label === "envelope" ? 2.5 : l.label === "groove" ? 0.004 : 3)));   // clipping outranks everything
 
 /** Which slots moved, and in which direction, against the same window the target was measured in. */
 export function slotDrift(now: Record<string, SlotLevel>, target: Record<string, SlotLevel>): { slot: string; db: number }[] {
@@ -36,7 +36,7 @@ export function slotDrift(now: Record<string, SlotLevel>, target: Record<string,
  * @param tried     what has already been attempted, newest last
  */
 export function brief(lines: Line[], refName: string, drift: { slot: string; db: number }[] = [], floors: Partial<Record<Metric, number>> = {}, tried: Attempt[] = [], masking: string[] = []): string {
-  const off = lines.filter((l) => l.word && l.word !== "ok").sort((a, b) => severity(b) - severity(a));
+  const off = lines.filter((l) => l.word && l.word !== "ok" && severity(l) > 0).sort((a, b) => severity(b) - severity(a));
   const fmt = (l: Line) => (l.label === "headroom" ? `${l.word} (headroom ${l.value})` : `${l.word} (${l.label.split(/\s+/)[0]}, ${(l.delta ?? 0) >= 0 ? "+" : ""}${(l.delta ?? 0).toFixed(1)}${l.label === "centroid" ? "%" : ""} off)`);
   const out: string[] = [`Measured against ${refName}, worst first.`];
 
@@ -45,7 +45,7 @@ export function brief(lines: Line[], refName: string, drift: { slot: string; db:
     out.push("", `THE BIGGEST PROBLEM: ${fmt(off[0])}`);
     if (off.length > 1) out.push(`Then: ${off.slice(1, 4).map(fmt).join(" · ")}${off.length > 4 ? ` · and ${off.length - 4} more` : ""}`);
   }
-  if (drift.length) out.push("", "WHICH VOICE MOVED (level against the same reference; this is where the damage is)", ...drift.slice(0, 4).map((d) => `  ${d.slot} is ${d.db > 0 ? "+" : ""}${d.db.toFixed(1)} dB ${d.db > 0 ? "louder" : "quieter"} than it should be`));
+  if (drift.length) out.push("", "WHICH VOICE MOVED (level against how this base sounded when it started; this is where the damage is)", ...drift.slice(0, 4).map((d) => `  ${d.slot} is ${d.db > 0 ? "+" : ""}${d.db.toFixed(1)} dB ${d.db > 0 ? "louder" : "quieter"} than it should be`));
   if (masking.length) out.push("", "VOICES FIGHTING EACH OTHER (two things in one band at one moment; this is what \"muddy\" and \"boxy\" usually are)", ...masking);
 
   const worst = off[0] && METRIC_OF[off[0].label];
