@@ -15,7 +15,19 @@ function rng(seed: number) { let a = seed >>> 0; return () => { a = (a + 0x6d2b7
 const f = (x: number) => String(+x.toFixed(3));
 
 interface Style { name: string; mood: "vibey" | "dark"; bpm: [number, number]; scales: string[]; kick: string[][]; hats: string; clap: string; bass: string; chords: string; lead: string; swing?: number }
+// The six the set rolls through. Fifteen meant none of them got the attention to be worth opening a demo on, and
+// most were drums with a rumour of harmony underneath. These are the ones that are supposed to sound good.
 const STYLES: Style[] = [
+  { name: "melodic", mood: "vibey", bpm: [122, 126], scales: ["dorian", "minor"], kick: [["X---X---X---X---", "X---X---X---X-x-"], ["X---X-----X-X---", "X---X-----X-X-x-"]], hats: "offbeat-open", clap: "backbeat", bass: "saw-octaves", chords: "saw-pad", lead: "saw-arp" },
+  { name: "euphoric", mood: "vibey", bpm: [130, 136], scales: ["major", "lydian"], kick: [["X---X---X---X---"]], hats: "sixteenths", clap: "backbeat", bass: "saw-octaves", chords: "saw-pad", lead: "saw-arp" },
+  { name: "deep house", mood: "vibey", bpm: [118, 124], scales: ["dorian", "major"], kick: [["X---X---X---X---", "X---X---X---X--x"]], hats: "shaker", clap: "backbeat", bass: "round", chords: "epiano", lead: "pluck", swing: 0.025 },
+  { name: "nu disco", mood: "vibey", bpm: [114, 122], scales: ["major", "mixolydian"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "disco", chords: "choir-warm", lead: "arp-bright" },
+  { name: "balearic", mood: "vibey", bpm: [106, 116], scales: ["major", "lydian"], kick: [["X---X---X---X---", "X---X---X-----X-"]], hats: "shaker", clap: "rim", bass: "round", chords: "warm-pad", lead: "epiano-melody", swing: 0.02 },
+  { name: "french touch", mood: "vibey", bpm: [120, 126], scales: ["major", "mixolydian"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "disco", chords: "filter-stabs", lead: "saw-arp" },
+];
+// Out of the rotation, still reachable by name: every benchmark run so far was seeded from these, and deleting them
+// would make runs 1-4 in docs/does-the-protocol-help.md unreproducible. `makeBase(seed, "dark")` still finds them.
+const ARCHIVE: Style[] = [
   { name: "detroit", mood: "dark", bpm: [126, 132], scales: ["minor", "dorian"], kick: [["X---X---X---X---", "X---X---X---X-x-"]], hats: "sixteenths", clap: "backbeat", bass: "riff", chords: "stabs", lead: "fm-sparse" },
   { name: "dub techno", mood: "dark", bpm: [118, 124], scales: ["minor", "dorian"], kick: [["X---X---X---X---"]], hats: "offbeat", clap: "rim", bass: "sub", chords: "dub-chord", lead: "pad" },
   { name: "acid", mood: "dark", bpm: [128, 136], scales: ["phrygian", "minor"], kick: [["X---X---X---X---", "X---X---X--XX---"]], hats: "sixteenths", clap: "backbeat", bass: "acid", chords: "none", lead: "toms" },
@@ -25,22 +37,17 @@ const STYLES: Style[] = [
   { name: "progressive", mood: "dark", bpm: [128, 134], scales: ["minor", "harmonic minor"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "offbeat", chords: "choir", lead: "arp" },
   { name: "halftime", mood: "dark", bpm: [140, 150], scales: ["minor", "phrygian"], kick: [["X---------X-----", "X--------XX-----"]], hats: "rolls", clap: "three", bass: "reese", chords: "choir", lead: "fm-sparse" },
   { name: "house", mood: "dark", bpm: [120, 126], scales: ["dorian", "mixolydian", "minor"], kick: [["X---X---X---X---", "X---X---X---X--x"]], hats: "offbeat-open", clap: "backbeat", bass: "octaves", chords: "organ", lead: "arp", swing: 0.02 },
-  // ---- the vibey family: major / lydian / dorian, 7th and 9th chords, round basses, electric piano, shakers, congas ----
-  // ---- the reference vibe: supersaw everywhere, harmony that moves once every few bars, and a lot of room.
-  { name: "melodic", mood: "vibey", bpm: [122, 126], scales: ["dorian", "minor"], kick: [["X---X---X---X---", "X---X---X---X-x-"], ["X---X-----X-X---", "X---X-----X-X-x-"]], hats: "offbeat-open", clap: "backbeat", bass: "saw-octaves", chords: "saw-pad", lead: "saw-arp" },
-  { name: "euphoric", mood: "vibey", bpm: [130, 136], scales: ["major", "lydian"], kick: [["X---X---X---X---"]], hats: "sixteenths", clap: "backbeat", bass: "saw-octaves", chords: "saw-pad", lead: "saw-arp" },
-  { name: "deep house", mood: "vibey", bpm: [118, 124], scales: ["dorian", "major"], kick: [["X---X---X---X---", "X---X---X---X--x"]], hats: "shaker", clap: "backbeat", bass: "round", chords: "epiano", lead: "pluck", swing: 0.025 },
-  { name: "nu disco", mood: "vibey", bpm: [114, 122], scales: ["major", "mixolydian"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "disco", chords: "choir-warm", lead: "arp-bright" },
-  { name: "balearic", mood: "vibey", bpm: [106, 116], scales: ["major", "lydian"], kick: [["X---X---X---X---", "X---X---X-----X-"]], hats: "shaker", clap: "rim", bass: "round", chords: "warm-pad", lead: "epiano-melody", swing: 0.02 },
   { name: "afro house", mood: "vibey", bpm: [118, 124], scales: ["dorian", "major"], kick: [["X---X---X---X---"]], hats: "shaker", clap: "congas", bass: "offbeat-round", chords: "marimba", lead: "choir-ooh", swing: 0.015 },
-  { name: "french touch", mood: "vibey", bpm: [120, 126], scales: ["major", "mixolydian"], kick: [["X---X---X---X---"]], hats: "offbeat-open", clap: "backbeat", bass: "disco", chords: "filter-stabs", lead: "pluck" },
   { name: "sunny garage", mood: "vibey", bpm: [128, 132], scales: ["major", "dorian"], kick: [["X---------X-----", "X------X--X-----"]], hats: "swung", clap: "backbeat", bass: "sub-bounce", chords: "epiano", lead: "epiano-melody", swing: 0.045 },
 ];
 
+
 export const STYLE_NAMES = STYLES.map((x) => x.name);
+export const ALL_STYLES = [...STYLES, ...ARCHIVE];
 export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Base {
   const r = rng(seed), pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)], chance = (p: number) => r() < p, int = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
-  const st = pick(STYLES.filter((x) => (only ? x.name === only : mood === "any" || x.mood === mood))), bpm = int(st.bpm[0] / 2, st.bpm[1] / 2) * 2, rootPc = int(0, 11), root = 26 + ((rootPc + 10) % 12);   // bass root D1..C#2
+  const pool = ALL_STYLES.filter((x) => (only ? x.name === only : mood === "dark" ? x.mood === "dark" : STYLES.includes(x)));
+  const st = pick(pool.length ? pool : STYLES), bpm = int(st.bpm[0] / 2, st.bpm[1] / 2) * 2, rootPc = int(0, 11), root = 26 + ((rootPc + 10) % 12);   // bass root D1..C#2
   const scaleName = pick(st.scales), sc = SCALES[scaleName], prog = pick(st.mood === "vibey" ? WARM : PROGRESSIONS);
   const deg = (d: number, oct = 0) => root + oct * 12 + sc[((d % sc.length) + sc.length) % sc.length] + Math.floor(d / sc.length) * 12;
   const offs = prog.map((d) => { const o = sc[d % sc.length]; return o > 6 ? o - 12 : o; });                      // chord roots as semitone offsets, kept near the tonic
@@ -93,33 +100,33 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
 
   const d5 = ({
     none: "",
-    stabs: `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["----X---------X-", "----X--X------X-"], 0.15), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\cutoff, Pbrown(900, 2600, 200), \\dec, 0.15, \\send, 1)`,
-    "dub-chord": `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["------X---------", "------X------x--"], 0.2), \\midinote, ${chord(0, 2)}, \\cutoff, Pbrown(600, 1900, 150), \\dec, 0.12, \\send, 1)`,
-    organ: `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X--X----X--X--", "--X--X----X-X-X-"], 0.11), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, 1.4, \\dec, 0.18, \\send, 0.35)`,
-    choir: `~d.(\\d5, \\instrument, \\choir, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\vowel, Pseq([0, 3, 4, 1], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.5, \\rel, ${f((60 / bpm) * 1.5)}, \\duck, 0.7, \\amp, 0.1)`,
-    epiano: `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X--X----X-----", "--X--X----X--X--"], 0.1), \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, Pwhite(0.9, 1.6), \\dec, 0.7, \\send, 0.45)`,
-    "filter-stabs": `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.("x-X-x-X-x-X-x-X-", 0.13), \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\cutoff, Pseq([500, 800, 1400, 2600, 4200, 2600, 1400, 800], inf).stutter(8), \\dec, 0.13, \\send, 0.35)`,
-    "warm-pad": `~d.(\\d5, \\instrument, \\pad, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\sus, ${f((60 / bpm) * 3.2)}, \\att, 0.5, \\rel, ${f((60 / bpm) * 1.6)}, \\cutoff, Pwhite(1700, 3000), \\duck, 0.8, \\amp, 0.09)`,
-    "choir-warm": `~d.(\\d5, \\instrument, \\choir, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\vowel, Pseq([0, 3, 0, 4], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.4, \\rel, ${f((60 / bpm) * 1.5)}, \\bright, 1.1, \\duck, 0.8, \\amp, 0.1)`,
-    marimba: `~d.(\\d5, \\instrument, \\fm, \\dur, ${swing}, \\amp, ~x.(["X--X--X---X--X--", "X--X--X---X-X-X-"], 0.13), \\midinote, Pseq([${prog.map((d) => `${deg(d, 3)}, ${deg(d + 2, 3)}, ${deg(d + 4, 3)}, ${deg(d + 2, 3)}`).join(", ")}], inf).stutter(4), \\ratio, 3.5, \\index, 0.9, \\dec, 0.22, \\pan, Pwhite(-0.4, 0.4), \\send, 0.35)`,
-    "saw-pad": `~d.(\\d5, \\instrument, \\supersaw, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\detune, 0.5, \\cutoff, Pwhite(500, 900), \\env, Pwhite(1800, 3400), \\res, 0.3, \\att, ${f((60 / bpm) * 1.2)}, \\sus, ${f((60 / bpm) * 2.4)}, \\rel, ${f((60 / bpm) * 2)}, \\spread, 1, \\send, 0.85, \\duck, 0.55, \\amp, 0.2)`,
-    pad: `~d.(\\d5, \\instrument, \\pad, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.4, \\rel, ${f((60 / bpm) * 1.5)}, \\cutoff, Pwhite(800, 2000), \\duck, 0.75, \\amp, 0.085)`,
+    stabs: `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["----X---------X-", "----X--X------X-"], 0.36), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\cutoff, Pbrown(900, 2600, 200), \\dec, 0.15, \\send, 0.9)`,
+    "dub-chord": `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.(["------X---------", "------X------x--"], 0.48), \\midinote, ${chord(0, 2)}, \\cutoff, Pbrown(600, 1900, 150), \\dec, 0.12, \\send, 0.9)`,
+    organ: `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X--X----X--X--", "--X--X----X-X-X-"], 0.264), \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, 1.4, \\dec, 0.18, \\send, 0.63)`,
+    choir: `~d.(\\d5, \\instrument, \\choir, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\vowel, Pseq([0, 3, 4, 1], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.5, \\rel, ${f((60 / bpm) * 1.5)}, \\duck, 0.7, \\amp, 0.24)`,
+    epiano: `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X--X----X-----", "--X--X----X--X--"], 0.24), \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, Pwhite(0.9, 1.6), \\dec, 0.7, \\send, 0.81)`,
+    "filter-stabs": `~d.(\\d5, \\instrument, \\stab, \\dur, 1/4, \\amp, ~x.("x-X-x-X-x-X-x-X-", 0.312), \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\cutoff, Pseq([500, 800, 1400, 2600, 4200, 2600, 1400, 800], inf).stutter(8), \\dec, 0.13, \\send, 0.63)`,
+    "warm-pad": `~d.(\\d5, \\instrument, \\pad, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\sus, ${f((60 / bpm) * 3.2)}, \\att, 0.5, \\rel, ${f((60 / bpm) * 1.6)}, \\cutoff, Pwhite(1700, 3000), \\duck, 0.8, \\amp, 0.216)`,
+    "choir-warm": `~d.(\\d5, \\instrument, \\choir, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\vowel, Pseq([0, 3, 0, 4], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.4, \\rel, ${f((60 / bpm) * 1.5)}, \\bright, 1.1, \\duck, 0.8, \\amp, 0.24)`,
+    marimba: `~d.(\\d5, \\instrument, \\fm, \\dur, ${swing}, \\amp, ~x.(["X--X--X---X--X--", "X--X--X---X-X-X-"], 0.312), \\midinote, Pseq([${prog.map((d) => `${deg(d, 3)}, ${deg(d + 2, 3)}, ${deg(d + 4, 3)}, ${deg(d + 2, 3)}`).join(", ")}], inf).stutter(4), \\ratio, 3.5, \\index, 0.9, \\dec, 0.22, \\pan, Pwhite(-0.4, 0.4), \\send, 0.63)`,
+    "saw-pad": `~d.(\\d5, \\instrument, \\supersaw, \\dur, 4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf), \\detune, 0.5, \\cutoff, Pwhite(500, 900), \\env, Pwhite(1800, 3400), \\res, 0.3, \\att, ${f((60 / bpm) * 1.2)}, \\sus, ${f((60 / bpm) * 2.4)}, \\rel, ${f((60 / bpm) * 2)}, \\spread, 1, \\send, 0.9, \\duck, 0.55, \\amp, 0.2)`,
+    pad: `~d.(\\d5, \\instrument, \\pad, \\dur, 4, \\midinote, Pseq([${prog.map((d) => chord(d, 2)).join(", ")}], inf), \\sus, ${f((60 / bpm) * 3)}, \\att, 0.4, \\rel, ${f((60 / bpm) * 1.5)}, \\cutoff, Pwhite(800, 2000), \\duck, 0.75, \\amp, 0.204)`,
   } as Record<string, string>)[st.chords];
 
   const motif = () => { let p = int(0, 4); return Array.from({ length: 8 }, () => { p = Math.max(0, Math.min(7, p + int(-2, 2))); return chance(0.2) ? "\\r" : String(deg([0, 2, 4, 5, 7, 9, 11, 14][p] % 7 + (p > 4 ? 7 : 0), 3)); }); };
   const A = motif(), B = motif();
   const d6 = ({
-    "saw-arp": `~d.(\\d6, \\instrument, \\supersaw, \\dur, 1/4, \\midinote, Pseq([${[0, 5, 4, 2, 0, 4].map((d, i) => deg(d, i < 3 ? 3 : 2)).join(", ")}], inf), ${slow}, \\detune, 0.35, \\cutoff, 300, \\env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \\res, ${f(0.35 + r() * 0.25)}, \\att, 0, \\sus, 0.09, \\rel, 0.12, \\spread, 0.9, \\send, 0.7, \\amp, 0.13)`,
-    pluck: `~d.(\\d6, \\instrument, \\fm, \\dur, ${pick(["1/2", "3/4"])}, \\midinote, Prand([${[0, 2, 4, 7, 9, 11].map((d) => deg(d, 3)).join(", ")}, \\r, \\r], inf), ${follow.replace(".stutter(16)", ".stutter(8)")}, \\ratio, 2, \\index, Pwhite(0.6, 1.8), \\dec, Pwhite(0.18, 0.4), \\amp, 0.1, \\pan, Pwhite(-0.6, 0.6), \\send, 0.7)`,
-    "arp-bright": `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([${[...A, ...A, ...B, ...A].join(", ")}], inf), ${follow}, \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.16, \\amp, 0.085, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.6)`,
-    "epiano-melody": `~d.(\\d6, \\instrument, \\fm, \\dur, 1/2, \\midinote, Pseq([${[...A, ...B].join(", ")}], inf), ${follow.replace(".stutter(16)", ".stutter(8)")}, \\ratio, 1, \\index, Pwhite(1.0, 2.0), \\dec, Pwhite(0.5, 1.0), \\amp, 0.11, \\pan, Pbrown(-0.4, 0.4, 0.1), \\send, 0.6)`,
-    "choir-ooh": `~d.(\\d6, \\instrument, \\choir, \\dur, 8, \\midinote, Pseq([[${deg(4, 3)}, ${deg(7, 3)}], [${deg(2, 3)}, ${deg(5, 3)}]], inf), \\vowel, 3.4, \\sus, ${f((60 / bpm) * 5)}, \\att, 1.2, \\rel, 2.5, \\bright, 0.95, \\duck, 0.5, \\amp, 0.07)`,
-    arp: `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([${[...A, ...A, ...B, ...A].join(", ")}], inf), ${follow.replace(".stutter(16)", ".stutter(16)")}, \\ratio, ${pick([2, 3.5])}, \\index, Pbrown(0.8, 4, 0.4), \\dec, Pwhite(0.12, 0.3), \\amp, 0.11, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.7)`,
-    "fm-sparse": `~d.(\\d6, \\instrument, \\fm, \\dur, ${pick(["3/4", "1/2"])}, \\midinote, Prand([${[0, 2, 4, 7, 9].map((d) => deg(d, 3)).join(", ")}, \\r, \\r, \\r], inf), \\ratio, ${pick([2, 3.5, 7.1])}, \\index, Pwhite(1.0, 5.0), \\dec, Pwhite(0.2, 0.8), \\amp, 0.12, \\pan, Pwhite(-0.7, 0.7), \\send, 0.8)`,
-    zaps: `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.("${ghosted(16, 3, int(0, 5))}", 0.14), \\midinote, Prand([${[0, 4, 7].map((d) => deg(d, 4)).join(", ")}], inf), \\ratio, 7.1, \\index, Pwhite(4.0, 9.0), \\dec, 0.07, \\pan, Pwhite(-0.8, 0.8), \\send, 0.4)`,
-    blips: `~d.(\\d6, \\instrument, \\perc, \\dur, 1/4, \\amp, ~x.("${ghosted(pick([7, 9, 11]), 3, 2)}", 0.2), \\freq, Prand([${[0, 2, 4].map((d) => Math.round(440 * Math.pow(2, (deg(d, 4) - 69) / 12))).join(", ")}], inf), \\dec, 0.05, \\click, 0.1, \\pan, Pwhite(-0.7, 0.7), \\send, 0.5)`,
-    toms: `~d.(\\d6, \\instrument, \\perc, \\dur, 1/4, \\amp, ~x.(["${ghosted(16, 5, 3)}", "${ghosted(16, 7, 1)}"], 0.3), \\freq, Pseq([${[0, 2, 4, 2].map((d) => Math.round(440 * Math.pow(2, (deg(d, 2) - 69) / 12))).join(", ")}], inf), \\dec, Pwhite(0.1, 0.22), \\pan, Pseq([-0.5, 0.5], inf), \\send, 0.3)`,
-    pad: `~d.(\\d6, \\instrument, \\pad, \\dur, 8, \\midinote, Pseq([${chord(0, 3)}, ${chord(prog[1], 3)}], inf), \\sus, ${f((60 / bpm) * 6)}, \\att, 1.5, \\rel, 3, \\cutoff, Pwhite(1200, 3000), \\duck, 0.5, \\amp, 0.05)`,
+    "saw-arp": `~d.(\\d6, \\instrument, \\supersaw, \\dur, 1/4, \\midinote, Pseq([${[0, 5, 4, 2, 0, 4].map((d, i) => deg(d, i < 3 ? 3 : 2)).join(", ")}], inf), ${slow}, \\detune, 0.35, \\cutoff, 300, \\env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \\res, ${f(0.35 + r() * 0.25)}, \\att, 0, \\sus, 0.09, \\rel, 0.12, \\spread, 0.9, \\send, 0.9, \\amp, 0.13)`,
+    pluck: `~d.(\\d6, \\instrument, \\fm, \\dur, ${pick(["1/2", "3/4"])}, \\midinote, Prand([${[0, 2, 4, 7, 9, 11].map((d) => deg(d, 3)).join(", ")}, \\r, \\r], inf), ${follow.replace(".stutter(16)", ".stutter(8)")}, \\ratio, 2, \\index, Pwhite(0.6, 1.8), \\dec, Pwhite(0.18, 0.4), \\amp, 0.1, \\pan, Pwhite(-0.6, 0.6), \\send, 0.9)`,
+    "arp-bright": `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([${[...A, ...A, ...B, ...A].join(", ")}], inf), ${follow}, \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.16, \\amp, 0.085, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)`,
+    "epiano-melody": `~d.(\\d6, \\instrument, \\fm, \\dur, 1/2, \\midinote, Pseq([${[...A, ...B].join(", ")}], inf), ${follow.replace(".stutter(16)", ".stutter(8)")}, \\ratio, 1, \\index, Pwhite(1.0, 2.0), \\dec, Pwhite(0.5, 1.0), \\amp, 0.11, \\pan, Pbrown(-0.4, 0.4, 0.1), \\send, 0.9)`,
+    "choir-ooh": `~d.(\\d6, \\instrument, \\choir, \\dur, 8, \\midinote, Pseq([[${deg(4, 3)}, ${deg(7, 3)}], [${deg(2, 3)}, ${deg(5, 3)}]], inf), \\vowel, 3.4, \\sus, ${f((60 / bpm) * 5)}, \\att, 1.2, \\rel, 2.5, \\bright, 0.95, \\duck, 0.5, \\amp, 0.154)`,
+    arp: `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([${[...A, ...A, ...B, ...A].join(", ")}], inf), ${follow.replace(".stutter(16)", ".stutter(16)")}, \\ratio, ${pick([2, 3.5])}, \\index, Pbrown(0.8, 4, 0.4), \\dec, Pwhite(0.12, 0.3), \\amp, 0.11, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)`,
+    "fm-sparse": `~d.(\\d6, \\instrument, \\fm, \\dur, ${pick(["3/4", "1/2"])}, \\midinote, Prand([${[0, 2, 4, 7, 9].map((d) => deg(d, 3)).join(", ")}, \\r, \\r, \\r], inf), \\ratio, ${pick([2, 3.5, 7.1])}, \\index, Pwhite(1.0, 5.0), \\dec, Pwhite(0.2, 0.8), \\amp, 0.12, \\pan, Pwhite(-0.7, 0.7), \\send, 0.9)`,
+    zaps: `~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.("${ghosted(16, 3, int(0, 5))}", 0.14), \\midinote, Prand([${[0, 4, 7].map((d) => deg(d, 4)).join(", ")}], inf), \\ratio, 7.1, \\index, Pwhite(4.0, 9.0), \\dec, 0.07, \\pan, Pwhite(-0.8, 0.8), \\send, 0.72)`,
+    blips: `~d.(\\d6, \\instrument, \\perc, \\dur, 1/4, \\amp, ~x.("${ghosted(pick([7, 9, 11]), 3, 2)}", 0.2), \\freq, Prand([${[0, 2, 4].map((d) => Math.round(440 * Math.pow(2, (deg(d, 4) - 69) / 12))).join(", ")}], inf), \\dec, 0.05, \\click, 0.1, \\pan, Pwhite(-0.7, 0.7), \\send, 0.9)`,
+    toms: `~d.(\\d6, \\instrument, \\perc, \\dur, 1/4, \\amp, ~x.(["${ghosted(16, 5, 3)}", "${ghosted(16, 7, 1)}"], 0.3), \\freq, Pseq([${[0, 2, 4, 2].map((d) => Math.round(440 * Math.pow(2, (deg(d, 2) - 69) / 12))).join(", ")}], inf), \\dec, Pwhite(0.1, 0.22), \\pan, Pseq([-0.5, 0.5], inf), \\send, 0.54)`,
+    pad: `~d.(\\d6, \\instrument, \\pad, \\dur, 8, \\midinote, Pseq([${chord(0, 3)}, ${chord(prog[1], 3)}], inf), \\sus, ${f((60 / bpm) * 6)}, \\att, 1.5, \\rel, 3, \\cutoff, Pwhite(1200, 3000), \\duck, 0.5, \\amp, 0.11)`,
   } as Record<string, string>)[st.lead];
 
   const about = `${st.name} · ${prog.map((d) => (st.mood === "vibey" ? ["I", "ii", "iii", "IV", "V", "vi", "vii"] : ["i", "ii", "III", "iv", "v", "VI", "VII"])[d]).join("–")}`;

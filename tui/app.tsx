@@ -420,7 +420,7 @@ function App() {
     }
     if (input === "e") setLogs((x) => !x);
     if (input === "g") { const seed = Math.floor(Math.random() * 9000) + 1000; setSay(`building into seed ${seed}…`); ride(Math.random() < 0.5 ? "build" : "wash", 2, () => newBase(seed)); }
-    if (input === "b") { mood.current = mood.current === "vibey" ? "dark" : mood.current === "dark" ? "any" : "vibey"; setSay(`bases are now ${mood.current === "vibey" ? "vibey: deep house, nu disco, balearic, afro house, french touch, sunny garage" : mood.current === "dark" ? "dark: detroit, dub techno, acid, electro, two-step, minimal, progressive, halftime, house" : "anything goes"}. g rolls one`); }
+    if (input === "b") { mood.current = mood.current === "vibey" ? "dark" : mood.current === "dark" ? "any" : "vibey"; setSay(`bases are now ${mood.current === "vibey" ? "vibey: melodic, euphoric, deep house, nu disco, balearic, french touch" : mood.current === "dark" ? "the archive: detroit, dub techno, acid, electro, two-step, minimal, progressive, halftime, house, afro house, sunny garage" : "anything goes"}. g rolls one`); }
     if (input === "u") ride("build", 2);
     if (input === "w") ride("wash", 2);
     if (input === "m") { eng.current.volume(muted ? 1 : 0); setMuted(!muted); }

@@ -30,8 +30,8 @@ Instruments and their arguments:
   \\acid  midinote, amp, cutoff (base Hz), env (how far the filter opens per note, 500-5000), res (0..1, 0.85+ squelches), dec, wave (0 saw .. 1 square), send
   \\stab  midinote (array = chord), amp, cutoff, dec, send
   \\fm    midinote, amp, ratio (1 warm, 2 hollow, 3.5 bell, 7.1 metal), index (0.5-8 bite), dec, pan, send
-  \\choir midinote (array = chord), amp (under 0.15), vowel (0 a, 1 e, 2 i, 3 o, 4 u; a Pseq morphs it), att, sus (seconds held), rel, bright (0.8-1.3), send, duck; long \\dur like 4 or 8. A synthetic choir pad.
-  \\pad   midinote (array = chord), amp (keep under 0.15), cutoff, att, sus (seconds held), rel, send; use long \\dur like 8 or 16
+  \\choir midinote (array = chord), amp (0.1-0.3), vowel (0 a, 1 e, 2 i, 3 o, 4 u; a Pseq morphs it), att, sus (seconds held), rel, bright (0.8-1.3), send, duck; long \\dur like 4 or 8. A synthetic choir pad.
+  \\pad   midinote (array = chord), amp (0.1-0.3), cutoff, att, sus (seconds held), rel, send; use long \\dur like 8 or 16
   \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
   \\snare amp, freq (150-260, the body), dec, snap (0..1, how much of it is noise), pan, send
   \\rim   amp, freq (1200-2600), dec (0.02-0.06), pan. A tick: offbeats, ghost notes, 3-3-2 patterns
