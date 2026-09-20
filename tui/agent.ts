@@ -33,6 +33,13 @@ Instruments and their arguments:
   \\choir midinote (array = chord), amp (under 0.15), vowel (0 a, 1 e, 2 i, 3 o, 4 u; a Pseq morphs it), att, sus (seconds held), rel, bright (0.8-1.3), send, duck; long \\dur like 4 or 8. A synthetic choir pad.
   \\pad   midinote (array = chord), amp (keep under 0.15), cutoff, att, sus (seconds held), rel, send; use long \\dur like 8 or 16
   \\perc  freq (Hz: 80 tom .. 800 blip), amp, dec, pan, send, click
+  \\snare amp, freq (150-260, the body), dec, snap (0..1, how much of it is noise), pan, send
+  \\rim   amp, freq (1200-2600), dec (0.02-0.06), pan. A tick: offbeats, ghost notes, 3-3-2 patterns
+  \\sub   midinote, amp, dec, drop (0..4, bends the pitch down into the note), duck. Pure weight, or the drop itself at long dec
+  \\reese midinote, amp, detune (0..3, how much the two saws beat), cutoff, res, dec, rate (filter LFO in Hz), duck
+  \\pluck midinote, amp, dec, tone (0..1 brightness), pan, send. A plucked string or marimba
+  \\noise amp, freq (centre of the band), bw (0.05 narrow .. 2 wide), sweep (>1 rises, <1 falls), att, dec, pan, send. Risers, waves, shakers, atmosphere
+CHARACTER, on \\bass \\stab \\fm \\reese only: \\crush (0..1 sample-and-bit reduction: 0.3 is grit, 0.8 is a broken transmitter) and \\fold (0..1 wavefolder: adds harmonics and bite without getting louder). Both default to 0 and are the fastest way to make a part sound like a different record.
 Nothing else exists. No new SynthDefs, no other functions, no semicolons, one expression.
 
 You answer with a MOVE, never whole code, in exactly this plain-text form and nothing else:
@@ -243,7 +250,7 @@ const DJ_SCHEMA = {
 
 /** Writes a new guest from a description. The result is saved as markdown and joins the booth. */
 export function summon(description: string, taken: string[]): Promise<DJ> {
-  const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns built from these instruments: \\kick (amp, tune, dec, drive), \\hat (amp, dec 0.03-0.16, hp, pan), \\clap (amp, send), \\bass (midinote, cutoff 200-4000 Hz, res 0-3.5, dec), \\acid (midinote, cutoff, env 500-5000, res 0-1, dec, wave), \\stab (chords, cutoff, dec, send), \\fm (midinote, ratio, index, dec, pan), \\pad (chords, cutoff, att, sus, rel), \\perc (freq Hz, dec, pan). Tempo and key vary per set, so describe notes as scale degrees or intervals from the root, not fixed pitches. Randomness (Prand, Pwhite, Pbrown, Pwrand) is available. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
+  const system = `You create guest DJ personas for a live-coded techno set. A guest only ever acts by suggesting edits to SuperCollider patterns built from these instruments: \\kick (amp, tune, dec, drive), \\hat (amp, dec 0.03-0.16, hp, pan), \\clap (amp, send), \\bass (midinote, cutoff 200-4000 Hz, res 0-3.5, dec), \\acid (midinote, cutoff, env 500-5000, res 0-1, dec, wave), \\stab (chords, cutoff, dec, send), \\fm (midinote, ratio, index, dec, pan), \\pad (chords, cutoff, att, sus, rel), \\perc (freq Hz, dec, pan), \\snare (freq, snap), \\rim (freq, dec), \\sub (dec, drop), \\reese (detune, cutoff, res, rate), \\pluck (dec, tone), \\noise (freq, bw, sweep, att, dec), and \\crush / \\fold (0..1 dirt) on bass, stab, fm and reese. Tempo and key vary per set, so describe notes as scale degrees or intervals from the root, not fixed pitches. Randomness (Prand, Pwhite, Pbrown, Pwrand) is available. So every idiom and every "never" must be something expressible with those parameters and with rhythm (Pseq, rests, \\dur). Be specific: numbers, beats, ranges. The Never list is what gives a DJ a personality; make it sharp.
 name: 1-3 words, uppercase stage name. tagline: one line, when to summon them. style: 2-3 sentences. greeting: what they say walking into the booth, under 12 words, in character. Pick the species (their face is pixel art of that animal or creature), eyes (shades/visor put sunglasses on it), rig, palette and visual look that suit them. id: kebab-case, not one of: ${taken.join(", ") || "(none)"}.`;
   return claude<DJ>(`Create a guest DJ: ${description}`, system, DJ_SCHEMA).then((d) => ({ ...d, skills: [] }));
 }

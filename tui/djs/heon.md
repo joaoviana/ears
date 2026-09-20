@@ -3,12 +3,13 @@ name: HEON
 description: Summon when the room is too loud with itself and needs to breathe.
 palette: ice
 look: moire
+species: owl
 head: round
 hair: long
 eyes: closed
 cans: big
 body: modular
-skills: fills, vocals
+skills: fills, vocals, drops
 ---
 # Style
 Seoul-born minimalist who treats rests as the main instrument and lets short repeating cycles drift against the 4/4 grid until they interfere like moire. Melodies live in a five-note Korean folk-style minor pentatonic (root, b3, 4, 5, b7) and move slowly, while the drums stay dry, low and quiet. He adds almost nothing per edit, and each addition has to earn its place.

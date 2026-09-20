@@ -18,6 +18,16 @@ s.waitForBoot {
   // +-4 (music here never exceeds ~2 before the limiter) is clipped. Without this, a burst of garbage at server
   // start circulated in the echo and reverb for ~15 s and kept the limiter pinned, ducking the whole mix.
   ~safe = { |sig| Sanitize.ar(sig).clip2(4) };
+  // Character, as ordinary numbers a patch can set: crush 0..1 is sample-and-bit reduction, fold 0..1 a wavefolder.
+  // Core UGens only, bounded at both ends. The point is that a DJ can reach for dirt without reaching for a Quark or
+  // a SynthDef: the host owns the DSP, the agent only ever names it.
+  ~col = { |sig, crush = 0, fold = 0|
+    var c = crush.clip(0, 1), f = fold.clip(0, 1);
+    var step = 0.5 ** (15 - (c * 11));
+    var down = Latch.ar(sig, Impulse.ar((SampleRate.ir * (1 - (c * 0.92))).max(1800)));
+    var crushed = SelectX.ar(c, [sig, (down / step).round(1) * step]);
+    SelectX.ar(f, [crushed, (crushed * (1 + (f * 5))).fold2(0.8)]);
+  };
   ~fx = Bus.audio(s, 2);
   ~duck = Bus.control(s, 1);   // the kick's envelope, for sidechain pumping (\duck 0..1 on bass, acid, stab, pad)
   ~clock = TempoClock(130 / 60);
@@ -37,9 +47,9 @@ s.waitForBoot {
     Out.ar(out, sig * amp ! 2); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
   // FM pluck / bell: ratio sets the timbre (1 = warm, 3.5 = bell, 7.1 = metal), index the bite
-  SynthDef(\fm, { |out = 0, freq = 440, amp = 0.2, ratio = 2, index = 3, dec = 0.4, pan = 0, send = 0.5|
+  SynthDef(\fm, { |out = 0, freq = 440, amp = 0.2, ratio = 2, index = 3, dec = 0.4, pan = 0, send = 0.5, crush = 0, fold = 0|
     var e = EnvGen.kr(Env.perc(0.002, dec), doneAction: 2);
-    var sig = SinOsc.ar(freq + (SinOsc.ar(freq * ratio) * freq * index * EnvGen.kr(Env.perc(0.001, dec * 0.5)))) * e;
+    var sig = ~col.(SinOsc.ar(freq + (SinOsc.ar(freq * ratio) * freq * index * EnvGen.kr(Env.perc(0.001, dec * 0.5)))), crush, fold) * e;
     Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
   }).add;
   // pad: slow, wide, filtered. sus is the hold time in seconds
@@ -64,13 +74,58 @@ s.waitForBoot {
     var sig = BPF.ar(PinkNoise.ar(7), 1400, 0.6) * (env + bursts);
     Out.ar(out, sig * amp ! 2); Out.ar(~fx, sig * send ! 2);
   }).add;
-  SynthDef(\bass, { |out = 0, freq = 43, amp = 0.8, cutoff = 600, res = 2.7, dec = 0.17, duck = 0.4|
+  SynthDef(\bass, { |out = 0, freq = 43, amp = 0.8, cutoff = 600, res = 2.7, dec = 0.17, duck = 0.4, crush = 0, fold = 0|
     var sig = MoogFF.ar(Saw.ar(freq) + (Pulse.ar(freq * 0.5, 0.4) * 0.4), cutoff.min(SampleRate.ir * 0.42), res)
       * EnvGen.kr(Env.perc(0.003, dec), doneAction: 2);
+    sig = ~col.(sig, crush, fold);
     Out.ar(out, (sig * 1.4).tanh * amp * (1 - (In.kr(~duck) * duck).clip(0, 1)) ! 2);
   }).add;
-  SynthDef(\stab, { |out = 0, freq = 440, amp = 0.1, cutoff = 1800, dec = 0.16, send = 1|
-    var sig = RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff.min(SampleRate.ir * 0.42), 0.35)
+  // ---- new colours. Added because eleven voices of 5-7 numeric args each is a box with no interesting corners:
+  // every idea an agent could have was "change a number on a filter". These are new sounds, not new powers.
+  // 909-ish snare: a tuned body under a band of noise. snap is how much of it is noise
+  SynthDef(\snare, { |out = 0, freq = 190, amp = 0.35, dec = 0.16, snap = 0.6, pan = 0, send = 0.2|
+    var e = EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
+    var body = (SinOsc.ar(freq) + SinOsc.ar(freq * 1.58)) * 0.5 * EnvGen.kr(Env.perc(0.001, dec * 0.4));
+    var sig = (body + (BPF.ar(WhiteNoise.ar, 3200, 0.9) * snap.clip(0, 1))) * e;
+    Out.ar(out, Pan2.ar(sig.tanh, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
+  }).add;
+  // rim / click: a very short resonant tick, for offbeats and ghost notes
+  SynthDef(\rim, { |out = 0, freq = 1700, amp = 0.25, dec = 0.035, pan = 0|
+    var e = EnvGen.kr(Env.perc(0.0005, dec), doneAction: 2);
+    var sig = ((Ringz.ar(Impulse.ar(0), freq.clip(200, 6000), dec * 0.8) * 0.3) + (HPF.ar(WhiteNoise.ar, 1200) * 0.4)) * e;
+    Out.ar(out, Pan2.ar(sig.tanh, pan, amp));
+  }).add;
+  // pure sub. drop > 0 bends the pitch down into the note; long dec is the drop itself
+  SynthDef(\sub, { |out = 0, freq = 41, amp = 0.6, dec = 0.5, drop = 0, duck = 0.5|
+    var f = freq * (1 + (drop.clip(0, 4) * EnvGen.kr(Env.perc(0.001, dec * 0.5))));
+    var sig = SinOsc.ar(f.clip(20, 400)) * EnvGen.kr(Env.perc(0.004, dec), doneAction: 2);
+    Out.ar(out, (sig * amp * (1 - (In.kr(~duck) * duck).clip(0, 1))).tanh ! 2);
+  }).add;
+  // reese: two detuned saws beating against each other under a moving filter
+  SynthDef(\reese, { |out = 0, freq = 55, amp = 0.35, detune = 0.6, cutoff = 700, res = 2.2, dec = 0.7, rate = 0.3, duck = 0.4, crush = 0, fold = 0|
+    var e = EnvGen.kr(Env.linen(0.01, dec, 0.12, 1, \sine), doneAction: 2);
+    var osc = Mix.ar(Saw.ar(freq * [1, 1 + (detune.clip(0, 3) * 0.01)])) * 0.5;
+    var sig = MoogFF.ar(osc, (cutoff * LFTri.kr(rate.clip(0.01, 8)).range(0.6, 1.5)).clip(60, 6000).min(SampleRate.ir * 0.42), res.clip(0, 3.5));
+    sig = ~col.(sig, crush, fold) * e;
+    Out.ar(out, (sig * amp * (1 - (In.kr(~duck) * duck).clip(0, 1))).tanh ! 2);
+  }).add;
+  // plucked string / marimba, from a noise burst in a delay line. tone 0..1 is how bright the pluck is
+  SynthDef(\pluck, { |out = 0, freq = 330, amp = 0.3, dec = 1.2, tone = 0.5, pan = 0, send = 0.3|
+    var e = EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
+    var sig = Pluck.ar(WhiteNoise.ar * tone.clip(0.05, 1), Impulse.ar(0), 0.2, freq.clip(40, 4000).reciprocal, dec * 2, 0.3);
+    sig = LPF.ar(sig, (freq * 8).clip(200, 12000).min(SampleRate.ir * 0.42)) * e;
+    Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
+  }).add;
+  // a band of air that can sweep: long \dur for waves and risers, short for shakers. sweep > 1 rises, < 1 falls
+  SynthDef(\noise, { |out = 0, freq = 2000, amp = 0.12, att = 0.4, dec = 1.2, bw = 0.5, sweep = 1, pan = 0, send = 0.5|
+    var e = EnvGen.kr(Env.perc(att, dec, 1, 0), doneAction: 2);
+    var f = (freq * (sweep.clip(0.1, 8) ** EnvGen.kr(Env.perc(att, dec)))).clip(80, 16000).min(SampleRate.ir * 0.42);
+    var sig = BPF.ar(PinkNoise.ar(3), f, bw.clip(0.05, 2)) * e;
+    Out.ar(out, Pan2.ar(sig, pan, amp)); Out.ar(~fx, sig * amp * send ! 2);
+  }).add;
+
+  SynthDef(\stab, { |out = 0, freq = 440, amp = 0.1, cutoff = 1800, dec = 0.16, send = 1, crush = 0, fold = 0|
+    var sig = ~col.(RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff.min(SampleRate.ir * 0.42), 0.35), crush, fold)
       * EnvGen.kr(Env.perc(0.004, dec), doneAction: 2);
     Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
   }).add;
