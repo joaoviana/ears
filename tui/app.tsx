@@ -155,6 +155,7 @@ function App() {
   // as the current options are all in, and the answers wait here until a verdict frees the screen.
   const prefetching = useRef(false);
   const bank = useRef<{ dj: DJ; opts: Suggestion[]; slots: Record<string, string> } | null>(null);
+  const [stacking, setStacking] = useState(false);
   const marks = useRef<Set<number>>(new Set());   // options picked to land together (alt+1/2/3, enter to commit)
   const stacked = useRef<number[]>([]);
   const wild = useRef(1);   // 0 tame .. 3 unhinged; w cycles it
@@ -496,10 +497,18 @@ function App() {
     if (input === "D") { all.current = roster(); setOverlay("roster"); return; }
     if (key.tab && s.booth.length > 1) { s.turn++; discardOptions("active DJ changed"); s.askAt = s.bar + 1; setSay(`${active().name} steps up`); return; }
     if (input === "q") { eng.current.stop(); setTimeout(() => { Promise.resolve(closeSession.current()).finally(() => { exit(); process.exit(0); }); }, 600); }
-    if (key.meta && "123".includes(input)) { const o = s.options?.[Number(input) - 1]; if (o) {
-      marks.current.has(o.id) ? marks.current.delete(o.id) : marks.current.add(o.id);
-      setSay(marks.current.size ? `${marks.current.size} marked · enter lands them together` : "nothing marked"); } return; }
-    if (key.return && marks.current.size) { takeStack(); return; }
+    // `0` opens stack mode: 1/2/3 then mark instead of taking, enter lands them together. Alt+digit was the first
+    // idea and it cannot work -- on macOS Option+1 is `¡`, not meta+1, unless the terminal is set to send meta.
+    if (input === "0") { setStacking((v) => !v); marks.current = new Set();
+      setSay(stacking ? "" : "stack: mark with 1 2 3, enter lands them on one bar, 0 cancels"); return; }
+    if (stacking) {
+      if (key.escape) { setStacking(false); marks.current = new Set(); setSay(""); return; }
+      if ("123".includes(input)) { const o = s.options?.[Number(input) - 1]; if (o) {
+        marks.current.has(o.id) ? marks.current.delete(o.id) : marks.current.add(o.id);
+        setSay(`${marks.current.size} marked · enter lands them together`); } return; }
+      if (key.return) { setStacking(false); takeStack(); return; }
+      return;   // nothing else gets through while stacking
+    }
     if (input === "y" || input === "1") take(0);
     if (input === "2") take(1);
     if ("!@#".includes(input) && input && s.options?.["!@#".indexOf(input)]) { const o = s.options["!@#".indexOf(input)]; setSay("building into it…"); ride("build", 2, () => take(s.options?.indexOf(o) ?? -1)); }
@@ -583,7 +592,7 @@ function App() {
   })() : null;
   const riding = build.current && now < build.current.until ? build.current : null;
   const KEYS: [string, [string, string][]][] = [
-    ["the booth", [["1 2 3", "take an option"], ["alt+1/2/3", "mark to stack"], ["enter", "land every marked option together"], ["! @ #", "take it with a build"], ["n", "skip the round"], ["tab", "point t / k / x / o at the next DJ"], ["t", "tell the booth something (every DJ answers it)"], ["a", "ask for options now"]]],
+    ["the booth", [["1 2 3", "take an option"], ["0", "stack mode: mark with 1 2 3, enter lands them together"], ["! @ #", "take it with a build"], ["n", "skip the round"], ["tab", "point t / k / x / o at the next DJ"], ["t", "tell the booth something (every DJ answers it)"], ["a", "ask for options now"]]],
     ["djs", [["d", "bring in someone from the roster"], ["D", "pick who from a list"], ["s", "summon a new DJ from a description"], ["x", "retire the active DJ"], ["o / O", "takeover: this DJ / everyone acts alone"], ["k", "activate a skill a DJ has unlocked"], ["K", "give the active DJ any skill right now"], ["R", "record a 4 s voice note for the DJs to chop"]]],
     ["the set", [["g", "new random base, through a build"], ["b", "base mood: vibey / dark / any"], ["W", "how wild the booth is: tame / house / loose / unhinged"], ["u / w", "build / wash by hand"], ["m", "mute"], ["v", "DJs speak their greeting (macOS say)"], ["r", "save what's playing as the reference"]]],
     ["the screen", [["f", "stage mode"], ["l / L", "next / previous look"], ["p", "palette"], ["c", "characters"], ["e", "live protocol log"], ["?", "this"], ["q", "quit"]]],
