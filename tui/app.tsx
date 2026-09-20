@@ -248,7 +248,9 @@ function App() {
     const usable = b.opts.filter((o) => (o.parts ?? [{ slot: o.slot }]).every((x) => (b.slots[x.slot] ?? "").trim() === (evidence.slots[x.slot] || "").trim()));
     if (!usable.length) return false;
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
-    for (const o of usable) offer(o, b.dj.id, context);
+    // the bank knows exactly what the agent was shown, so judge its staleness per slot like any other idea:
+    // without this every prefetched option was measured against the whole-session revision and refused
+    for (const o of usable) offer(o, b.dj.id, context, b.slots);
     if (st.current.options?.length) { setThinking(""); setSay(`${b.dj.name.toLowerCase()} was already thinking`); return true; }
     return false;
   };
