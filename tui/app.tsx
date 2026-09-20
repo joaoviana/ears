@@ -45,6 +45,7 @@ const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
 const arg = (f: string) => process.argv.includes(f);
 const MUTE = arg("--mute"), AUTO = !arg("--manual"), DEMO = arg("--demo"), KEEP = arg("--keep");
 const MOOD0 = ((): Mood => { const i = process.argv.indexOf("--mood"), v = i > 0 ? process.argv[i + 1] : "vibey"; return v === "dark" || v === "any" ? v : "vibey"; })();
+const STYLE0 = (() => { const i = process.argv.indexOf("--style"); return i > 0 ? process.argv[i + 1] : undefined; })();
 const SEED = (() => { const i = process.argv.indexOf("--seed"); return i > 0 ? Number(process.argv[i + 1]) : Math.floor(Math.random() * 9000) + 1000; })();
 const fgc = ([r, g, b]: number[], k = 1) => `\x1b[38;2;${Math.round(r * k)};${Math.round(g * k)};${Math.round(b * k)}m`, RESET = "\x1b[39m";
 const YOU = [255, 255, 255], SEEDC = [138, 135, 153];   // your own edits are white; the seed's are grey; DJs bring their colour
@@ -159,7 +160,7 @@ function App() {
     if (then) setTimeout(then, Math.max(0, drop - now - 450));   // written just before the bar line, so Pdef's quantise lands it on the drop
   };
   const newBase = (seed: number) => {
-    const b = (base.current = makeBase(seed, mood.current)), sd = { name: `seed ${seed}`, rgb: SEEDC };
+    const b = (base.current = makeBase(seed, mood.current, STYLE0)), sd = { name: `seed ${seed}`, rgb: SEEDC };
     needSlotRef.current = true; slotRef.current = null; attempts.current = [];
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     for (const k of SLOTS) { author(k, b.slots[k], sd); authors.current[k].fresh = new Set();   // a whole new base isn't a 'change' to highlight

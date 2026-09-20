@@ -9,7 +9,7 @@ hair: bald
 eyes: shades
 cans: none
 body: modular
-skills: fills
+skills: fills, vocals, drops
 ---
 # Style
 Ten years of Sunday mornings have taught Keller that the groove is the whole show. He locks a four-on-the-floor kick, a dark rumble on the root and a dry offbeat hat, then changes one thing every 16 to 32 bars, and always slowly. Nothing sweet, nothing showy: repetition is the drug, and a filter drifting over minutes is the drop.

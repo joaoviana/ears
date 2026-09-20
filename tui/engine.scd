@@ -109,6 +109,18 @@ s.waitForBoot {
     sig = ~col.(sig, crush, fold) * e;
     Out.ar(out, (sig * amp * (1 - (In.kr(~duck) * duck).clip(0, 1))).tanh ! 2);
   }).add;
+  // Seven detuned saws under a filter envelope: the supersaw. Both references are built on it — an octave bass and
+  // an arp that opens up. cutoff is where the filter starts, env how far it travels, att/rel how it gets there.
+  SynthDef(\supersaw, { |out = 0, freq = 110, amp = 0.25, detune = 0.18, cutoff = 400, env = 2200, res = 0.3,
+                        att = 0.01, sus = 0.3, rel = 0.25, spread = 0.8, send = 0.5, duck = 0.3, crush = 0, fold = 0|
+    var d = detune.clip(0, 1) * 0.02;
+    var osc = Splay.ar(Saw.ar(freq * [1 - d, 1 - (d * 0.62), 1 - (d * 0.24), 1, 1 + (d * 0.24), 1 + (d * 0.62), 1 + d]), spread.clip(0, 1));
+    var fenv = EnvGen.kr(Env.perc(att.max(0.001), (sus + rel).max(0.05)));
+    var e = EnvGen.kr(Env.linen(att.max(0.001), sus, rel, 1, \sine), doneAction: 2);
+    var sig = RLPF.ar(osc, (cutoff + (env * fenv)).clip(60, 14000).min(SampleRate.ir * 0.42), (1.02 - res.clip(0, 1)).clip(0.05, 1));
+    sig = ~col.(sig, crush, fold) * e * (1 - (In.kr(~duck) * duck).clip(0, 1));
+    Out.ar(out, sig * amp); Out.ar(~fx, sig * amp * send);
+  }).add;
   // plucked string / marimba, from a noise burst in a delay line. tone 0..1 is how bright the pluck is
   SynthDef(\pluck, { |out = 0, freq = 330, amp = 0.3, dec = 1.2, tone = 0.5, pan = 0, send = 0.3|
     var e = EnvGen.kr(Env.perc(0.001, dec), doneAction: 2);
