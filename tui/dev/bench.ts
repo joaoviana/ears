@@ -14,31 +14,33 @@ import { ask, type Past, type Suggestion } from "../agent.ts"; import { roster }
 import { parseSlot, applyPatch } from "../patch.ts";
 import { NoiseFloor, grade, forPrompt, MIN_SAMPLES, type Differences, type Metric } from "../shots.ts";
 import { brief as writeBrief, slotDrift, type Attempt } from "../brief.ts";
+import { maskingLines } from "../masking.ts";
 process.env.EARS_ANGLES = "1";
 const N_SEEDS = Number(process.argv[2] || 2), ROUNDS = Number(process.argv[3] || 6), SEEDS = [41, 7, 77, 12, 33, 5, 21, 64].slice(0, N_SEEDS);
-const METRICS_USED: Metric[] = ["sub", "low", "mid", "high", "air", "brightness", "loudness"];   // density and punch have no per-slot measurement
+const METRICS_USED: Metric[] = ["sub", "low", "mid", "high", "air", "brightness", "loudness", "width"];   // density and punch have no per-slot measurement
 const CONDS = ["blind", "ears", "ears+shots", "brief+shots"] as const, SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6"], BANDS = ["sub", "low", "mid", "high", "air"] as const;
 const dj = roster().find((d) => d.id === "resident")!, e = new Engine(), wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let listener = new Listener(), taps: Record<string, { rms: number; centroid: number; bands: number[] }[]> = {}, barLen = 1846, barWaiters: (() => void)[] = [];
 e.on("ears", (f) => listener.push(f)); e.on("onset", () => listener.onset()); e.on("slotears", (f: any) => (taps[f.slot] ??= []).push(f));
+e.on("hit", (h: any) => listener.hit(h.offGrid ?? 0));
 e.on("bar", ({ bpm }) => { barLen = (240 / bpm) * 1000; listener.bar(); barWaiters.splice(0).forEach((f) => f()); });
 e.on("log", (l) => /ERROR/.test(l) && console.log("   [sc]", l.slice(0, 100)));
 const nextBar = () => new Promise<void>((r) => barWaiters.push(r));
 
 interface Tap { power: number; bands: number[]; centroid: number }
-interface Win { master: Profile; taps: Record<string, Tap> }
+interface Win { master: Profile; taps: Record<string, Tap>; frames: { slot: string; bands: number[] }[] }
 const window2 = async (): Promise<Win> => { for (let attempt = 0; attempt < 4; attempt++) { const w = await windowOnce(); if (w.master) return w; console.log("   (empty window, listening again)"); } throw new Error("no audio frames are arriving from the engine"); };
 const windowOnce = async (): Promise<Win> => {
   await nextBar(); listener = new Listener(); taps = {}; for (let i = 0; i < 4; i++) await nextBar();   // four bars: the grooves turn around every fourth bar, and the hats are random
   const t: Record<string, Tap> = {};
   for (const k of SLOTS) { const f = taps[k] || [], n = Math.max(1, f.length), pw = f.map((x) => x.rms * x.rms), tot = pw.reduce((a, b) => a + b, 0); t[k] = { power: tot / n, bands: [0, 1, 2, 3, 4].map((i) => f.reduce((a, x) => a + x.bands[i] * x.bands[i], 0) / n), centroid: tot > 0 ? f.reduce((a, x, j) => a + x.centroid * pw[j], 0) / tot : 0 }; }
-  return { master: listener.take()!, taps: t };
+  return { master: listener.take()!, taps: t, frames: SLOTS.flatMap((k) => (taps[k] || []).map((x) => ({ slot: k, bands: x.bands }))) };
 };
 const dB = (p: number) => 10 * Math.log10(Math.max(p, 1e-12));
 /** the dry mix rebuilt from the taps: total level, band balance, brightness */
 const mix = (t: Record<string, Tap>) => { const tot = SLOTS.reduce((a, k) => a + t[k].power, 0), bands = [0, 1, 2, 3, 4].map((i) => SLOTS.reduce((a, k) => a + t[k].bands[i], 0)); return { loud: dB(tot), rel: bands.map((b) => dB(b) - dB(tot)), centroid: SLOTS.reduce((a, k) => a + t[k].centroid * t[k].power, 0) / Math.max(tot, 1e-12) }; };
 const mixDiff = (a: Record<string, Tap>, b: Record<string, Tap>, master?: [Profile, Profile]): Differences => { const x = mix(a), y = mix(b), m = master ? metricDelta(master[0], master[1]) as any : { onsets_per_beat: 0, peak_to_envelope_db: 0 }; return { envelope_db: y.loud - x.loud, centroid_hz: y.centroid - x.centroid, relative_bands_db: Object.fromEntries(BANDS.map((n, i) => [n, y.rel[i] - x.rel[i]])), onsets_per_beat: m.onsets_per_beat, peak_to_envelope_db: m.peak_to_envelope_db }; };
-const asMetrics = (d: Differences): Partial<Record<Metric, number>> => ({ ...d.relative_bands_db, brightness: d.centroid_hz, loudness: d.envelope_db, density: d.onsets_per_beat, punch: d.peak_to_envelope_db } as any);
+const asMetrics = (d: Differences): Partial<Record<Metric, number>> => ({ ...d.relative_bands_db, brightness: d.centroid_hz, loudness: d.envelope_db, density: d.onsets_per_beat, punch: d.peak_to_envelope_db, width: d.width_db, groove: (d.off_grid_beats ?? 0) * 1000 } as any);
 /** how far the dry mix is from the clean base, in tolerances (1.5 dB per band, 0.15 octave of brightness, 1 dB level), each capped at 4 */
 const distance = (t: Record<string, Tap>, target: Record<string, Tap>) => { const a = mix(t), b = mix(target), cap = (x: number) => Math.min(4, x); return ([...a.rel.map((v, i) => cap(Math.abs(v - b.rel[i]) / 1.5)), cap(Math.abs(Math.log2(a.centroid / b.centroid)) / 0.15), cap(Math.abs(a.loud - b.loud) / 1)]).reduce((x, y) => x + y, 0) / 7; };
 /** deliberately worse: the kick buried, the hats too loud, the low voice's filter wide open */
@@ -83,7 +85,7 @@ e.on("ready", async () => {
       const worstSlot = slotDrift(before.taps, target.taps)[0]?.slot ?? "d1";
       const lines = compare(before.master, target.master);
       const report = cond === "blind" ? "NO LISTENING REPORT IS AVAILABLE. You have the code only. Still call your shot."
-        : cond === "brief+shots" ? writeBrief(lines, "this track as it should sound", slotDrift(before.taps, target.taps), Object.fromEntries(METRICS_USED.map((m) => [m, tapNoise[worstSlot].floor(m)])), attempts)
+        : cond === "brief+shots" ? writeBrief(lines, "this track as it should sound", slotDrift(before.taps, target.taps), Object.fromEntries(METRICS_USED.map((m) => [m, tapNoise[worstSlot].floor(m)])), attempts, maskingLines(before.frames))
         : asText(lines, "this track as it should sound");
       let got: Suggestion | null = null, refused = 0;
       try { await ask({ dj, skills: [], slots, report, note: "", history: cond.includes("shots") ? history : history.map((h) => ({ ...h, outcome: undefined })), context: `${base.bpm} BPM, key ${base.key} (bass root midinote ${base.root})` }, (o) => { got ??= o; }, (kind) => { if (kind === "rejected") refused++; }); } catch {}

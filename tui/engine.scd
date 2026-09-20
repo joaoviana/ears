@@ -135,14 +135,19 @@ s.waitForBoot {
   SynthDef(\master, {
     var sig = ~safe.(In.ar(0, 2)) * 2.6;
     sig = Compander.ar(sig, sig, 0.35, 1, 0.5, 0.005, 0.12);
+    SendReply.kr(Impulse.kr(4), '/head', [A2K.kr(Peak.ar(sig, Impulse.ar(4)).reduce(\max))]);   // pre-limiter
     ReplaceOut.ar(0, Limiter.ar(sig, 0.95, 0.004));
   }).add;
   SynthDef(\vol, { |vol = 1| ReplaceOut.ar(0, In.ar(0, 2) * vol.lag(0.05)) }).add;
   SynthDef(\slottap, { |in, slot = 1|
     var st = ~safe.(In.ar(in, 2)), sig = st.sum * 0.5, chain = FFT(LocalBuf(1024), sig);
     var amp = { |x| Amplitude.kr(x, 0.01, 0.25) };
-    SendReply.kr(Impulse.kr(7.5), '/slotears', [slot, amp.(sig), SpecCentroid.kr(chain),
-      amp.(LPF.ar(LPF.ar(sig, 80), 80)), amp.(BPF.ar(sig, 150, 1.0)), amp.(BPF.ar(sig, 700, 1.6)), amp.(BPF.ar(sig, 3000, 1.4)), amp.(HPF.ar(HPF.ar(sig, 7000), 7000))]);
+    var mid = amp.(sig), side = amp.((st[0] - st[1]) * 0.5);
+    // tail: how much level survives 120 ms of smoothing. A short hit decays away; a reverb or a long pad does not.
+    var fast = Amplitude.kr(sig, 0.005, 0.02), slow = Amplitude.kr(sig, 0.12, 0.35);
+    SendReply.kr(Impulse.kr(7.5), '/slotears', [slot, mid, SpecCentroid.kr(chain),
+      amp.(LPF.ar(LPF.ar(sig, 80), 80)), amp.(BPF.ar(sig, 150, 1.0)), amp.(BPF.ar(sig, 700, 1.6)), amp.(BPF.ar(sig, 3000, 1.4)), amp.(HPF.ar(HPF.ar(sig, 7000), 7000)),
+      side, slow, fast]);
     Out.ar(0, st);
   }).add;
   // the agent's ears: after the master chain, before the volume stage, so a muted test still reads true
@@ -157,7 +162,7 @@ s.waitForBoot {
       amp.(BPF.ar(sig, 3000, 1.4)),
       amp.(HPF.ar(HPF.ar(sig, 7000), 7000)),
     ];
-    SendReply.kr(Impulse.kr(15), '/ears', [amp.(sig), A2K.kr(Peak.ar(sig, Impulse.ar(15))), SpecCentroid.kr(chain), SpecFlatness.kr(chain)] ++ bands);
+    SendReply.kr(Impulse.kr(15), '/ears', [amp.(sig), A2K.kr(Peak.ar(sig, Impulse.ar(15))), SpecCentroid.kr(chain), SpecFlatness.kr(chain)] ++ bands ++ [amp.((In.ar(0, 2)[0] - In.ar(0, 2)[1]) * 0.5)]);
     SendReply.kr(Onsets.kr(chain, 0.18), '/onset');
   }).add;
   // the picture's raw material: the master bus itself, low-passed and written into a small ring buffer
@@ -174,6 +179,7 @@ s.waitForBoot {
   ~slotBus = 6.collect { Bus.audio(s, 2) };
   ~slotBus.do { |bus, i| Synth.tail(s, \slottap, [\in, bus, \slot, i + 1]) };
   OSCdef(\slotears, { |msg| tui.sendMsg(*(['/slotears'] ++ msg[3..])) }, '/slotears');
+  OSCdef(\head, { |msg| tui.sendMsg('/head', msg[3]) }, '/head');
   ~space = Synth.tail(s, \space);
   ~djfx = Synth.tail(s, \djfx);
   Synth.tail(s, \master);
@@ -196,7 +202,7 @@ s.waitForBoot {
     Pdef(name, Pbind(*(pairs ++ [\stretch, 1, \out, ~slotBus[(name.asString.drop(1).asInteger - 1).clip(0, 5)],
       \tell, Pfunc { |ev|
         if(first) { first = false; tui.sendMsg('/active', name, execution, s.latency, thisThread.seconds, "pattern_event", Main.elapsedTime) };
-        if(ev.isRest.not) { tui.sendMsg('/hit', name, ev[\instrument] ? \default, s.latency, (ev[\amp] ? 0.1).asFloat, thisThread.seconds, thisThread.beats) }; 0 }
+        if(ev.isRest.not) { tui.sendMsg('/hit', name, ev[\instrument] ? \default, s.latency, (ev[\amp] ? 0.1).asFloat, thisThread.seconds, thisThread.beats, ((thisThread.beats * 4).round(1) - (thisThread.beats * 4)) / 4) }; 0 }   // signed distance from the 16th grid, in beats
     ]))).quant_(4);
     if(Pdef(name).isPlaying.not) { Pdef(name).play(~clock, quant: 4) };
     name

@@ -2,7 +2,7 @@
 // evidence layer produces a before/after comparison for that change, the host grades the call. The grade is shown,
 // kept per DJ, and fed into that DJ's next prompt, so a DJ that keeps being wrong is told so, in numbers.
 // Pure module: no UI, no engine. Grading is observational (live master mix), and says so.
-export const METRICS = ["sub", "low", "mid", "high", "air", "brightness", "loudness", "density", "punch"] as const;
+export const METRICS = ["sub", "low", "mid", "high", "air", "brightness", "loudness", "density", "punch", "width", "groove"] as const;
 export type Metric = (typeof METRICS)[number];
 export type Dir = "up" | "down" | "same";
 export interface Expect { metric: Metric; dir: Dir }
@@ -12,11 +12,11 @@ export type Grade = "hit" | "miss" | "flat" | "ungraded";
 const AMBIGUOUS = /other state or activation changes|mixer transitions/i;
 export const attributable = (confounds: string[] = []) => !confounds.some((c) => AMBIGUOUS.test(c));
 export interface Outcome { grade: Grade; delta: number | null; unit: string; floor: number; text: string }
-export interface Differences { envelope_db: number; peak_to_envelope_db: number; centroid_hz: number; onsets_per_beat: number; relative_bands_db: Record<string, number> }
+export interface Differences { envelope_db: number; peak_to_envelope_db: number; centroid_hz: number; onsets_per_beat: number; relative_bands_db: Record<string, number>; width_db?: number; off_grid_beats?: number }
 
-const UNIT: Record<Metric, string> = { sub: "dB", low: "dB", mid: "dB", high: "dB", air: "dB", brightness: "Hz", loudness: "dB", density: "/beat", punch: "dB" };
+const UNIT: Record<Metric, string> = { sub: "dB", low: "dB", mid: "dB", high: "dB", air: "dB", brightness: "Hz", loudness: "dB", density: "/beat", punch: "dB", width: "dB", groove: "ms" };
 // the smallest change worth calling a change, before any noise has been measured
-const BASE: Record<Metric, number> = { sub: 1.2, low: 1.2, mid: 1.2, high: 1.5, air: 2, brightness: 220, loudness: 0.8, density: 0.3, punch: 1.2 };
+const BASE: Record<Metric, number> = { sub: 1.2, low: 1.2, mid: 1.2, high: 1.5, air: 2, brightness: 220, loudness: 0.8, density: 0.3, punch: 1.2, width: 1.5, groove: 4 };
 export const ARROW: Record<Dir, string> = { up: "↑", down: "↓", same: "=" };
 /** below this many baseline samples, `floor` falls back to the fixed default and `ready` is false */
 export const MIN_SAMPLES = 4;
@@ -29,7 +29,7 @@ export function parseExpect(line: string): Expect | null {
   return { metric, dir };
 }
 export const describeExpect = (e: Expect) => `${e.metric} ${ARROW[e.dir]}`;
-export const pick = (d: Differences, m: Metric): number => m === "brightness" ? d.centroid_hz : m === "loudness" ? d.envelope_db : m === "density" ? d.onsets_per_beat : m === "punch" ? d.peak_to_envelope_db : d.relative_bands_db[m] ?? 0;
+export const pick = (d: Differences, m: Metric): number => m === "brightness" ? d.centroid_hz : m === "loudness" ? d.envelope_db : m === "density" ? d.onsets_per_beat : m === "punch" ? d.peak_to_envelope_db : m === "width" ? (d.width_db ?? 0) : m === "groove" ? (d.off_grid_beats ?? 0) * 1000 : d.relative_bands_db[m] ?? 0;
 
 /**
  * How much the sound moves between two windows when NOTHING was changed: patterns here are stochastic, so some
@@ -59,9 +59,9 @@ export function grade(e: Expect, d: Differences | null, floor: number): Outcome 
   const unit = UNIT[e.metric];
   if (!d) return { grade: "ungraded", delta: null, unit, floor, text: "no clean before/after window" };
   const delta = pick(d, e.metric), moved = Math.abs(delta) >= floor, up = delta > 0;
-  const shown = `${delta >= 0 ? "+" : ""}${e.metric === "brightness" ? Math.round(delta) : delta.toFixed(1)} ${unit}`;
+  const shown = `${delta >= 0 ? "+" : ""}${e.metric === "brightness" || e.metric === "groove" ? Math.round(delta) : delta.toFixed(1)} ${unit}`;
   if (e.dir === "same") return { grade: moved ? "miss" : "hit", delta, unit, floor, text: moved ? `${shown}: it moved` : `${shown}: held` };
-  if (!moved) return { grade: "flat", delta, unit, floor, text: `${shown}: inside the noise (±${e.metric === "brightness" ? Math.round(floor) : floor.toFixed(1)})` };
+  if (!moved) return { grade: "flat", delta, unit, floor, text: `${shown}: inside the noise (±${e.metric === "brightness" || e.metric === "groove" ? Math.round(floor) : floor.toFixed(1)})` };
   return { grade: up === (e.dir === "up") ? "hit" : "miss", delta, unit, floor, text: shown };
 }
 

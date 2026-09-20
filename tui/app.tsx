@@ -287,7 +287,7 @@ function App() {
     e.on("scope", feed);
     e.on("slotears", (f: any) => slotEars.current.push(f));
     e.on("onset", () => ears.current.onset());
-    e.on("hit", (h: Hit) => hits.current.push(h));
+    e.on("hit", (h: Hit) => { hits.current.push(h); ears.current.hit(h.offGrid ?? 0); });
     e.on("evald", ({ id, ok, msg, execution_id, scheduled_at_ms }) => {
       if (!evidence.current(execution_id)) return;
       evidence.evaluated(execution_id, ok, msg, scheduled_at_ms);
@@ -325,7 +325,7 @@ function App() {
     if (DEMO) {
       if (!KEEP) newBase(SEED);
       const beat = 60000 / 130; let n = 0;
-      demo = setInterval(() => { const at = Date.now() + 50; const st4 = (n % 4) * 4; hits.current.push({ slot: "d1", inst: "kick", at, amp: 0.9, step: st4 }); if (n % 2) hits.current.push({ slot: "d4", inst: "clap", at, amp: 0.5, step: st4 }); for (let i = 0; i < 4; i++) hits.current.push({ slot: "d2", inst: "hat", at: at + (i * beat) / 4, amp: 0.2, step: st4 + i }); if (n % 4 === 0) onBar(n / 4, at, beat * 4); if (n % 32 === 31) queueScene({}); n++; }, beat);
+      demo = setInterval(() => { const at = Date.now() + 50; const st4 = (n % 4) * 4; hits.current.push({ slot: "d1", inst: "kick", at, amp: 0.9, step: st4, offGrid: 0 }); if (n % 2) hits.current.push({ slot: "d4", inst: "clap", at, amp: 0.5, step: st4, offGrid: 0 }); for (let i = 0; i < 4; i++) hits.current.push({ slot: "d2", inst: "hat", at: at + (i * beat) / 4, amp: 0.2, step: st4 + i, offGrid: 0 }); if (n % 4 === 0) onBar(n / 4, at, beat * 4); if (n % 32 === 31) queueScene({}); n++; }, beat);
     } else e.start(MUTE);
     const w = chokidar.watch(SET, { ignoreInitial: true }).on("all", (_ev, file) => {
       const s = path.basename(file, ".scd");
