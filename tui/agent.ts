@@ -126,7 +126,10 @@ function claude<T>(prompt: string, system: string, schema: object, timeout = 700
 // Options render the moment each one validates, so a straggler costs one option rather than everyone's time.
 // 40 s was a safety net for a batch job; on a stage the round is over long before that. Latency varies by a few
 // seconds run to run for identical work, so this caps the tail rather than removing it.
-const DEADLINE = Number(process.env.EARS_DEADLINE || 9000);
+// 9 s killed 9 of 13 angles in a real set: the add and turn angles write rewrites against a full brief and
+// regularly need 10-12 s, so the cap turned slow options into absent ones while the header still promised three.
+// Options stream in as they validate, so a late one costs nothing that a missing one does not cost more.
+const DEADLINE = Number(process.env.EARS_DEADLINE || 16000);
 function claudeText(prompt: string, system: string, timeout = DEADLINE): Promise<string> {
   return new Promise((resolve, reject) => {
     const p = spawn("claude", ["-p", prompt, "--system-prompt", system, "--output-format", "text", "--model", MODEL, ...(process.env.EARS_EFFORT === "default" ? [] : ["--effort", process.env.EARS_EFFORT || "low"]), "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"], { stdio: ["ignore", "pipe", "pipe"] });

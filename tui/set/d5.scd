@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \pluck, \dur, 1/4, \amp, 0.3, \dec, 1.2, \tone, 0.5, \send, 0.3, \midinote, Pseq([\r, \r, 73, \r, \r, 80, \r, \r, 77, \r, \r, 73, \r, 85, \r, \r], inf))
+~d.(\d5, \instrument, \pad, \dur, 4, \midinote, Pseq([[60, 63, 70, 74], [65, 69, 75, 79], [58, 62, 69, 72], [58, 62, 69, 72]], inf), \sus, 1.655, \att, 0.5, \rel, 0.828, \cutoff, Pwhite(1700, 3000), \duck, 0.8, \amp, 0.216)
