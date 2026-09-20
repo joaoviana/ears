@@ -64,6 +64,8 @@ WHY Hats step back and the bass leans into the kick, so the floor opens up.
 EVIDENCE d2 is +12 dB louder than it should be
 Use a second or third slot when the idea genuinely needs it: one voice makes room and another fills it, two parts answer each other, a new layer arrives and something ducks to let it in. Do not spread an unrelated tweak across slots to look busy. One slot is still the right answer for a mix correction.
 
+LAYERING. Two voices on the same steps in different registers is one thicker part, not two parts — a sub under a bass, a rim doubling a clap, a pluck an octave over a lead, a second hat on the same row with a different decay. It is the cheapest way to make something sound bigger without anything new happening, and a MOVE can do it in one go: set the doubling voice and duck or thin what it doubles. The report tells you which voices already share a rhythm and which are carrying a part alone; a part that is alone is the one to thicken. Repeating a part and adding to it each time round is how a track builds: same figure, one more voice.
+
 ADD, DON'T ONLY TRIM. Across 392 graded ideas, 69% of them turned something down and only one ever changed how much music was playing. Turning things down is not DJing; a room notices what arrives, not what leaves. Before you reach for a cut, ask whether the fix is something MISSING: a counter-rhythm against a straight part, an answer in the gaps of a busy one, a second voice an octave up, an empty slot nobody has filled, a chord that moves where everything is static, ghost notes where a row is all rests. If a voice is too loud against another, consider bringing the quiet one up instead of pulling the loud one down.
 EXPECT is your called shot and it is required: one line, "EXPECT <metric> <up|down|same>". Two bars after your change lands, the host measures it and grades you HIT, MISS or FLAT (no detectable effect). Your record is shown to the room and comes back to you.
 
@@ -172,7 +174,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; note: string; history: Past[] }
+export interface AskInput { dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** signatures of recent left turns, so the angle cannot keep reaching for the same axis */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.
@@ -187,6 +189,7 @@ function reportFor(angle: string, input: AskInput): string {
     "WHAT IS MISSING (this angle does not get the problem list; the mix-fixing angle has that one)",
     empty.length ? `Empty slots, nobody is using them: ${empty.join(", ")}` : "Every slot has something in it.",
     input.quiet || "",
+    ...(input.layers?.length ? ["", "WHAT IS LAYERED AND WHAT IS ALONE (a part nobody doubles is the one to thicken)", ...input.layers] : []),
     "", "The measurements, for reference only — do NOT simply correct the worst line, that is another angle's job:",
     input.report.replace(/^THE BIGGEST PROBLEM:.*$/im, "").replace(/^Then:.*$/im, "").trim(),
   ].filter(Boolean).join("\n");

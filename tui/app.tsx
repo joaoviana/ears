@@ -22,6 +22,7 @@ import { NoiseFloor, grade, describeExpect, forPrompt, emptyTally, attributable,
 import { SlotEars, slotDifference, PER_SLOT_METRICS, type SlotWindow } from "./slotears.ts";
 import { brief as writeBrief, slotDrift, type Attempt } from "./brief.ts";
 import { maskingLines } from "./masking.ts";
+import { layerLines, type Beat } from "./layers.ts";
 import { spawn, execSync } from "child_process";
 import { TextInput, Select, Spinner, ThemeProvider, extendTheme, defaultTheme } from "@inkjs/ui";
 import asciichart from "asciichart";
@@ -147,6 +148,7 @@ function App() {
 
   // What the `add` angle is given instead of the problem list: the parts nobody has touched. A ranked report names one
   // worst thing and every angle then solves that one thing; this is the other half of the room.
+  const beats = useRef<Beat[]>([]);     // every hit that sounded, so the report can say what doubles what
   const turns = useRef<string[]>([]);   // the axes the left turn has already spent this set
   const quietLine = () => {
     const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
@@ -190,7 +192,7 @@ function App() {
     refreshState();
     const context: Context = { based_on_revision: evidence.revision, evidence_ids: evidence.latest ? [evidence.latest.id] : [] };
     busy.current = true; setThinking(`${dj.name.toLowerCase()} is listening`);
-    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
+    ask({ dj, skills: dj.skills, showcase: showcase.current?.agent === dj.id ? showcase.current.skill : null, slots: { ...evidence.slots }, report: s.report, quiet: quietLine(), turns: turns.current, layers: layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8)), note: s.note, history: s.history, context: `${bpmRef.current} BPM${base.current ? `, key ${base.current.key} (bass root midinote ${base.current.root})` : ""}` },
       (o) => { if (st.current.round !== round) return; refreshState(); offer(o, dj.id, context);
         if (o.angle === "turn") { const k = Object.fromEntries(parseSlot(o.parts[0].code).map((x) => [x.key, x.value]));
           turns.current = [...turns.current, `${k.instrument ?? "same"} ${k.dur ?? "same"}`].slice(-5); }   // spent whether or not it is taken
@@ -313,7 +315,9 @@ function App() {
     e.on("scope", feed);
     e.on("slotears", (f: any) => slotEars.current.push(f));
     e.on("onset", () => ears.current.onset());
-    e.on("hit", (h: Hit) => { hits.current.push(h); ears.current.hit(h.offGrid ?? 0); });
+    e.on("hit", (h: Hit) => { hits.current.push(h); ears.current.hit(h.offGrid ?? 0);
+      beats.current.push({ slot: h.slot, step: h.step, bar: st.current.bar });   // a rolling window of who hit where, for layers.ts
+      if (beats.current.length > 400) beats.current.shift(); });
     e.on("evald", ({ id, ok, msg, execution_id, scheduled_at_ms }) => {
       if (!evidence.current(execution_id)) return;
       evidence.evaluated(execution_id, ok, msg, scheduled_at_ms);
@@ -338,8 +342,9 @@ function App() {
         if (needSlotRef.current && Object.keys(hereNow).length >= 3) { slotRef.current = hereNow; needSlotRef.current = false; }   // first clean window after a new base
         const floors = Object.fromEntries(METRICS.map((k) => [k, (slotNoise.current[slotDrift(hereNow, slotRef.current ?? hereNow)[0]?.slot ?? "d1"] ?? noise.current).floor(k)]));
         const drift = slotRef.current ? slotDrift(hereNow, slotRef.current) : [], masking = win ? maskingLines(slotEars.current.bandFrames(win.start_ms, win.end_ms)) : [];
+        const layers = layerLines(beats.current.filter((x) => (x.bar ?? 0) > st.current.bar - 8));
         setDiagnosis({ drift, masking });
-        s.report = writeBrief(l, slotRef.current ? "how this base sounded when it started" : "detroit", drift, floors, attempts.current, masking);
+        s.report = writeBrief(l, slotRef.current ? "how this base sounded when it started" : "detroit", drift, floors, attempts.current, masking, layers);
       } { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; evidence.observe(p, summary, s.report, summary === lastSummary.current); lastSummary.current = summary; } const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       bus.current.bar = n;
       for (const r of s.reverts.filter((r) => n >= r.atBar)) { if (read(r.slot).trim() !== r.appliedCode) { bus.current.send("note", "host", { text: `Skipped ${r.slot} fill restore: a newer edit is on disk` }); continue; } writeSlot(r.slot, r.code); evaluateSlot(r.slot, r.code, "fill over"); }

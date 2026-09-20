@@ -36,7 +36,7 @@ export function slotDrift(now: Record<string, SlotLevel>, target: Record<string,
  * @param floors    what counts as a detectable change, per metric
  * @param tried     what has already been attempted, newest last
  */
-export function brief(lines: Line[], refName: string, drift: { slot: string; db: number }[] = [], floors: Partial<Record<Metric, number>> = {}, tried: Attempt[] = [], masking: string[] = []): string {
+export function brief(lines: Line[], refName: string, drift: { slot: string; db: number }[] = [], floors: Partial<Record<Metric, number>> = {}, tried: Attempt[] = [], masking: string[] = [], layers: string[] = []): string {
   const off = lines.filter((l) => l.word && l.word !== "ok" && severity(l) > 0).sort((a, b) => severity(b) - severity(a));
   const fmt = (l: Line) => (l.label === "headroom" ? `${l.word} (headroom ${l.value})` : `${l.word} (${l.label.split(/\s+/)[0]}, ${(l.delta ?? 0) >= 0 ? "+" : ""}${(l.delta ?? 0).toFixed(1)}${l.label === "centroid" ? "%" : ""} off)`);
   const out: string[] = [`Measured against ${refName}, worst first.`];
@@ -48,6 +48,7 @@ export function brief(lines: Line[], refName: string, drift: { slot: string; db:
   }
   if (drift.length) out.push("", "WHICH VOICE MOVED (level against how this base sounded when it started; this is where the damage is)", ...drift.slice(0, 4).map((d) => `  ${d.slot} is ${d.db > 0 ? "+" : ""}${d.db.toFixed(1)} dB ${d.db > 0 ? "louder" : "quieter"} than it should be`));
   if (masking.length) out.push("", "VOICES FIGHTING EACH OTHER (two things in one band at one moment; this is what \"muddy\" and \"boxy\" usually are)", ...masking);
+  if (layers.length) out.push("", "WHAT IS LAYERED AND WHAT IS ALONE (same rhythm, different register: a sub under a bass, a rim on a clap)", ...layers);
 
   // the worst problem the agent can actually be graded on: headroom outranks everything but is not a called metric
   const worst = off.map((l) => METRIC_OF[l.label]).find((m) => m && floors[m] != null);

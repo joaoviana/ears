@@ -1,1 +1,1 @@
-~d.(\d5, \instrument, \choir, \dur, 4, \midinote, Pseq([[56, 60, 67, 70], [58, 62, 68, 72], [55, 58, 65, 68], [60, 63, 70, 74]], inf), \vowel, Pseq([0, 3, 0, 4], inf), \sus, 1.552, \att, 0.4, \rel, 0.776, \bright, 1.1, \duck, 0.8, \amp, 0.24)
+~d.(\d5, \instrument, \choir, \dur, 4, \midinote, Pseq([[53, 57, 64, 67], [57, 60, 67, 70], [58, 62, 69, 72], [60, 64, 70, 74]], inf), \vowel, Pseq([0, 3, 0, 4], inf), \sus, 3, \att, 0.3, \rel, 1.2, \bright, 1.1, \duck, 0.6, \amp, 0.27)
