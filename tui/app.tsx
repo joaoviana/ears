@@ -128,6 +128,7 @@ function App() {
   const slotEars = useRef(new SlotEars()), slotNoise = useRef<Record<string, NoiseFloor>>({}), slotWins = useRef<{ key: string; from: number; to: number; w: Record<string, SlotWindow> }[]>([]);
   // what each voice measured when this base started: the reference slot drift is judged against
   const slotRef = useRef<Record<string, SlotWindow> | null>(null), needSlotRef = useRef(false), attempts = useRef<Attempt[]>([]);
+  const [diagnosis, setDiagnosis] = useState<{ drift: { slot: string; db: number }[]; masking: string[] }>({ drift: [], masking: [] });
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
@@ -317,9 +318,9 @@ function App() {
         const win = p.capture ?? null, hereNow = win ? slotEars.current.all(win.start_ms, win.end_ms) : {};
         if (needSlotRef.current && Object.keys(hereNow).length >= 3) { slotRef.current = hereNow; needSlotRef.current = false; }   // first clean window after a new base
         const floors = Object.fromEntries(METRICS.map((k) => [k, (slotNoise.current[slotDrift(hereNow, slotRef.current ?? hereNow)[0]?.slot ?? "d1"] ?? noise.current).floor(k)]));
-        s.report = writeBrief(l, slotRef.current ? "how this base sounded when it started" : "detroit",
-          slotRef.current ? slotDrift(hereNow, slotRef.current) : [], floors, attempts.current,
-          win ? maskingLines(slotEars.current.bandFrames(win.start_ms, win.end_ms)) : []);
+        const drift = slotRef.current ? slotDrift(hereNow, slotRef.current) : [], masking = win ? maskingLines(slotEars.current.bandFrames(win.start_ms, win.end_ms)) : [];
+        setDiagnosis({ drift, masking });
+        s.report = writeBrief(l, slotRef.current ? "how this base sounded when it started" : "detroit", drift, floors, attempts.current, masking);
       } { const summary = l.filter((x) => x.word && x.word !== "ok").map((x) => `${x.label.split(" ")[0]} ${x.word}`).join(" · ") || "balanced"; evidence.observe(p, summary, s.report, summary === lastSummary.current); lastSummary.current = summary; } const tr = trend.current; tr.loud.push(Math.max(0, Math.min(1, (p.rms + 24) / 24))); tr.bright.push(Math.max(0, Math.min(1, p.centroid / 7000))); tr.marks.push(landed.current); landed.current = null; for (const k of ["loud", "bright", "marks"] as const) if (tr[k].length > 120) tr[k].shift(); } }
       bus.current.bar = n;
       for (const r of s.reverts.filter((r) => n >= r.atBar)) { if (read(r.slot).trim() !== r.appliedCode) { bus.current.send("note", "host", { text: `Skipped ${r.slot} fill restore: a newer edit is on disk` }); continue; } writeSlot(r.slot, r.code); evaluateSlot(r.slot, r.code, "fill over"); }
@@ -486,15 +487,19 @@ function App() {
             {lines.length === 0 ? <Spinner label="listening" /> : lines.map((l, li) => {
               const off = l.word && l.word !== "ok", d = l.delta ?? 0;
               return (
-                <Text key={l.label} wrap="truncate"><Text color={off ? TEXT : DIM}>{(({ "onsets/beat": "onsets", centroid: "bright", loudness: "loud" } as Record<string, string>)[l.label] ?? l.label.replace(/\s+.*$/, "")).padEnd(9)}</Text>{li < 5 ? meter((20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56) : li === 7 ? meter((20 * Math.log10(Math.max(p.bands.reduce((x, y) => x + y, 0), 1e-5)) + 40) / 40) : " ".repeat(12)} <Text color={off ? B : FAINT}>{Math.abs(d) < 0.05 ? "  " : d > 0 ? "▲ " : "▼ "}{Math.abs(d).toFixed(1).padStart(4)}</Text> {off ? <Text color={B} bold>{l.word}</Text> : <Text color={FAINT}>·</Text>}</Text>
+                <Text key={l.label} wrap="truncate"><Text color={off ? TEXT : DIM}>{(({ "onsets/beat": "onsets", centroid: "bright", loudness: "loud" } as Record<string, string>)[l.label] ?? l.label.replace(/\s+.*$/, "")).padEnd(9)}</Text>{li < 5 ? meter((20 * Math.log10(Math.max(p.bands[li], 1e-5)) + 56) / 56) : li === 7 ? meter((20 * Math.log10(Math.max(p.bands.reduce((x, y) => x + y, 0), 1e-5)) + 40) / 40) : " ".repeat(12)} <Text color={off ? B : FAINT}>{l.delta === null ? (l.label === "headroom" ? "  " + l.value.replace(" dB", "").padStart(4) : "     –") : `${Math.abs(d) < 0.05 ? "  " : d > 0 ? "▲ " : "▼ "}${Math.abs(d).toFixed(1).padStart(4)}`}</Text> {off ? <Text color={B} bold>{l.word}</Text> : <Text color={FAINT}>·</Text>}</Text>
               );
             })}
           </Box>
-          {chart && <Box flexDirection="column" marginLeft={1}>
-            {chart.rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
-            <Text wrap="truncate">{chart.marks}</Text>
-            <Text wrap="truncate"><Text color={A}>━ loudness</Text>  <Text color={B}>━ brightness</Text>  <Text color={DIM}>▴ change</Text></Text>
-          </Box>}
+          <Box flexDirection="column" marginLeft={1} flexGrow={1} overflow="hidden">
+            {chart ? <>
+              {chart.rows.slice(0, Math.max(3, paneH - 6)).map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
+              <Text wrap="truncate">{chart.marks}</Text>
+              <Text wrap="truncate"><Text color={A}>━ loud</Text> <Text color={B}>━ bright</Text> <Text color={DIM}>▴ change</Text></Text>
+            </> : null}
+            {diagnosis.drift.length ? <Text wrap="truncate"><Text color={DIM}>drift </Text>{diagnosis.drift.slice(0, 4).map((d) => <Text key={d.slot}><Text color={Math.abs(d.db) > 6 ? B : DIM} bold={Math.abs(d.db) > 6}>{d.slot} {d.db > 0 ? "+" : ""}{d.db.toFixed(0)}</Text><Text color={FAINT}>  </Text></Text>)}</Text> : null}
+            {diagnosis.masking.slice(0, 2).map((m, i) => { const w = m.match(/(d\d) and (d\d) are both filling (\w+)/); return <Text key={i} wrap="truncate"><Text color={B} bold>{w ? `${w[1]}+${w[2]} fight ${w[3]}` : "masking"}</Text></Text>; })}
+          </Box>
         </Pane>
       </Box>}
       {!full && <Box>
