@@ -200,7 +200,9 @@ s.waitForBoot {
     Out.ar(0, sig * amp ! 2); Out.ar(~fx, sig * amp * 0.6 ! 2);
   }).add;
   SynthDef(\master, {
-    var sig = ~safe.(In.ar(0, 2)) * 2.6;
+    // 2.6 was set when the harmony sat 15 dB under the drums. Lifting it x2.4 put the mix 3 dB into the limiter
+    // on every window: the balance was right and the level was not, so the drive comes down to match.
+    var sig = ~safe.(In.ar(0, 2)) * 1.7;
     sig = Compander.ar(sig, sig, 0.35, 1, 0.5, 0.005, 0.12);
     SendReply.kr(Impulse.kr(4), '/head', [A2K.kr(Peak.ar(sig, Impulse.ar(4)).reduce(\max))]);   // pre-limiter
     ReplaceOut.ar(0, Limiter.ar(sig, 0.95, 0.004));
