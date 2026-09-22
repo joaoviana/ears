@@ -6,6 +6,7 @@ one change at a time. Everything is a terminal program, so the whole show is one
 ```
 npm run ears:stage        # tmux: your $EDITOR on the left, EARS on the right
 npm run ears              # just the TUI (edit tui/set/*.scd in any editor)
+npm run ears -- --style ambient  # the new calm nature system (also the default)
 npm run ears -- --seed 4821   # replay a base you liked (the seed is shown top right)
 npm run ears -- --keep    # continue the set that's on disk instead of rolling a new base
 npm run ears -- --mute    # silent: the ears still measure, nothing reaches the speakers
@@ -13,21 +14,153 @@ npm run ears -- --manual  # DJs only speak when you press a
 npm run ears -- --demo    # visuals only, fake pulse, no SuperCollider
 ```
 
-## A different base every time
+## Suggestions
 
-Bases come in two moods. **Vibey** (the default): deep house, nu disco, balearic, afro house, french touch, sunny
-garage, in major, lydian, mixolydian or dorian, with 9th chords, electric piano, round basses, shakers and congas.
-**Dark**: the techno family below. **b** switches mood (vibey / dark / any); `--mood dark` starts there.
+Ambient rounds and typed directions show two composed choices immediately from a sixteen-gesture arsenal. They rotate across slowed
+fingertips, rolling marbles, paper and brush grain clouds, rain prisms, wave memory, warm paper folds, submerged droplets, twig and reed cycles, leaf shuffles, harmonic light, field recordings and replacing the low foundation. A third, source-aware
+idea is composed by the current Sonnet model in the background, with a 45-second ceiling. No question blocks the
+music. A newly added DJ starts this flow as soon as it enters the booth.
 
-Each launch rolls a seed, and the seed picks a **style** first: detroit, dub techno, acid, electro, two-step,
-minimal, progressive, halftime or house. The style decides how the six slots are rolled so they belong together:
-tempo (118–150, by style), kick figure, hat feel and swing, what the bass does, a four-bar chord progression the bass
+Club styles retain “Keep this groove or reshape it?” Answering does not apply a move: **y / 1** takes the resulting
+proposal separately. Changes to source, tempo or key invalidate prepared answers. Jev can review an offered move in
+the background and cannot delay it. A new typed brief, favourite direction, DJ, skill or mode cancels obsolete work.
+
+Favourite development and club modes retain the **three-alternative** flow, normally groove, hook and left turn.
+Ambient directions and power showcases keep the immediate pair while the model prepares an optional wildcard. Each
+composer reads the current source, DJ persona, performer request and relevant evidence. The model chooses its
+musical mechanism; the live prompt no longer assigns a rotating recipe. No instant row shifts, reversed melodies
+or octave answers fill seats while a model is thinking. `--keep` continues the current files instead of loading the
+ambient base.
+
+**W** changes the musical briefs and permitted scope (tame still asks for repair). The default creative mode uses
+medium effort. Composition gets 45 seconds per request, 60 for a favourite, with one bounded retry where applicable.
+`EARS_DEADLINE` and `EARS_EFFORT` override these defaults. Valid ideas appear as they finish; a failed composer does
+not erase the others. Taking/skipping, changing the brief or exiting cancels obsolete work.
+
+Jev review is optional: export `JEV_API_KEY` and set `EARS_JEV_RANK=1`. Alternatively, `EARS_JEV_ENV_FILE` reads
+only that key from a dotenv file without executing it. In the three-alternative flow, the first completed idea goes straight to review while
+other composers continue. Further completions accumulate into the next review batch (at most three requests,
+each bounded to 10 seconds). TypeSafe scores request fit and musical development from source. Confident candidates
+may be reordered within an unpublished batch; uncertain ones retain their positions. Visible option numbers never
+move. Progress shows composers finished, review activity and elapsed seconds. Errors leave the original composed options available. The wire logs review results
+as notes, separate from measured prediction outcomes. Jev neither hears audio nor writes code or takes an option.
+See [TypeSafe's API](https://docs.typesafe.ai/introduction/quickstart).
+
+```sh
+EARS_JEV_RANK=1 EARS_JEV_ENV_FILE=path/to/.env npm run ears -- --keep
+```
+
+An offline probe reads the current set and writes no musical source:
+
+```sh
+npx tsx tui/dev/probe-composed.ts
+# Optional: reads only JEV_API_KEY from a dotenv file, without executing it or saving the credential.
+npx tsx tui/dev/probe-composed.ts --jev-env /path/to/.env.development.local
+```
+
+## Hear A/B and keep a moment
+
+`[` saves the last four seconds as A; `]` saves B. Press `\` to hear A then B, or Escape to return live.
+`M` keeps the last four seconds as a favorite. `H` opens saved moments, including previous sessions; Enter opens
+actions: replay, mutate its rhythm, answer its melody, or bring it back transformed.
+The status row identifies replay. Mute still applies. Patterns continue underneath; meters keep describing the live
+engine, and automatic takes pause during audition. This plays captured audio; it does not restore the set or effect state.
+
+Choose a development action to make that favourite the musical reference for future DJ rounds. The footer shows the
+active direction plus actual progress (elapsed seconds, ready ideas, or a failure reason); **J** clears it. **t** can refine the request. DJs borrow the saved patterns and adapt them to the
+current key, tempo, instruments and unlocked skills. Choosing a reference neither restores old code nor plays audio;
+proposals use the usual take / auto controls. A new reference invalidates existing suggestions and cached work. Favourite requests get 60 seconds per composer by default
+(`EARS_DEADLINE` overrides). If no idea arrives, **a** retries; automatic mode waits four bars to retry.
+
+This is **source-based development**, not audio motif extraction. The saved source may overlap a transition or differ
+from the exact captured sound; prompts retain that uncertainty. Requests and proposals carry `inspiration_id`, and
+`inspiration` log events record the chosen artifact, intent and source snapshot. Captures made while a direction is
+active retain its ID as context, not proof that the audio derives from it. This direction lasts for the current
+session until cleared; select the favourite again after restarting. Remote agents are not automatically steered by
+this local DJ prompt.
+
+Each capture writes a stereo WAV and JSON manifest under `tui/moments/` (override with `EARS_MOMENTS_DIR`). The manifest
+contains source context, the preceding known state, events during the window, overlapping observation IDs, execution
+IDs and a content hash. `M` also emits an explicit human `preference: keep`; taking a proposal does not imply liking it.
+The protocol log records `audio_artifact`, `preference`, `audition` and capture failures; MCP `read_room` exposes recent
+artifacts and preferences received while connected. Clips remain on the host; local paths are not remote downloads.
+
+These are retrospective live comparisons, not controlled renders. Window timing is estimated, reports may overlap
+without sharing exact boundaries, and randomness, phase and effect tails can differ. Audio is captured after the
+master chain, before mute/volume. Demo mode has no audio to capture. Saved moments retain source as context; they do
+not yet extract motifs or teach agents to recall them automatically.
+
+Checks: `npm run test:ears`; `npm run ears:demo-check` exercises the projected ambient opening, first choices and powers in an isolated demo TUI. Optional real-engine probe on unused ports:
+`EARS_PORT=57341 EARS_SC_PORT=57191 npx tsx tui/dev/probe-moments.ts` (muted, separate engine, approximately 36 seconds).
+
+## The ambient base
+
+Ambient is now the default: 64 BPM in D lydian. Its first twelve seconds are scored: water and close fingertips arrive immediately,
+rain and grain enter at 1.88 / 3.75 seconds, warm paper at 7.5, then the canopy at 11.25. The full system holds waves, slowed rain and occasional birds, plus a
+moving granular brush current, close paper folds and an asymmetric fingertip rhythm with a short physical low-body impulse. It starts with no pad,
+FM mote, permanent drone, kick, backbeat or bass riff. It is deliberately composed rather than reshuffled by the JavaScript seed; SuperCollider's stochastic patterns
+create the living variation. Voices and choir are disabled here. The resident DJ protects silence, long envelopes and
+the field recordings while replacing stale layers with fingertips, marbles, submerged droplets, wood, leaves, mist, canopy, air or open space.
+
+The older bases remain available by name. **boogie** (112-118, swung hats, octave bass, FM organ stabs),
+**italo** (124-130, four-on-the-floor, offbeat hats, snare backbeat, supersaw arp) and **piano house** (126-132,
+pumping offbeat bass, 9th-voiced electric piano, choir pad). **Dark**: the techno family below. **Any**: everything,
+including the styles retired from the rotation - nothing was deleted, they are still in `seed.ts`, and
+`--style "balearic"` reaches one by name. **b** cycles the mood; `--mood dark` starts there.
+
+The `\nature` instrument plays stereo field recordings as long, filtered, overlapping layers. Bundled public-domain
+sources and transformations are recorded in `tui/samples/nature/SOURCES.md`: rain, birds and waves from Wikimedia
+Commons. Replace those WAV files or use `~n.(\name)` to add another environment.
+
+The `\texture` instrument plays close object recordings through `~t.(\name)`. `fingertips.wav` is fingertip contact
+and release on a wooden beam; `marbles.wav` is glass rolling across wood. `paper.wav` and `brush.wav` add close paper
+fibres and pitched forest brush. All are CC0, processed to 48 kHz stereo, and documented in
+`tui/samples/texture/SOURCES.md`. Optional `sub` / `subfreq` arguments add a bounded, decaying contact body instead of a sustained bass voice.
+
+`\cloud` continuously granulates any nature or texture recording through `~g.(\name)`: grain position, pitch,
+stereo placement and filter drift independently. Ambient selection excludes the porcelain resonator and pitched bell gestures.
+The shared space uses tempo-related comb echoes followed by four slowly modulated diffusion stages. These are core
+SuperCollider UGens; no Quark or C++ plugin is required. The design follows the official
+[Pattern Guide](https://doc.sccode.org/Tutorials/A-Practical-Guide/PG_01_Introduction.html),
+[GrainBuf](https://doc.sccode.org/Classes/GrainBuf.html), [Warp1](https://doc.sccode.org/Classes/Warp1.html),
+[Pwalk](https://doc.sccode.org/Classes/Pwalk.html) and [Pfsm](https://doc.sccode.org/Classes/Pfsm.html) references.
+
+The muted real-engine opening probe records twenty seconds and reports exact first-event times, four-second loudness,
+headroom, centroid and five spectral bands: `npx tsx tui/dev/probe-ambient-opening.ts`.
+
+Explicit recipe takes/skips and measured HIT/MISS/FLAT outcomes update a small per-DJ score. The score only reorders
+the next eight structurally eligible recipes; it never writes source or bypasses validation. Memory persists locally
+in ignored `tui/state/ambient-learning.json`. `round_start`, `curation` and `learning` events make every choice visible
+on the wire and in `npm run ears:why`.
+
+## Start from nothing and build it together
+
+```
+npm run ears -- --style opening
+```
+
+A kick and a sub, and **four empty slots**. The host lists them to every DJ as free (`agent.ts` computes which slots
+are empty and says so in the prompt), the `add` angle goes hunting for them, and a proposal that fills one always
+counts as new. So the track composes itself: you take an idea, a voice arrives, the report changes, the next DJ
+answers what is now there. Nothing is scripted - the arc is whatever you take.
+
+It is kept out of the random rotation so **g** can never roll it out from under you mid-set. `--style glitch` is the
+same feeling with all six voices already in: sparse, off-grid, and built so the four-bar turnaround *accretes* - bar
+one is nearly silent and a hit is added each bar, so the pattern itself is the build.
+
+Each launch rolls a seed, and the seed picks a **style** first, from whichever mood is active (the dark family is
+detroit, dub techno, acid, electro, two-step, minimal, progressive, halftime, house). The style decides how the six
+slots are rolled so they belong together: tempo (112–150, by style), kick figure, hat feel and swing, what the bass does, a four-bar chord progression the bass
 follows with `\ctranspose`, and a lead. Grooves turn around every fourth bar (`~x` takes a list of rows: A A A B),
 the kick pumps the bass and pads through a sidechain bus (`\duck`), and patterns carry their own randomness
 (`Pwhite`, `Prand`, `Pbrown`, `Pwrand`), so one seed never loops identically. **g** rolls a new base mid-set through
-a build; it lands on the drop and the tempo follows. Whatever was in `tui/set/` is archived to `tui/sets/` first.
+a wash; it lands under the filter and the tempo glides to the new value. Whatever was in `tui/set/` is archived to `tui/sets/` first.
 By convention d1 kick · d2 hats · d3 clap/perc · d4 bass · d5 chords · d6 lead, but any slot can hold anything.
-Ten instruments: `\kick \hat \clap \bass \acid \stab \fm \pad \perc`, plus `\vox` once a DJ has the vocals skill.
+Instruments: `\nature \gendy \kick \hat \clap \bass \acid \stab \fm \pad \perc \snare \rim \sub \reese \pluck \choir \noise`, plus `\vox`
+once a DJ has the vocals skill, and the two sampled ones the live rotation is built on: **`\smp`** (the 909 / LinnDrum
+kit in `tui/samples/kit`, one voice per `\buf`, or a whole percussion row with `~kp.("--s-C--s-s--C-t-")`) and
+**`\keys`** (a sampled piano in `tui/samples/keys`, pitched to the nearest recorded octave by `~kf` / `~kr`).
+The archive styles stay on the synth drums: the benchmark measured those, and runs 1-4 have to stay reproducible.
 
 ## The live thing is the code
 
@@ -37,9 +170,19 @@ or a DJ, with the bar it landed on. The tokens a change brought in glow white fo
 how many rounds they offered, how many you took, and which slots are currently theirs. The report's band rows have
 live meters.
 
-**?** shows every key on screen. The ones you'll use most: **1 2 3** take an option (**! @ #** with a build) ·
-**n** skip · **tab** next DJ · **t** tell · **d / D / s / x** bring in, pick, summon, retire a DJ · **g** new base ·
+**?** shows every key on screen. It takes the whole window and packs its groups into as many rows as the terminal is
+wide enough for, so no description is ever cut in half; **esc** or **?** closes it. Ambient hides club-only voice notes
+and manual builds. Its powers transform the
+currently playing source: **k** performs an active power and **K** chooses one directly. The keys you'll use most: **1 2 3** take an option ·
+**n** skip · **tab** next listener · **t** direct · **d / D / x** bring in, pick, retire a listener · **g** new base ·
 **f** stage mode · **l p c** look, palette, characters · **v** DJs speak · **q** quit.
+
+Whatever the host says back to you — a refused stack, an unlocked power, "engine is still booting", the stack-mode
+hint — appears on its own `›` row at the foot of the offers pane, so it is never covered by the options it is about.
+While a model composes, the spinner carries the elapsed seconds *and* a bar filling toward the composition ceiling
+(45 s, 60 s for a favourite), because on a projector an unbounded wait and a hang look identical. When a DJ has
+`auto`, the veto window is stated above the options as **AUTO takes one of these in N bars**, not only in the pane's
+note.
 
 The interface wears the active palette: two accents per palette over shared neutrals, so a transition recolours
 the whole screen, not only the field. `pixels` (the default character mode) draws field looks with half-blocks:
@@ -61,8 +204,9 @@ mouths on the clap, and their headphones flash with the hats.
 4 beats, so it swaps on the next bar, never mid-phrase. Parse errors are reported without advancing the last acknowledged active source. Interpretation is not transactional; later runtime errors or partial side effects require inspection.
 
 **Agent loop.** An `ears` synth sits on the master bus and streams level, five bands, spectral centroid and onsets 15
-times a second. Every 2 bars that becomes a listening report: each number against `refs/detroit.json`, with one plain
-word (thin, boomy, dull, harsh, bright, sparse…). The active DJ is asked for ideas 4 bars after a new base, 2 bars after a take and 1 after a skip: the report, the
+times a second. Every 2 bars that becomes a listening report: each number against `refs/house.json`, with one plain
+word (thin, boomy, dull, harsh, bright, sparse…). Ambient asks immediately after a new base, take, skip or DJ arrival;
+club styles keep their slower turn spacing. The report, the
 code, your last verdicts and any note you typed go to Claude, which answers with small patches (see Speed). **1/2/3**
 writes the patched code into the slot file, which is the human loop again.
 When any change lands, the visuals wipe to a new look and palette on that bar.
@@ -101,26 +245,15 @@ It is observational, on the live master mix, and says so; it is not proof the ed
 The third option each round is a **left turn**: it must change that slot's instrument, rhythm or register, and
 name what it contrasts with. A tweak is refused and asked again once.
 
-## Skills: earned by the DJ, activated by you
+## Ambient powers: earned by the listener, performed by you
 
-A DJ starts with the basic vocabulary. As you take its ideas it **unlocks** skills (fills after 1 take, vocals
-after 2, drops after 3); the glyph under its face blinks `k!`, and **k** activates it. Until then the DJ isn't told
-the skill exists, and the host refuses any proposal that reaches for it. Activated skills are saved in the DJ's
-markdown file (`skills: fills, vocals`), so they keep them next set.
+A listener begins with **CARVE**. Taking its ideas unlocks **FRACTURE** after two and **REVEAL** after three; the glyph
+under its face blinks `k!`, and **k** activates and immediately demonstrates it. **K** opens all three for a deliberate
+demo at any time. Active powers are saved in the listener's markdown file.
 
-- **⟲ fills**: the patch carries `FOR 1` (or 2): the host keeps it for that many bars, then restores the slot.
-- **♪ vocals**: a new instrument, `\vox`. The DJ writes `~v.("machine soul")`; the host renders the phrase with
-  macOS `say` in that DJ's voice, loads it into SuperCollider, and only then evaluates the slot. `chop`, `len` and
-  `rate` patterns turn a phrase into a hook.
-  `\note` pitches a chop in semitones (a Pseq of notes turns one word into a melody); `\voxpad` holds one
-  syllable still with grains, pitched, as a chord if you like: the chopped, reverb-soaked vocal sound.
-  **Real voices beat the robot:** press **R** and talk or sing for 4 seconds (the mix drops out while it records);
-  it lands in `tui/samples/note-N.wav`, trimmed and normalised, and DJs with the vocals skill are told to build
-  from it. Any WAV/AIFF/FLAC you drop into `tui/samples/` works the same way, by file name: `~v.("hey-you")`.
-  First use: macOS asks to let your terminal use the microphone.
-- **`\choir`** is a base instrument (no skill needed): a formant choir that morphs between vowels
-  (`\vowel` 0 a · 1 e · 2 i · 3 o · 4 u). The progressive and halftime styles use it for their chords.
-- **▲ drops**: the patch carries `WITH build` or `WITH wash`, and the change lands on the drop.
+- **◒ CARVE** applies moving high/low-pass, saturation and space to the current slot, regardless of its instrument.
+- **⟲ FRACTURE** gives the current texture an asymmetric close-pair / long-gap rhythm for two bars, then restores it.
+- **✦ REVEAL** exchanges or opens one colour through a slow wash and lands it on a phrase boundary.
 
 Same idea as takeover: a capability is a grant, it's on the wire (`unlock`, `grant`), and it's revocable by editing
 one line of a markdown file.
@@ -133,12 +266,16 @@ angles, and riding a build into the bold ones. **O** grants everyone: a back-to-
 you stand there. **o** again takes control back. The DJ never gains a new ability; the host acts on its behalf, and
 every such verdict is logged as `grant:auto`.
 
-## Speed
+## Composition latency
 
-A DJ's three angles (fix the report · push its style · one bold move) are asked **in parallel**, each answers with
-a few lines of patch (`SET cutoff = 600`) instead of rewriting code, at low reasoning effort. The first idea is on
-screen in about 3 seconds and they appear as they arrive (it was 6–20 s for anything at all). The host turns the
-patch into code, shows it as a diff, and validates it. `EARS_MODEL` and `EARS_EFFORT` override the defaults.
+Ambient offers two authored, source-safe gestures immediately while the model composes a third source-aware move.
+`EARS_MODEL` and `EARS_EFFORT` apply to every composer. `EARS_ANGLES` limits three-alternative rounds to 1–3 requests;
+the question flow prepares two directions and cancels the unused one on answer.
+`fast-round.ts` owns that ambient path; free-text requests, favourite development and club alternatives use
+model composition. Every proposal still passes the same patch validator and revision guard.
+
+Proposals identify `origin: recipe` or `origin: model`. Source revisions, verdicts, execution receipts and measured outcomes
+remain independent of optional Jev source review.
 
 ## The wire (for demos)
 
@@ -157,13 +294,15 @@ it shows up as a robot marked `wire`, its ideas join the same option list, and t
 ## Transitions
 
 A DJ mixer sits across the whole mix in SuperCollider (`\djfx`: high-pass, low-pass, echo), and a transition rides it
-from now until a bar line, then lets go on the downbeat under a crash:
+towards a bar-aligned handoff, then eases back to dry:
 
 - **build**: the high-pass sweeps up under a noise riser, the bass disappears, and it all comes back on the drop.
-- **wash**: the low-pass closes while the echo takes over, then opens on the drop.
-- **riser**: riser and crash only. A DJ walking in gets one automatically.
+- **wash**: the low-pass closes while the echo takes over, then gradually reopens. No added riser/crash; echo tails continue through the return to dry.
+- **riser**: riser and crash only. A DJ walking into a club style gets one automatically; ambient arrivals stay dry.
 
-**g** (new base) rides a two-bar build or wash and the new base lands exactly on the drop, tempo change included.
+**g** (new base) approaches the handoff over four bars of wash, swaps the patterns at the bar boundary, then reopens
+over four bars. Tempo glides to the new base over four bars. This is a filter/echo-masked swap, not two complete decks
+crossfading. **w** uses the same long wash. Starting a new ride cancels any older pending base-switch timer.
 **! @ #** (shift 1 2 3) take an option *with* a build, so the change arrives as a drop instead of just appearing.
 **u** and **w** fire a build or a wash by hand. The header shows the ride's progress.
 To add one: a new `case` in the `/transition` OSCdef in `engine.scd` (what to do to `~djfx` as `f` goes 0→1), and
@@ -186,7 +325,10 @@ its name in `engine.ts`.
   dissolve back into it, in their colour, while the scene wipes to their look.
 - Four wipe styles, picked at random per change: `iris`, `blinds`, `sweep`, `shatter`.
 - **f** is stage mode: the field fills the screen, with the six lanes and code lines, the booth line-up and the
-  current options in a strip underneath. That's the projector layout.
+  current options in a strip underneath — one option per line, each carrying the same move verb, slots and called
+  shot as the windowed card (`ARRANGE d4+d5 · calls low ↑`). The strip is measured, so the field stops exactly above
+  it and the footer keeps its row; the footer swaps to the round's own keys (**1 2 3** take, **n**, **t**, **a**),
+  which in the windowed layout live in the pane notes. That's the projector layout.
 
 ## The visuals
 
@@ -217,8 +359,16 @@ Keys: **l / L** next / previous look · **p** palette · **c** character ramp ·
 
 `--seed N` replay a base · `--keep` continue the set on disk · `--mute` · `--manual` DJs only think on **a** ·
 `--demo` visuals only · `--logs` start with the wire open · `--full` start in stage mode · `--voice` DJs speak.
-`EARS_MODEL` (default sonnet) · `EARS_EFFORT` (default low) · `EARS_ANGLES` (1–3 ideas per round) ·
+`EARS_MODEL` (default sonnet) · `EARS_EFFORT` (default medium in the creative mode) · `EARS_ANGLES` (1–3 ideas per round) ·
+`EARS_CONVERSATION=0` disables the immediate direction question ·
 for a second instance that won't touch the live one: `EARS_PORT`, `EARS_SC_PORT`, `EARS_BUS_PORT`, `EARS_SET`, `EARS_DJS`.
+
+SuperCollider is resolved asynchronously from `EARS_SCLANG` (an explicit executable path), then PATH, then known
+macOS/Windows installation locations. An occupied audio port reports an error instead of killing another server.
+Choose a free `EARS_SC_PORT` or stop the owning session. Optional greeting speech and microphone capture still use
+macOS facilities; `say` discovery does not block startup. No custom C++ build is needed.
+
+Run `npm run typecheck:ears` for the strict live-TUI type check and `npm run test:ears` for behavioral tests.
 
 ## Files
 
@@ -227,18 +377,24 @@ engine.scd    SynthDefs, guarded master chain, ears, scope, djfx transitions, vo
 engine.ts     spawns sclang, speaks OSC both ways, maps SuperCollider's logical clock to local time
 report.ts     ears stream → listening report          audio.ts   real samples → FFT for the visuals
 agent.ts      angles, patch format, validator, summon  patch.ts   parse a slot, apply a patch, describe the diff
-skills.ts     fills / vocals / drops: unlock rules, gating, phrase rendering with `say`
+skills.ts     carve / fracture / reveal: ambient power unlocks and gating
 djs.ts        DJs as markdown files                    sprites.ts pixel-art faces
 seed.ts       nine styles → six slots                  ascii.ts   looks, palettes, pixel mode, wipes, banners
 bus.ts        the wire: screen log, JSONL, localhost socket      evidence.ts revisions, receipts, before/after comparisons
-app.tsx       the Ink screen                           tail.ts    `npm run ears:tail`
+app.tsx       presentation only                        tail.ts    `npm run ears:tail`
+use-performance.ts  performer actions, React state and visual timing
+conversation.ts     immediate direction questions and cancellable model preparation
+session.ts    source I/O, watcher ownership, admission, execution receipts and lifecycle
+remote.ts     validates untrusted guest proposals      live-grading.ts calibration and linked outcomes
+platform.ts   executable discovery, optional speech    osc-reader.ts checked telemetry values
+suggestion-round.ts model-only composition            jev.ts optional source-based ranking
 set/ djs/ refs/ logs/ sets/ vox/    your code · the roster · reference profile · wire logs · archived sets · rendered phrases
 dev/          probes that boot a second, muted engine to measure things without touching a live set
 ```
 
 ## Checked / not checked
 
-Checked, all with the output muted: engine boots headless, slots eval and hot-swap, broken code is refused while the
+Historical muted engine checks (not rerun by the latest refactor): engine boots headless, slots eval and hot-swap, broken code is refused while the
 music continues, measurements and hit times arrive, the report renders, the first idea arrives in ~3–5 s (all three by ~6–13 s), a take lands it, a typed note changes the next suggestion, quit leaves no scsynth behind.
 Not checked: how it sounds through speakers, audio/visual latency by eye, the tmux stage script with a real editor.
 
