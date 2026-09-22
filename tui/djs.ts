@@ -48,7 +48,7 @@ const BODY_ROWS: Record<string, string[]> = {
 export function avatar(dj: DJ, p: Pulse, active: boolean): string[] {
   const acc = ACCENT[dj.palette] ?? ACCENT.ember, b = UI[dj.palette]?.b ?? "#ffffff", second = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
   const now = Date.now() / 1000, seedT = dj.id.length * 1.7, blink = active && (now + seedT) % 3.7 < 0.13;   // each DJ blinks on its own schedule
-  return face(dj.species, acc, second, { kick: p.kick, snare: p.snare, hat: p.hat, active, shades: dj.eyes === "shades" || dj.eyes === "visor", blink, t: now + seedT, bar: p.bar, cans: dj.cans !== "none" }).map((r) => " " + r);
+  return face(dj.species, acc, second, { kick: p.kick, snare: p.snare, hat: p.hat, active, shades: dj.eyes === "shades" || dj.eyes === "visor", blink, t: now + seedT, bar: p.bar, cans: dj.cans !== "none" }, 22, 10, "braille").map((r) => " " + r);
 }
 
 // ---- files -----------------------------------------------------------------------------------
