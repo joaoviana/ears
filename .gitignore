@@ -6,4 +6,7 @@ public/faust
 tui/sets
 tui/logs
 tui/vox
+tui/moments
 tui/samples/note-*.wav
+tui/state/
+docs/*.wav
