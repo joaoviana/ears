@@ -5,7 +5,8 @@ import fs from "fs";
 import path from "path";
 import { ROOT } from "./engine.ts";
 import { LOOKS, PALETTE_NAMES, UI, type Pulse } from "./ascii.ts";
-import { face, SPECIES } from "./sprites.ts";
+import { SPECIES } from "./sprites.ts";
+import { asciiFace } from "./ascii-avatars.ts";
 export { SPECIES };
 
 export const DIR = process.env.EARS_DJS || path.join(ROOT, "tui/djs");   // EARS_DJS: a test roster that can be granted skills without touching the real one
@@ -48,7 +49,7 @@ const BODY_ROWS: Record<string, string[]> = {
 export function avatar(dj: DJ, p: Pulse, active: boolean): string[] {
   const acc = ACCENT[dj.palette] ?? ACCENT.ember, b = UI[dj.palette]?.b ?? "#ffffff", second = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
   const now = Date.now() / 1000, seedT = dj.id.length * 1.7, blink = active && (now + seedT) % 3.7 < 0.13;   // each DJ blinks on its own schedule
-  return face(dj.species, acc, second, { kick: p.kick, snare: p.snare, hat: p.hat, active, shades: dj.eyes === "shades" || dj.eyes === "visor", blink, t: now + seedT, bar: p.bar, cans: dj.cans !== "none" }, 22, 10, "braille").map((r) => " " + r);
+  return asciiFace(dj.species, acc, second, { active, blink, hat: p.hat, snare: p.snare, eyes: dj.eyes }).map((r) => " " + r);
 }
 
 // ---- files -----------------------------------------------------------------------------------
