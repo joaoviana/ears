@@ -11,6 +11,7 @@ test("braille portraits keep their terminal footprint while using the 2 x 4 cell
   assert.equal(visible.length, 10);
   assert.ok(visible.every((row) => [...row].length === 22));
   assert.ok(visible.some((row) => [...row].some((char) => char >= "\u2801" && char <= "\u28ff")));
+  assert.ok(!portrait.join("").includes("\x1b[48;2;"), "filled facial features stay solid instead of becoming two-colour dot clusters");
 });
 
 test("quadrant mode remains available for callers that use the previous boolean flag", () => {

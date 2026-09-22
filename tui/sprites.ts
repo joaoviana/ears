@@ -169,7 +169,8 @@ export function face(species: string, body: RGB, second: RGB, s: FaceState, cols
   for (let j = 0; j < H; j++) for (let i = 0; i < cols; i++) {
     const p = at(i, j);
     if (p) { if (!at(i - 1, j) || !at(i + 1, j) || !at(i, j - 1) || !at(i, j + 1)) rim[j * cols + i] = mix(p, neon, 0.3).map(Math.round); continue; }
-    if (!s.active) continue;
+    // Braille is useful for a crisp 2 x 4 silhouette, but sparse halo dots read as visual noise around a face.
+    if (!s.active || braille) continue;
     const d1 = at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1) || at(i - 1, j - 1) || at(i + 1, j - 1) || at(i - 1, j + 1) || at(i + 1, j + 1);
     const d2 = !d1 && (at(i - 2, j) || at(i + 2, j) || at(i, j - 2) || at(i, j + 2) || at(i - 2, j - 1) || at(i + 2, j - 1) || at(i - 2, j + 1) || at(i + 2, j + 1) || at(i - 1, j - 2) || at(i + 1, j - 2) || at(i - 1, j + 2) || at(i + 1, j + 2));
     const k = d1 ? 0.07 + s.kick * 0.2 : d2 ? 0.025 + s.kick * 0.07 : 0;
@@ -187,17 +188,10 @@ export function face(species: string, body: RGB, second: RGB, s: FaceState, cols
         let mask = 0, fgc: RGB | null = null, bgcol: RGB | null = null, glyph = " ";
         if (filled.length) {
           let dots = filled;
-          if (filled.length === 8) {
-            let a = 0, b = 1, best = -1;
-            for (let p = 0; p < 8; p++) for (let q = p + 1; q < 8; q++) { const d = dist(cell[p]!, cell[q]!); if (d > best) { best = d; a = p; b = q; } }
-            if (best < 1100) { fgc = mean(cell as RGB[]); glyph = "█"; dots = []; }
-            else {
-              const ga: number[] = [], gb: number[] = [];
-              for (let k = 0; k < 8; k++) (dist(cell[k]!, cell[a]!) <= dist(cell[k]!, cell[b]!) ? ga : gb).push(k);
-              dots = ga.length <= gb.length ? ga : gb; const ground = dots === ga ? gb : ga;
-              fgc = mean(dots.map((k) => cell[k]!)); bgcol = mean(ground.map((k) => cell[k]!));
-            }
-          } else fgc = mean(filled.map((k) => cell[k]!));
+          // Never dither a filled cell: dots inside eyes and cheeks look like holes. Braille is reserved for the
+          // silhouette edge; solid regions stay calm, readable blocks with their averaged colour.
+          if (filled.length === 8) { fgc = mean(cell as RGB[]); glyph = "█"; dots = []; }
+          else fgc = mean(filled.map((k) => cell[k]!));
           if (dots.length) { mask = dots.reduce((m, k) => m | (1 << BRAILLE_BITS[k]), 0); glyph = String.fromCodePoint(0x2800 + mask); }
         }
         const wantBg = bgcol ? `48;2;${bgcol[0]};${bgcol[1]};${bgcol[2]}` : "49", wantFg = fgc ? `38;2;${fgc[0]};${fgc[1]};${fgc[2]}` : fg;
