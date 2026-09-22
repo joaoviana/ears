@@ -96,4 +96,6 @@ ${d.greeting}
 export function roster(): DJ[] {
   try { return fs.readdirSync(DIR).filter((f) => f.endsWith(".md")).map((f) => parse(fs.readFileSync(path.join(DIR, f), "utf8"), f.replace(".md", ""))).filter(Boolean) as DJ[]; } catch { return []; }
 }
+/** Ambient mode only invites listeners whose style explicitly declares an ambient discipline. */
+export const isAmbientDJ = (dj: DJ) => dj.id === "resident" || /AMBIENT DISCIPLINE:/i.test(dj.style);
 export function save(d: DJ) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(path.join(DIR, d.id + ".md"), toMarkdown(d)); }

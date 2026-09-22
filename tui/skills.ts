@@ -5,17 +5,17 @@ import path from "path";
 import { execFile, spawnSync } from "child_process";
 import { ROOT, type Engine } from "./engine.ts";
 
-export interface Skill { id: string; name: string; glyph: string; takes: number; blurb: string; teach: string; uses: (code: string, extra: { forBars?: number; transition?: string }) => boolean }
+export interface Skill { id: string; name: string; glyph: string; takes: number; blurb: string; teach: string; gated?: boolean; uses: (code: string, extra: { forBars?: number; transition?: string }) => boolean }
 
 export const SKILLS: Skill[] = [
-  { id: "fills", name: "FILLS", glyph: "⟲", takes: 1, blurb: "a change that lasts a bar or two, then puts itself back",
-    teach: `SKILL fills: add a line "FOR 1" (or "FOR 2") and the host keeps your patch for that many bars, then restores the slot. Use it for drum fills, a stutter, a one-bar filter stab before a phrase turns over.`,
+  { id: "carve", name: "CARVE", glyph: "◒", takes: 1, blurb: "cut moving bands through the sound already playing",
+    teach: `SKILL carve: transform the CURRENT voice with scalar post-slot controls that work on every instrument: fxhp 25..1800, fxlp 700..12000, fxmotion 0..1, fxrate 0.02..0.3, fxdrive 0..0.35, fxspace 0..0.7, fxgate 0..1 with fxgaterate 0.02..8 (cuts holes in the voice already playing: rhythm without restarting the phrase), fxoctave -2..2 (moves its register without changing its instrument). Preserve its instrument and sample. Make the before/after unmistakable without a harsh sweep.`,
+    uses: (c) => /\\fx(?:hp|lp|motion|rate|drive|space)\b/.test(c) },
+  { id: "fracture", name: "FRACTURE", glyph: "⟲", takes: 2, blurb: "a tactile rhythmic mutation that restores itself after two bars", gated: true,
+    teach: `SKILL fracture: change the current voice's delta to an asymmetric phrase and add "FOR 2". Use close pairs, a long hole and one changed return. Keep the instrument/sample and level; the host restores the original after two bars.`,
     uses: (_c, x) => !!x.forBars },
-  { id: "vocals", name: "VOCALS", glyph: "♪", takes: 2, blurb: "a spoken phrase, rendered and chopped in time",
-    teach: `SKILL vocals: a new instrument, \\vox, plays a spoken phrase the host renders for you. Write the phrase with ~v.("two or three words"). Keys: buf (always ~v.("...")), rate (1 normal, 0.8 deep, 1.5 chipmunk; patterns welcome), chop (0..1 where in the phrase to start; a Pseq of chops makes a hook), len (seconds each hit speaks, 0.1 stutter .. 0.6 word), amp (0.3-0.6), pan, send. Example for an empty slot: SLOT d4 REPLACE / SET instrument = \\vox / SET dur = 1/2 / SET buf = ~v.("work it") / SET chop = Pseq([0, 0, 0.5, 0], inf) / SET len = 0.22 / SET rate = Pwrand([1, 0.8], [0.8, 0.2], inf) / SET amp = ~x.("X-xX--X-", 0.5). Keep phrases short, in your character, fit for a room. \\note (semitones, patterns and arrays welcome) pitches a chop, so a Pseq of notes from the key turns one word into a melody. For a sustained, stretched vowel use the instrument \\voxpad instead: buf, chop (which syllable to hold, 0..1), note (an array makes a vocal chord), len (seconds held), amp 0.25-0.4, with \\dur 2 or 4: that is the chopped-up, pitched, reverb-soaked vocal sound.`,
-    uses: (c) => /\\vox(pad)?\b|~v\./.test(c) },
-  { id: "drops", name: "DROPS", glyph: "▲", takes: 3, blurb: "your idea arrives through a build or a wash, on the drop",
-    teach: `SKILL drops: add a line "WITH build" or "WITH wash" and the host rides a two-bar transition so your change lands on the drop. Save it for the bold moves.`,
+  { id: "reveal", name: "REVEAL", glyph: "✦", takes: 3, blurb: "replace one colour through a slow, audible wash", gated: true,
+    teach: `SKILL reveal: transform or exchange one voice, add fxspace and slow filter motion, then write "WITH wash". The host closes the room and reveals the change on the phrase boundary. No riser, drop, drums or voices.`,
     uses: (_c, x) => !!x.transition },
 ];
 export const skill = (id: string) => SKILLS.find((s) => s.id === id)!;
@@ -23,7 +23,7 @@ export const skill = (id: string) => SKILLS.find((s) => s.id === id)!;
 /** Which locked skills has this DJ earned by now? */
 export const earned = (taken: number, active: string[], offered: string[]) => SKILLS.filter((s) => taken >= s.takes && !active.includes(s.id) && !offered.includes(s.id));
 /** A proposal that reaches for a skill its DJ hasn't been granted is refused before the human sees it. */
-export const missing = (code: string, extra: { forBars?: number; transition?: string }, active: string[]) => SKILLS.find((s) => !active.includes(s.id) && s.uses(code, extra))?.name ?? null;
+export const missing = (code: string, extra: { forBars?: number; transition?: string }, active: string[]) => SKILLS.find((s) => s.gated && !active.includes(s.id) && s.uses(code, extra))?.name ?? null;
 
 // ---- vocals: render phrases with `say`, load them into SuperCollider, and only then let the slot be evaluated ----
 const DIR = path.join(ROOT, "tui/vox"), SAMPLES = path.join(ROOT, "tui/samples"), loaded = new Set<string>();
