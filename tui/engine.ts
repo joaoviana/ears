@@ -38,6 +38,8 @@ export class Engine extends EventEmitter<EngineEvents> {
   private sock = dgram.createSocket("udp4");
   private sc: ChildProcess | null = null;
   private lang = 0;
+  private audioPort = 0;   // the scsynth we booted; shutdown talks to it directly, never to a port we did not open
+  private reap?: () => void;   // removes the signal handlers again, so an Engine in a test leaves none behind
   private stopped = false;
   private starting?: Promise<void>;
   ready = false;
@@ -62,6 +64,7 @@ export class Engine extends EventEmitter<EngineEvents> {
     if (this.stopped) return;
     const port = Number(process.env.EARS_SC_PORT || 57110);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("invalid EARS_SC_PORT");
+    this.audioPort = port;
     // Never kill another performance just because its process name matches. An occupied port is actionable.
     const probe = dgram.createSocket("udp4");
     await new Promise<void>((resolve, reject) => {
@@ -86,6 +89,16 @@ export class Engine extends EventEmitter<EngineEvents> {
     this.sc.stderr?.on("data", (d: Buffer) => this.emit("log", String(d).trim()));
     this.sc.on("error", error => { this.emit("log", `engine process error: ${error.message}`); this.stop(); });
     this.sc.on("exit", () => { this.ready = false; this.emit("log", "engine exited"); this.stop(); });
+
+    // Nothing above this line survives a signal. The TUI's own exit hook closes the session but never stops the
+    // engine, and there were no signal handlers at all, so Ctrl-C or closing the terminal left scsynth running --
+    // still playing, still holding the audio port, so the next boot failed with "audio port unavailable".
+    const onSignal = (signal: NodeJS.Signals) => { this.stop(); setTimeout(() => process.kill(process.pid, signal), 500).unref?.(); };
+    const onExit = () => { try { this.sc?.kill(); } catch {} };   // exit handlers are synchronous; a datagram would not flush
+    const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+    for (const signal of signals) process.once(signal, onSignal);
+    process.once("exit", onExit);
+    this.reap = () => { for (const signal of signals) process.off(signal, onSignal); process.off("exit", onExit); };
   }
 
   private onMessage(buf: Buffer) {
@@ -163,9 +176,18 @@ export class Engine extends EventEmitter<EngineEvents> {
     if (this.stopped) return;
     this.stopped = true;
     this.ready = false; this.emit("stopping");
+    this.reap?.(); this.reap = undefined;
+    // Asking sclang to quit the server is not enough on its own: s.quit is asynchronous, the `0.exit` that follows
+    // it can leave before the server has gone, and scsynth is a sibling process that outlives the sclang that
+    // spawned it. That orphan then holds the audio port and keeps playing, which is what "I quit and I can still
+    // hear sound" is. So tell scsynth to quit directly as well -- it answers /quit on its own port, and this is the
+    // port we verified was free and booted ourselves, so it cannot be somebody else's performance.
     try { this.send("/eval", ["s.quit; { 0.exit }.defer(0.2); 1", "bye"]); } catch {}
-    const sc = this.sc, sock = this.sock;
-    setTimeout(() => { try { sc?.kill(); } catch {} try { sock.close(); } catch {} }, 400).unref?.();
+    const sc = this.sc, sock = this.sock, audio = this.audioPort;
+    const quitAudio = () => { if (audio) try { sock.send(osc.toBuffer({ address: "/quit", args: [] }), audio, "127.0.0.1"); } catch {} };
+    setTimeout(quitAudio, 120);   // after sclang has had its chance, before anything is killed
+    setTimeout(() => { quitAudio(); try { sc?.kill(); } catch {} }, 320);
+    setTimeout(() => { try { sock.close(); } catch {} }, 420).unref?.();
   }
 }
 
