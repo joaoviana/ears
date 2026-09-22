@@ -1,1 +1,1 @@
-~d.(\d2, \instrument, \hat, \dur, 1/4, \amp, ~x.("x-X-x-X-x-X-x-X-", 0.3), \dec, Pseq([0.03, 0.03, 0.15, 0.03], inf), \hp, 7500)
+~d.(\d2, \instrument, \nature, \buf, ~n.(\rain), \delta, Pseq([2, Pexprand(22, 31, inf)], 1), \dur, 24, \len, 22, \att, 5, \rel, 8, \start, Pwhite(0.0, 0.7), \rate, Pwhite(0.66, 0.86), \hp, Pwrand([520, 520, 1500], [0.55, 0.25, 0.2], inf), \lp, ~arc.(1800, 9500, 38), \amp, Pseq([Rest(0), Pwrand([Pwhite(0.07, 0.1, 1), Pwhite(0.13, 0.17, 1), Rest(0)], [0.58, 0.14, 0.28], inf)], 1), \pan, Pbrown(-0.38, 0.38, 0.08), \send, 0.84)

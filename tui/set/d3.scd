@@ -1,1 +1,1 @@
-~d.(\d3, \instrument, \clap, \dur, 1/4, \amp, ~x.(["----X-------X---", "----X-------X--x"], 0.5), \send, 0.565)
+~d.(\d3, \instrument, \nature, \buf, ~n.(\birds), \delta, Pseq([12, Pexprand(34, 52, inf)], 1), \dur, 40, \len, 34, \att, 8, \rel, 12, \start, Pwhite(0.05, 0.76), \rate, Pwhite(0.78, 0.98), \hp, 1250, \lp, ~arc.(3000, 11000, 62), \amp, Pseq([Rest(0), Pwrand([Pwhite(0.026, 0.046, 1), Pwhite(0.07, 0.1, 1), Rest(0)], [0.5, 0.12, 0.38], inf)], 1), \pan, Pbrown(-0.62, 0.62, 0.12), \send, 0.8)

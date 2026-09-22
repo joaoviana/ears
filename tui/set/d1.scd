@@ -1,1 +1,1 @@
-~d.(\d1, \instrument, \kick, \dur, 1/4, \amp, ~x.(["X---X-----X-X---", "X---X-----X-X---", "X---X-----X-X---", "X---X-----X-X-x-"], 0.9), \tune, 46, \dec, 0.3, \drive, 1.15)
+~d.(\d1, \instrument, \nature, \buf, ~n.(\waves), \dur, 32, \len, 30, \att, 4, \rel, 9, \start, Pwhite(0.0, 0.65), \rate, Pwhite(0.94, 1.03), \hp, 45, \lp, ~arc.(1200, 7200, 52), \amp, 0.165, \pan, Pwhite(-0.2, 0.2), \send, 0.65)
