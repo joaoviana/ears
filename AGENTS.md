@@ -37,6 +37,27 @@ wiring, which `.compile` does not.
 
 A graph that builds is not a graph that has been heard. Say which one you did.
 
+### Never boot a server on the performer's port
+
+`engine.scd` line 12 only uses a custom port when `EARS_SC_PORT` is set; with it unset it falls
+through to the default localhost server on **57110**, which is the port a live `npm run ears`
+needs. `scsynth` is a sibling process, not a child, so when your `sclang` exits the server is
+left reparented to init — still running, still playing, still holding 57110. The next boot then
+fails with `audio port 57110 unavailable`, and the performer hears sound after quitting.
+
+So on every sclang invocation that loads `engine.scd`:
+
+```sh
+EARS_SC_PORT=57191 EARS_PORT=57341 $SC -d /tmp yourscript.scd
+```
+
+Pure NRT (`Score.recordNRT`) binds no port and is unaffected. Before you finish, check you left
+nothing behind:
+
+```sh
+ps -eo pid,ppid,etime,command | grep scsynth      # PPID 1 means an orphan
+```
+
 ## Levels are the thing to be careful about
 
 The multipliers at the end of each SynthDef are **not comparable across instruments**.
