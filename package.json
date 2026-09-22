@@ -16,6 +16,7 @@
     "test:ears": "tsx --test tui/tests/*.test.ts",
     "ears:bench": "EARS_PORT=57300 EARS_SC_PORT=57190 EARS_NO_GLUE=1 tsx tui/dev/bench.ts",
     "ears:why": "tsx tui/why.ts",
+    "ears:recap": "tsx tui/recap.ts",
     "ears:demo-check": "python3 tui/dev/check-ambient-demo-ui.py",
     "typecheck:ears": "tsc -p tui/tsconfig.json"
   },
