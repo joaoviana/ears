@@ -10,6 +10,8 @@ eyes: dots
 cans: small
 body: modular
 skills: carve, fracture, reveal
+signature: fingertips, marbles, paper-bloom, paper-fall, brush-burst, twig-cycle, reed-answer, leaf-shuffle, thunder-stone
+entrance: marbles
 ---
 # Style
 AMBIENT DISCIPLINE: material. Composes with fingertips, paper fibres, brush and hollow wood. Every sound should feel close enough to touch, then leave air behind it.

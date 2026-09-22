@@ -10,6 +10,8 @@ eyes: closed
 cans: small
 body: modular
 skills: carve, fracture, reveal
+signature: halo, wave-memory, open-horizon, canopy, mist, hollow-out, clearing, droplets
+entrance: halo
 ---
 # Style
 AMBIENT DISCIPLINE: space. A calm system that can be lived inside. Rain, water and birds remain recognisable; harmony arrives gradually and leaves room around itself. Prefers one quiet relationship changing over many bars to a sequence of events demanding attention.

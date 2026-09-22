@@ -1,11 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AMBIENT_ARSENAL, ambientArsenal, ambientSkillArsenal, ambientTide } from "../ambient-arsenal.ts";
-import { fastRound } from "../fast-round.ts";
+import { AMBIENT_ARSENAL, MEASURED, ambientArsenal, ambientSkillArsenal, ambientTide } from "../ambient-arsenal.ts";
+import { fastRound, RHYTHMIC } from "../fast-round.ts";
 import { makeBase } from "../seed.ts";
 import { musicContext } from "../direction.ts";
 import { parse, roster, isAmbientDJ } from "../djs.ts";
 import { ask, validate, type AskInput, type Suggestion } from "../agent.ts";
+
+// These rounds were written for the two-instant-seat layout; the default is now one instant seat then the model.
+process.env.EARS_INSTANT = "2";
 
 const dj = parse("---\nname: TEST\n---\n# Style\nCalm organic ambience\n# Idioms\n- sparse natural gestures\n# Never\n- voices", "test")!;
 const base = makeBase(1, "vibey", "ambient");
@@ -30,11 +33,12 @@ test("the expanded palette has audible high, low and stochastic rhythm roles", (
   assert.match(get("brush-burst"), /Pexprand\(4\.5, 10, 1\)/);
 });
 
-test("close material gestures carry a bounded low body impulse", () => {
+test("close material gestures carry a bounded low body impulse in the warm-low register, not the sub", () => {
   for (const id of ["fingertips", "marbles"]) {
     const code = AMBIENT_ARSENAL.find(seed => seed.id === id)!.code;
     assert.match(code, /\\sub, Pwhite\(0\.[12]/);
-    assert.match(code, /\\subfreq, Pwhite\((?:38|42),/);
+    const lo = Number(code.match(/\\subfreq, Pwhite\((\d+),/)![1]);
+    assert.ok(lo >= 48 && lo <= 90, `${id} knock starts at ${lo} Hz: a 38-42 Hz thump measured 25 dB over the bed`);
   }
 });
 
@@ -130,8 +134,11 @@ test("ambient model options reject the ominous synthetic families", async () => 
 test("clearing removes the continuous low foundation", () => {
   const clearing = AMBIENT_ARSENAL.find(seed => seed.id === "clearing")!;
   assert.equal(clearing.slot, "d4");
-  assert.deepEqual(clearing.expect, { metric: "sub", dir: "down" });
-  assert.match(clearing.code, /Pexprand\(6, 16/);
+  assert.equal(clearing.expect.dir, "down");   // a removal predicts less of something; which band is measured, not guessed
+  // its fallback voice is rare warm chords with a heavy rest weight, not Gendy tones alternating a bare tritone
+  assert.match(clearing.code, /\\instrument, \\glow/);
+  assert.match(clearing.code, /\\delta, Pexprand\(18, 40/);
+  assert.match(clearing.code, /\\r, \\r\]/);
 });
 
 test("ambient rotation includes quiet organic rhythm and leaves Sonnet a different role", async () => {
@@ -139,13 +146,20 @@ test("ambient rotation includes quiet organic rhythm and leaves Sonnet a differe
     const seed = AMBIENT_ARSENAL.find(candidate => candidate.id === id);
     assert.ok(seed, id); assert.match(seed.code, /\\delta/); assert.doesNotMatch(seed.code, /\\(?:kick|hat|clap|snare|rim)\b/);
   }
-  let angle = "";
-  // Round 10 offers two sustained granular gestures, so nothing in the pair carries rhythm: the wildcard is asked
-  // for the missing role rather than another texture.
-  const offered: string[] = [];
-  await fastRound([input(10)], option => offered.push(option.angle), () => {}, async modelInput => { angle = modelInput.angle || ""; return []; });
-  assert.equal(angle, "pulse");
-  assert.ok(!offered.includes(angle));
+  // A round whose instant offers carry no rhythm asks the model for the missing role; a round that already has
+  // rhythm on the table asks for something else. Which rounds those are depends on the rotation, so find them.
+  const ask = async (round: number) => {
+    let angle = ""; const offered: string[] = [];
+    await fastRound([input(round)], option => offered.push(option.angle), () => {}, async modelInput => { angle = modelInput.angle || ""; return []; });
+    return { angle, offered };
+  };
+  // the host asks for pulse on every fifth round, when nothing on the table carries rhythm
+  const rounds = await Promise.all([5, 10, 15, 20, 25, 30].map(ask));
+  const quiet = rounds.find(r => !r.offered.some(a => RHYTHMIC.has(a))), busy = rounds.find(r => r.offered.some(a => RHYTHMIC.has(a)));
+  assert.ok(quiet && busy, "the rotation should have both kinds of round");
+  assert.equal(quiet!.angle, "pulse");
+  assert.ok(!quiet!.offered.includes("pulse"));
+  assert.notEqual(busy!.angle, "pulse");
 });
 
 test("the extremes reach registers and amplitudes the calm gestures never did", () => {
@@ -159,7 +173,7 @@ test("the extremes reach registers and amplitudes the calm gestures never did", 
   assert.match(get("spray").code, /\\hp, 2600/);
   assert.match(get("glint").code, /\\delta, Pexprand\(14, 46, inf\)/);
   // and an option whose whole content is taking something away
-  assert.deepEqual(get("hollow-out").expect, { metric: "loudness", dir: "down" });
+  assert.match(get("hollow-out").code, /Pexprand\(24, 48/);   // an event every thirty seconds or so, the rest of the time nothing
   for (const id of ["tide-floor", "spray", "swarm", "thunder-stone", "falling-air", "glint", "hollow-out"])
     assert.equal(validate({ slot: get(id).slot, code: get(id).code }), null, id);
 });
@@ -198,4 +212,52 @@ test("ambient mode has four dedicated listeners and excludes club personas", () 
     assert.ok(ambient.some(candidate => candidate.id === id), id);
   assert.ok(ambient.every(candidate => /voice|choir/i.test(candidate.never.join(" "))));
   assert.ok(!ambient.some(candidate => candidate.id === "acid-reflux"));
+});
+
+test("a note the library cannot place gets no instant answer; the model is told to answer the words", async () => {
+  const was = process.env.EARS_INSTANT; delete process.env.EARS_INSTANT;
+  try {
+    const odd = { ...input(3), note: "make it feel like a cathedral at dawn" };
+    assert.deepEqual(ambientArsenal(odd), []);
+    let angle = ""; const offered: Suggestion[] = [];
+    await fastRound([odd], option => offered.push(option), () => {}, async modelInput => { angle = modelInput.angle || ""; return []; });
+    assert.equal(offered.length, 0);
+    assert.equal(angle, "answer");
+    // a note it can place answers at once and says which words it matched
+    const synth = ambientArsenal({ ...input(3), note: "stack another synth on top" });
+    assert.ok(synth.length >= 1);
+    assert.match(synth[0].answers ?? "", /synth/);
+    assert.match(synth[0].code, /\\glow/);
+  } finally { process.env.EARS_INSTANT = was; }
+});
+
+test("listeners are distinct: each has a repertoire, and their instant offers overlap little", () => {
+  const listeners = roster().filter(isAmbientDJ);
+  const offers = (dj: ReturnType<typeof roster>[number]) => new Set(Array.from({ length: 12 }, (_, i) => ambientArsenal({ ...input(i + 2), dj }, 1)[0]?.angle).filter(Boolean));
+  const sets = listeners.map((dj) => [dj.id, offers(dj)] as const);
+  for (const [id, set] of sets) assert.ok(set.size >= 5, `${id} offers only ${[...set].join(", ")}`);
+  for (let a = 0; a < sets.length; a++) for (let b = a + 1; b < sets.length; b++) {
+    const shared = [...sets[a][1]].filter((x) => sets[b][1].has(x)).length, smaller = Math.min(sets[a][1].size, sets[b][1].size);
+    assert.ok(shared / smaller <= 0.5, `${sets[a][0]} and ${sets[b][0]} share ${shared} of ${smaller}`);
+  }
+  for (const dj of listeners) { assert.ok(dj.signature.length >= 6, dj.id); assert.ok(dj.signature.includes(dj.entrance), `${dj.id}: entrance is in its repertoire`); assert.ok(AMBIENT_ARSENAL.some((g) => g.id === dj.entrance), dj.id); }
+});
+
+test("a listener walks in with its calling card first", () => {
+  const dj = roster().find((d) => d.id === "canopy-listener")!;
+  const round = ambientArsenal({ ...input(4), dj, entrance: dj.entrance }, 1);
+  assert.equal(round[0].angle, dj.entrance);
+  assert.match(round[0].why, /calling card/);
+  // and not on later rounds
+  assert.notEqual(ambientArsenal({ ...input(4), dj }, 1)[0].why.includes("calling card"), true);
+});
+
+test("every prediction is measured: the metric a gesture moves most over the base, with its strength recorded", () => {
+  for (const seed of AMBIENT_ARSENAL) {
+    const m = MEASURED[seed.id];
+    assert.ok(m, `${seed.id} has no measurement`);
+    assert.deepEqual(seed.expect, { metric: m.metric, dir: m.dir }, seed.id);
+  }
+  // most gestures clear the floor: a round is usually checkable
+  assert.ok(AMBIENT_ARSENAL.filter((seed) => MEASURED[seed.id].strength >= 1.5).length >= AMBIENT_ARSENAL.length / 2);
 });

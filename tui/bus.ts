@@ -101,6 +101,7 @@ export function pretty(m: Msg): { time: string; type: string; from: string; text
     : m.type === "outcome" ? `${s(m.agent)} called ${s(expected.metric)} ${s(expected.dir)} → ${String(m.grade).toUpperCase()}${m.delta != null ? ` (${Number(m.delta) >= 0 ? "+" : ""}${Number(m.delta).toFixed(1)} ${s(m.unit)}, floor ±${Number(m.noise_floor).toFixed(1)})` : ""}`
     : m.type === "unlock" ? `${s(m.agent)} earned ${s(m.skill)} · waiting for the human to activate it`
     : m.type === "state" ? `${s(m.tempo)} bpm · ${s(m.key)} · ${Object.keys((m.slots as object) || {}).length} slots`
+    : m.type === "script" ? `${s(m.title)} · ${s(m.live)}`
     : m.type === "note" ? `“${s(m.text)}”`
     : m.type === "transition" ? `${s(m.kind)} · ${s(m.bars)} bars`
     : m.type === "enter" || m.type === "leave" ? s(m.agent)

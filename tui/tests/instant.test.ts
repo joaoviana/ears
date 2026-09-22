@@ -8,6 +8,9 @@ import { parseSlot } from "../patch.ts";
 import { validate, type AskInput, type Suggestion } from "../agent.ts";
 import { developMoment } from "../inspiration.ts";
 
+// These rounds were written for the two-instant-seat layout; the default is now one instant seat then the model.
+process.env.EARS_INSTANT = "2";
+
 const dj = parse("---\nname: TEST\n---\n# Style\nHouse\n# Idioms\n- rhythm\n# Never\n- abandon the pulse", "test")!;
 const input = (seed = 4821): AskInput => ({ dj, slots: makeBase(seed, "vibey", "boogie").slots, context: "", note: "", history: [], report: "" });
 const props = (code: string) => Object.fromEntries(parseSlot(code).map(x => [x.key, x.value]));
@@ -56,6 +59,17 @@ test("two options arrive before the sole model request resolves; abort drops its
   assert.equal(options.length, 2); assert.equal(calls, 1);
   controller.abort(); resolve([{ ...options[0], code: "late", origin: "model" }]); await pending;
   assert.equal(options.length, 2);
+});
+
+test("by default a round is one instant seat and then the model", async () => {
+  const was = process.env.EARS_INSTANT; delete process.env.EARS_INSTANT;
+  try {
+    const options: Suggestion[] = [], events: Record<string, unknown>[] = [];
+    await fastRound([input()], o => options.push(o), (kind, detail) => { if (kind === "composition") events.push(detail); }, async () => []);
+    assert.equal(options.length, 1);
+    assert.deepEqual(events[0], { completed: 1, total: 2 });
+    assert.deepEqual(events.at(-1), { completed: 2, total: 2 });
+  } finally { process.env.EARS_INSTANT = was; }
 });
 
 test("a failed wildcard leaves the instant options usable", async () => {

@@ -12,7 +12,7 @@ import { inspirationPrompt, type Inspiration } from "./inspiration.ts";
 import { DEFAULT_WILD, angleKind, compositionBrief, hasPatternChange } from "./direction.ts";
 
 /** `parts` is the whole move; `slot`/`code`/`diff` are its first part, so every single-slot reader still works. */
-export interface Suggestion { origin?: "recipe" | "model"; recipe_id?: string; inspiration_id?: string; slot: string; code: string; why: string; evidence: string; diff: string; parts: Part[]; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
+export interface Suggestion { origin?: "recipe" | "model"; recipe_id?: string; /** for an instant answer to a typed note: the words it matched */ answers?: string; inspiration_id?: string; slot: string; code: string; why: string; evidence: string; diff: string; parts: Part[]; angle: string; ms: number; forBars?: number; transition?: "build" | "wash"; expect: Expect }
 export interface Past { slot: string; why: string; verdict: "y" | "n" | "x"; id?: number; outcome?: string; agent?: string; recipe_id?: string }
 
 const SYSTEM = `You are a guest DJ standing next to a live coder in a live-coded dance set whose style is given with the code. You cannot hear audio and you cannot touch the code. You read a listening report (measurements of the master bus compared to a reference) and the performer's current code, and you offer ONE musically recognisable idea as a concise patch. Concise code can make a bold musical change. Other options come from other musical angles or DJs; commit to your assigned angle. The performer takes one or none. Your idea is projected in front of an audience, so they must be short and legible.
@@ -119,8 +119,14 @@ a drop, distortion, an obvious repeating ostinato, bells, chimes, porcelain, gla
 Gendy, or sparse synthetic high notes. Those read as ominous here. Use recognisable samples, paper, brush, fingertips, leaves,
 wood and filtered weather for detail instead.
 
+THE ROOM IS WARM AND MELLOW. Warmth is a shape, not a direction: the 200-600 Hz body is the fullest band, the sub
+sits well under it, the top is present but smooth. Lows live in the D2-A2 register (midinote 38-45, 55-110 Hz) and
+arrive and leave; never a 30-50 Hz sub, never a pitch that drops into a note, never a muffled rumble behind a
+near-closed filter. Never a bare tritone (D against G#) or a lone high note with a long tail. Harmony, when it is
+wanted, is \\glow: slow D-lydian major voicings that take six to ten seconds to arrive.
+
 Build a clear high/low and busy/empty arc. High means unpitched leaf air, rain hiss or granular sample detail, never
-a struck note. Low means a short tactile body impulse, never a continuous drone. Prefer rhythms that change family:
+a struck note. Low means a warm body that arrives and leaves, never a continuous drone. Prefer rhythms that change family:
 brief clusters, displaced pairs and threes, then 4-16 beat holes. At least one parameter may wander stochastically
 with Pwhite, Pbrown or Pexprand so rare events keep appearing, but the first change must still be audible quickly.
 Foreground textures should be confident: use the upper half of the listed amp range and make filter travel broad.
@@ -138,8 +144,22 @@ Useful instruments:
 - \\rustle: freq 500-7000, amp 0.015-0.045, dec 0.3-2.5, grain 2-80, bw 0.08-1.4, pan, send
 - \\nature: buf ~n.(\\rain|\\waves|\\birds), dur/len 16-48, att 4-12, rel 6-14, rate, start, hp, lp, amp, pan, send
 - \\texture: buf ~t.(\\fingertips|\\marbles|\\paper|\\brush), rate 0.35-0.95, start 0..0.9, len 2-6, att 0.01-0.1, rel 0.3-1.2, hp, lp, amp 0.09-0.30, pan, send
-- \\cloud: buf ~g.(\\rain|\\waves|\\birds|\\fingertips|\\marbles|\\paper|\\brush), rate 0.3-1.1, pos 0..1, wander 0.02-0.25, grain 0.04-1.2, density 4-40, jitter 0..0.18, att/sus/rel, hp/lp, spread, shimmer 0..0.08, amp 0.06-0.18, send. Granular, continuously moving sample memory.
+- \\cloud: buf ~g.(\\rain|\\waves|\\birds|\\fingertips|\\marbles|\\paper|\\brush), rate 0.45-1.1, pos 0..1, wander 0.02-0.25, grain 0.04-1.2, density 8-44, jitter 0..0.18, att/sus/rel, hp 100+, lp, spread, shimmer 0.04-0.2, amp 0.12-0.4, send. Granular, continuously moving sample memory.
+- \\glow: midinote as a chord, best as a Pseq cycle over a D pedal ([50, 57, 64, 69], [50, 59, 64, 68], [50, 57, 61, 66], [50, 56, 59, 64], [50, 57, 62, 69], [45, 52, 61, 64]; roots on A2/D3, never a bare D-G#), att 5-10, sus 8-20, rel 8-16, warm 2-4, breath 0..0.25, shine 0..0.8 (glimmering upper partials), swell 0..0.6 (the held chord breathes), saw 0..1 (0 warm sine glow, 1 wide bright space organ: more saw, filter opened, octave layer), amp 0.012-0.045 (lower the higher the chord and the more saw). A Pseg on warm over 60 beats opens the whole voice like dawn. \\glow STACKS: put it in two slots at once in different registers (a low pedal [38, 45] in one, the chord cycle in another, quiet high chords [69, 76, 81] in a third) and the room becomes one wide organ., pan, send. The warm voice: slow, soft, comes and goes. Give it Pexprand deltas of 14-40 beats and a rest weight so it is light, not a bed.
 D-lydian pitch material for the rare pitched physical gesture: low 38/45/50; middle 50,52,54,56,57,59,61,62.
+
+HOW YOUR CLAIM IS CHECKED. EXPECT is checked on the FIRST slot of your move, on that layer's own meter: its bands in
+dB of its own signal, its own loudness, its own brightness, measured in the first clean report after the change and
+compared with the report before it. It is not the whole mix, so ask "what does THIS layer do after my change?":
+- replacing a busy voice with a sparse one, or adding long gaps and rests: that layer's loudness DOWN (and density down)
+- putting a voice into a slot that was near silent, or making its events more frequent: loudness UP
+- \\sub, \\stone, \\droplet, a \\glow chord rooted below midinote 45, a texture with sub: sub or low UP
+- \\glow chords rooted at 50-57 with saw: mid UP; \\glow above midinote 60, \\rustle, \\noise, a cloud of birds or rain, spray: high or air UP
+- a lower playback rate or a lower filter (lp, fxlp, warm): brightness DOWN; a higher one: brightness UP
+- removing paper, brush or fingertips from a slot takes their top with them: high or air DOWN
+Never say "same" for a layer you are changing; "same" is only for a claim you can defend about a layer you did not
+touch, and it is graded on the mix. Choose the metric your first slot moves MOST, not the one that sounds musical.
+Each verdict comes back to you with the measured number.
 Use changing 5-8 step Pseq phrases on \\delta for close pairs, displaced accents and long holes; use Pexprand only
 when truly unmetered spacing is the idea. Use Pwrand with rests, Pbrown for slow placement, and Pseg for changes over
 16-80 beats. The first audible contrast must arrive within eight beats. Silence is valid. One coherent mutation beats a pile of layers. Prefer granular material, physical
@@ -161,8 +181,12 @@ Normally repeat SLOT for the linked second part. Both parts land together and mu
 not two unrelated presets. Use only needed SET lines. You may touch up to three slots. No
 semicolons, new SynthDefs, tools, shell, files, or prose outside the move.`;
 
+/** the ambient brief, for tests that check what a listener is told */
+export const ambientBrief = () => AMBIENT_SYSTEM;
+
 // Three angles asked in parallel. Each call writes a few dozen tokens, so the first idea is on screen in seconds.
 export const ANGLES: Record<string, string> = {
+  answer: "YOUR ANGLE: the performer's words. The PERFORMER NOTE below is the whole brief: do what it asks, literally and audibly, with the instruments that fit it. Do not substitute a different kind of gesture because it is your habit. If the note names a sound (a synth, a chord, a stack, a low, air), that sound is the move. WHY repeats the note's own words.",
   droplets: "YOUR ANGLE: submerged texture. Compose close-mic water with a soft 36-80 Hz body, filtered grain and irregular spacing. Avoid bells, glass chimes and bright resonant pings.",
   pulse: "YOUR ANGLE: organic pulse. Replace one stale layer with an uneven wood, pebble, leaf or reed rhythm. It must be audible quickly, remain quiet, use rests or changing gaps, and never resemble a drum loop.",
   texture: "YOUR ANGLE: texture. Replace one stale layer with a new organic texture that can live for minutes.",
@@ -179,11 +203,18 @@ export const ANGLES: Record<string, string> = {
 
 const FORBIDDEN = /unixCmd|systemCmd|\bFile\b|\bPipe\b|interpret|compile|thisProcess|\.load|Quarks|NetAddr|Server|\bs\.|SynthDef|;|\bexit\b/;
 
+// The pattern classes a slot may name. A capitalised word outside this list is not SuperCollider the engine knows
+// (a leaked grammar word, a misspelt pattern, a class from a Quark), and it used to reach sclang and fail there.
+const CLASSES = new Set(["Pseq", "Pser", "Pwhite", "Pwrand", "Pbrown", "Pexprand", "Pseg", "Prand", "Pxrand", "Pshuf", "Pn", "Pfunc", "Pkey", "Pstutter", "Ppatlace", "Pwalk", "Pfsm",
+  "Pslide", "Pclump", "Pswitch", "Pswitch1", "Plprand", "Phprand", "Pmeanrand", "Pgauss", "Pgeom", "Plazy", "Pdup", "Pif", "Pindex", "Ptuple", "Pfin", "Pfinval", "Pwhile", "Pchain", "Pdef", "Pbind",
+  "Rest", "Env", "Pbeta", "Pcauchy", "Ppoisson", "Pstep", "Pseries", "Pdrop", "Pstretch", "Pset", "Padd", "Pmul"]);
 /** The agent's text never reaches the engine without passing this. */
 export function validate(s: { slot: string; code: string }): string | null {
   const code = s.code.trim();
   if (!new RegExp(`^~d\\.\\(\\\\${s.slot}\\b`).test(code)) return `must start with ~d.(\\${s.slot}, ...`;
   if (FORBIDDEN.test(code)) return "uses something outside the instrument vocabulary";
+  const unknown = [...code.replace(/"[^"]*"/g, "").matchAll(/(?<![\\\w.~])([A-Z][A-Za-z0-9]*)\b/g)].map((m) => m[1]).find((w) => !CLASSES.has(w));
+  if (unknown) return `"${unknown}" is not a pattern the engine knows`;
   let depth = 0;
   for (const ch of code) { if ("([".includes(ch)) depth++; if (")]".includes(ch)) depth--; if (depth < 0) break; }
   if (depth !== 0) return "unbalanced brackets";
@@ -259,7 +290,13 @@ export function parseMove(text: string): Parsed | null {
       if (cur) { if (replace) cur.replace = true; }
       else { cur = { slot, set: [], remove: [], replace }; p.patches.push(cur); }
     }
-    else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) cur?.set.push({ key: m[1], value: m[2].trim().replace(/,$/, "") });
+    else if ((m = line.match(/^SET\s+\\?([A-Za-z]\w*)\s*=\s*(.+)$/i))) {
+      // Two leaks seen on the wire: "SET delta = Pseq(...) FOR 2" and "SET buf = REMOVE". Both are grammar words
+      // written where a value goes; both reached SuperCollider and came back "Class not defined".
+      let value = m[2].trim().replace(/,$/, "");
+      const forBars = value.match(/\s+FOR\s+([12])\s*$/i); if (forBars) { p.forBars = Number(forBars[1]); value = value.replace(/\s+FOR\s+[12]\s*$/i, ""); }
+      if (/^REMOVE$/i.test(value)) cur?.remove!.push(m[1]); else cur?.set.push({ key: m[1], value });
+    }
     else if ((m = line.match(/^REMOVE\s+\\?([A-Za-z]\w*)/i))) cur?.remove!.push(m[1]);
     else if (/^EXPECT\b/i.test(line)) p.expect = parseExpect(line) ?? p.expect;
     else if ((m = line.match(/^FOR\s+([12])\b/i))) p.forBars = Number(m[1]);
@@ -283,7 +320,7 @@ function isTurn(before: string, p: Patch): boolean {
   return (!!inst && inst !== old.instrument) || (!!dur && dur !== old.dur) || (!!amp && /~x\./.test(amp) && amp !== old.amp) || (a !== null && b !== null && Math.abs(a - b) >= (isFreq ? b * 0.9 : 11));
 }
 
-export interface AskInput { signal?: AbortSignal; inspiration?: Inspiration | null; round?: number; dj: DJ; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** recent left-turn descriptions, so the angle avoids repeating the same trick */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; /** learned taste and audibility by ambient recipe */ recipeScores?: Record<string, number>; /** 0 tame .. 3 unhinged */ wild?: number; /** ask this one angle only: one idea per DJ, so a booth of three is three voices rather than one brain */ angle?: string; note: string; history: Past[] }
+export interface AskInput { signal?: AbortSignal; inspiration?: Inspiration | null; round?: number; dj: DJ; /** slots whose last change is still waiting for its check: a round should leave them alone */ pendingSlots?: string[]; /** the gesture this listener walks in with, for its arrival round only */ entrance?: string | null; /** a skill id the DJ must use this round: replaces the bold angle with a showcase */ showcase?: string | null; /** skills the human has activated for this DJ */ skills?: string[]; context: string; slots: Record<string, string>; report: string; /** what has not moved lately, for the `add` angle: the host's answer to "what is missing" */ quiet?: string; /** recent left-turn descriptions, so the angle avoids repeating the same trick */ turns?: string[]; /** what doubles what, and what is carrying its part alone */ layers?: string[]; /** the slot the host would like this angle to work on, so three answers do not land on one voice */ aim?: Record<string, string>; /** learned taste and audibility by ambient recipe */ recipeScores?: Record<string, number>; /** 0 tame .. 3 unhinged */ wild?: number; /** ask this one angle only: one idea per DJ, so a booth of three is three voices rather than one brain */ angle?: string; note: string; history: Past[] }
 
 /**
  * Each angle sees a DIFFERENT room, because they were all solving the same problem otherwise.

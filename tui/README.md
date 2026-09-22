@@ -17,7 +17,7 @@ npm run ears -- --demo    # visuals only, fake pulse, no SuperCollider
 ## Suggestions
 
 Ambient rounds and typed directions show two composed choices immediately from a sixteen-gesture arsenal. They rotate across slowed
-fingertips, rolling marbles, paper and brush grain clouds, rain prisms, wave memory, warm paper folds, submerged droplets, twig and reed cycles, leaf shuffles, harmonic light, field recordings and replacing the low foundation. A third, source-aware
+fingertips, rolling marbles, paper and brush grain clouds, rain prisms, wave memory, warm paper folds, submerged droplets, twig and reed cycles, leaf shuffles, warm glow, field recordings and replacing the low foundation. A third, source-aware
 idea is composed by the current Sonnet model in the background, with a 45-second ceiling. No question blocks the
 music. A newly added DJ starts this flow as soon as it enters the booth.
 
@@ -96,9 +96,17 @@ Checks: `npm run test:ears`; `npm run ears:demo-check` exercises the projected a
 ## The ambient base
 
 Ambient is now the default: 64 BPM in D lydian. Its first twelve seconds are scored: water and close fingertips arrive immediately,
-rain and grain enter at 1.88 / 3.75 seconds, warm paper at 7.5, then the canopy at 11.25. The full system holds waves, slowed rain and occasional birds, plus a
-moving granular brush current, close paper folds and an asymmetric fingertip rhythm with a short physical low-body impulse. It starts with no pad,
-FM mote, permanent drone, kick, backbeat or bass riff. It is deliberately composed rather than reshuffled by the JavaScript seed; SuperCollider's stochastic patterns
+rain and the warm glow enter together at 1.88 seconds (the glow's own attack takes six to ten seconds, so it blooms under the rain), grain at 3.75, then the canopy at 11.25. The full system holds waves, slowed rain and occasional birds, plus a
+moving granular brush current, slow D-lydian warmth and an asymmetric fingertip rhythm with a short woody contact knock. It starts with no
+FM mote, permanent drone, kick, backbeat or bass riff.
+
+**It is meant to be warm and mellow, and warmth is measured, not asserted.** `sh tui/dev/band-profile.sh clip.wav` reads
+a render on the same bands the ears report; the shape wanted is body (200-600 Hz) fullest, sub well under it, top present
+but smooth. Before this revision the base read *boomy* (sub 15 dB over body) and its sustained layer read as absent: the
+fingertip contact body was a 38-58 Hz sine thump 25 dB louder than the waves, the brush cloud measured -55 dBFS, and the
+arsenal's lows were 37-55 Hz sines with a pitch drop (the horror-cue shape). Those were fixed by measurement: the knock is
+a warm-low woody body 9 dB down, the cloud plays nearer its own pitch and is audible, the waves lost their surf rumble and
+gained 3 dB, the reverb's wet path is high-passed at 150 Hz, and every low gesture lives in the D2-A2 register. It is deliberately composed rather than reshuffled by the JavaScript seed; SuperCollider's stochastic patterns
 create the living variation. Voices and choir are disabled here. The resident DJ protects silence, long envelopes and
 the field recordings while replacing stale layers with fingertips, marbles, submerged droplets, wood, leaves, mist, canopy, air or open space.
 
@@ -110,12 +118,29 @@ including the styles retired from the rotation - nothing was deleted, they are s
 
 The `\nature` instrument plays stereo field recordings as long, filtered, overlapping layers. Bundled public-domain
 sources and transformations are recorded in `tui/samples/nature/SOURCES.md`: rain, birds and waves from Wikimedia
-Commons. Replace those WAV files or use `~n.(\name)` to add another environment.
+Commons, 48 kHz stereo, high-passed and faded, with no low-pass and no loudness normalization. Their Commons
+originals are 44.1 kHz, so 48 kHz is the whole of what honestly exists; `waves.wav` has real air, `rain.wav` and
+`birds.wav` have almost none and no processing will put any there. Replace those WAV files or use `~n.(\name)` to
+add another environment.
 
 The `\texture` instrument plays close object recordings through `~t.(\name)`. `fingertips.wav` is fingertip contact
 and release on a wooden beam; `marbles.wav` is glass rolling across wood. `paper.wav` and `brush.wav` add close paper
-fibres and pitched forest brush. All are CC0, processed to 48 kHz stereo, and documented in
-`tui/samples/texture/SOURCES.md`. Optional `sub` / `subfreq` arguments add a bounded, decaying contact body instead of a sustained bass voice.
+fibres and pitched forest brush. All are CC0, processed to 48 kHz stereo with a high-pass, a 10 ms declick fade and
+loudness normalization, and documented in `tui/samples/texture/SOURCES.md`. There is deliberately **no** low-pass:
+an earlier preparation filtered all four at 10-11 kHz and the tactile detail went with it, so every bit of air in
+the show had to be synthesised. `scripts/prepare-samples.sh` re-derives the whole library from its pinned sources,
+and `docs/sample-audit.md` records what that recovered. Optional `sub` / `subfreq` arguments add a bounded, decaying contact body instead of a sustained bass voice.
+
+`\glow` is the warm voice: a sine fundamental, a soft second harmonic and two barely detuned saws low-passed at a few
+times the note (`warm`), with per-voice drift on its own slow clock and attacks measured in seconds. It takes chords as
+`\midinote` arrays and the D-lydian voicings the base uses avoid the bare tritone; `breath` adds a little formant air,
+`shine` a glimmering third and fourth partial, `swell` a slow breath on the held chord, and `saw` 0..1 runs it from a
+warm sine glow to a wide, bright space organ (more saw, filter opened, an octave layer). The base keeps it present the
+whole time on a chord cycle over a D pedal, and the arsenal offers it in four registers: **space organ tide** (the
+full organ in d5), **star field** (quiet high chords in d3), **deep orbit** (a low saw pedal that arrives and leaves
+in d4) and **saw dawn** (bright chords whose filter opens across a minute in d6). A note that mentions harmony, chords,
+saws, synth or interstellar pulls those forward. Taking any of them brings a second glow voice in another register with
+it (a low pedal under the organ, stars over a dawn): the chord is stacked across the room, and the card says so.
 
 `\cloud` continuously granulates any nature or texture recording through `~g.(\name)`: grain position, pitch,
 stereo placement and filter drift independently. Ambient selection excludes the porcelain resonator and pitched bell gestures.
@@ -127,6 +152,19 @@ SuperCollider UGens; no Quark or C++ plugin is required. The design follows the 
 
 The muted real-engine opening probe records twenty seconds and reports exact first-event times, four-second loudness,
 headroom, centroid and five spectral bands: `npx tsx tui/dev/probe-ambient-opening.ts`.
+
+Every gesture's called shot is **measured, not written**: `tui/dev/measure-expect.ts` lands each one over the base on a
+muted engine and reads the changed slot's own tap before and after, and `tui/dev/derive-expect.py --write` sets each
+gesture's `expect` to the metric it moves most against the grader's default floors (keeping the gesture's intent where
+that clears the floor) and records the strength in `MEASURED`; gestures that clear the floor lead the rotation a little,
+so a round is usually one the meter can check. In the ambient set the verdict uses the first clean report after the change, a move that
+touches two slots is graded on its primary slot's own tap, and the next round is held until the taken idea's verdict
+is in (capped at eight bars), so the idea that was taken stays the subject on screen through play, measure and verdict.
+The LOOP panel in the offers pane is paced for a room: a taken idea's line flies from the cards to the panel over
+0.7 s and the panel flashes as it lands; each step (idea, vet, write, play, measure, verdict) is shown for at least
+1.2 s even though the host does vet and write in a millisecond; the judged idea holds the panel for eight seconds after
+its verdict, and the next round waits three bars after it. Rerun both after
+changing a gesture or an instrument.
 
 Explicit recipe takes/skips and measured HIT/MISS/FLAT outcomes update a small per-DJ score. The score only reorders
 the next eight structurally eligible recipes; it never writes source or bypasses validation. Memory persists locally
@@ -161,6 +199,38 @@ once a DJ has the vocals skill, and the two sampled ones the live rotation is bu
 kit in `tui/samples/kit`, one voice per `\buf`, or a whole percussion row with `~kp.("--s-C--s-s--C-t-")`) and
 **`\keys`** (a sampled piano in `tui/samples/keys`, pitched to the nearest recorded octave by `~kf` / `~kr`).
 The archive styles stay on the synth drums: the benchmark measured those, and runs 1-4 have to stay reproducible.
+
+## Three layouts, and the show
+
+**f** walks three layouts. **show** is the default and the audience's view: the visuals take most of the screen, the
+booth and its offers sit under them, and everything else appears only once the protocol has produced it. The
+`ROOM` line arrives with the first listening report; **the protocol** pane arrives with your first verdict and draws
+the SPEC's loop live (`state ▸ observe ▸ propose ▸ verdict ▸ applied ▸ evaluated ▸ active ▸ measured ▸ graded`, each
+stage lit as its message lands for the idea in flight) over a running tally (proposed, refused by validation, taken,
+calls hit) and the newest wire line; the `CALLED` row joins it with the first measured grade. A guide line under the
+booth points at whatever just happened and says what it means in one sentence, keyed to the message itself: an idea
+arriving explains called shots, a take explains the receipts, a grade explains that nobody prompted the correction, an
+unlock explains that a capability is a grant. **G** hides it; `--no-guide` starts without it. **stage** is the field
+plus a measured strip (the projector layout for a set that is already understood); **window** is everything at once,
+for the performer (`--window` starts there, `--full` in stage). `tui/guide.ts` holds the reveals, the ribbon and the
+captions as pure functions over the wire, so `tui/tests/guide.test.ts` can drive them without a terminal.
+
+**S** opens the demo script beside the visuals: a teleprompter that follows the wire. Its top half is the four
+components of the show, always on screen with their live state and one sentence to say about each: the picture
+(which look, what it draws from), the sound (what is in the six slots), the listeners (who is in, taken/offered, checks
+right and wrong, powers, acting alone, guest), the ideas on the table (instant or Claude Code), and the last check
+(what the idea said it would do, what the meter showed, right or wrong, or why it could not be checked). The component
+the newest event belongs to is lit. Under that it shows the beat the set is on
+(an idea arrives, you took it, in the speakers, the call is graded, a listener earned a power, takeover, a guest on
+the wire…), two or three sentences to say about the mechanism behind it that read the actual example on screen
+(which option changes which slots, what it called, who wrote it), each tagged `[claude]`, `[sound]`,
+`[supercollider]`, `[protocol]` or `[djs]`, the next thing to do with the key that does it, and the beats not yet
+reached. The beat is chosen by the newest protocol message with something to say, never by a timer, so the words are
+always about what is on screen. `--script` starts with it open. The beats live in `tui/script.ts`. Whatever the sidebar
+would say is also written to the session log as a `script` message whenever it changes, open or not, so a transcript
+reads back as the talk that went with it (`npm run ears:tail` shows it as `title · live sentence`); it is not shown on
+the wire panes, and guests ignore it as an unknown type. In the show layout each card is one line, because the sidebar
+now explains what the move does to the sound; the diff and evidence lines stay in the window layout.
 
 ## The live thing is the code
 
@@ -219,12 +289,15 @@ each cell is two samples, foreground over background, so it reads as a real shad
 
 ## DJs
 
-A DJ is a markdown file in `tui/djs/`: frontmatter for the name, palette, look and face parts, then `# Style`,
-`# Idioms`, `# Never`, `# Greeting`. It's deliberately the shape of a Claude Code skill. Several ship with the repo (`resident`, `detroit-130`, `dub-siren`, `acid-reflux`, and whoever you've summoned since). **s** then a description ("plays acid, a bit unhinged") has Claude write a
+A DJ is a markdown file in `tui/djs/`: frontmatter for the name, palette, look and face parts, a `signature` (the
+arsenal gestures it reaches for first, so two listeners never offer the same set) and an `entrance` (the gesture it walks
+in with: offered at once as its calling card and taken on its behalf after the two-bar veto window, logged as
+`grant:entrance`; **n** vetoes it), then `# Style`, `# Idioms`, `# Never`, `# Greeting`. It's deliberately the shape of a Claude Code skill. Several ship with the repo (`resident`, `detroit-130`, `dub-siren`, `acid-reflux`, and whoever you've summoned since). **s** then a description ("plays acid, a bit unhinged") has Claude write a
 new one; it is saved, walks into the booth on the next bar, brings its own look and palette with a wipe, and says
 its greeting. Up to three DJs share the booth and take turns (back to back): each round the active one offers two or
-three options in their own voice, you take one or none, and the next DJ steps up. Faces are 16×16 pixel art drawn with half-blocks (`sprites.ts`): cat, dog, fox, owl, bear, rabbit, frog, robot,
-alien, skull, with optional shades. A generated DJ picks a species and never draws. They nod on the kick, open their
+three options in their own voice, you take one or none, and the next DJ steps up. Faces are 44×20 pixel portraits drawn with quadrant blocks, two by two pixels per character (`sprites.ts`): cat, dog, fox, wolf, owl, bear, rabbit, bat, moth,
+frog, axolotl, robot, alien, skull, with optional shades. They are geometry, not bitmaps, lit from the top left with a
+neon rim in the palette's second colour along every edge, and the active one sits in a halo that breathes with the kick. A generated DJ picks a species and never draws. They nod on the kick, open their
 mouths on the clap, and their headphones flash with the hats.
 
 ## The two loops
@@ -387,10 +460,15 @@ Keys: **l / L** next / previous look · **p** palette · **c** character ramp ·
 ## Flags and environment
 
 `--seed N` replay a base · `--keep` continue the set on disk · `--mute` · `--manual` DJs only think on **a** ·
-`--demo` visuals only · `--logs` start with the wire open · `--full` start in stage mode · `--voice` DJs speak.
+`--demo` visuals only · `--logs` start with the wire open · `--full` start in stage mode · `--window` start in the
+performer's layout · `--no-guide` show layout without the guide line · `--voice` DJs speak.
 `EARS_MODEL` (default sonnet) · `EARS_EFFORT` (default medium in the creative mode) · `EARS_ANGLES` (1–3 ideas per round) ·
 `EARS_CONVERSATION=0` disables the immediate direction question ·
 for a second instance that won't touch the live one: `EARS_PORT`, `EARS_SC_PORT`, `EARS_BUS_PORT`, `EARS_SET`, `EARS_DJS`.
+
+If the interpreter dies under a live set, the host logs its last forty lines of output (an `engine_log` with
+`engine exited … last lines:`), quits the server it left behind, relaunches it, and once it is ready again puts the six
+slot files back and restores the tempo; the offers pane says so. It gives up after three deaths in one session.
 
 SuperCollider is resolved asynchronously from `EARS_SCLANG` (an explicit executable path), then PATH, then known
 macOS/Windows installation locations. An occupied audio port reports an error instead of killing another server.

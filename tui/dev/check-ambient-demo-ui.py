@@ -52,7 +52,8 @@ with tempfile.TemporaryDirectory(prefix="ears-ambient-demo-") as folder:
         read(5.6)
         rendered = text()
         assert "OPENING 1/4 touch + water" in rendered, "opening score is not labelled"
-        assert "ARRANGE d4+" in rendered and "ARRANGE d2+" in rendered, "curated arrangement choices did not arrive"
+        assert "ARRANGE d4+" in rendered, "the instant arrangement choice did not arrive"
+        assert "composing" in rendered or "ARRANGE d2+" in rendered, "the second seat is neither composing nor filled"
         assert not any(bad in rendered for bad in ["ambient syOPENING", "watedemo", "lydiandemo"]), "header columns overlap"
 
         os.write(master, b"K")
@@ -77,14 +78,14 @@ with tempfile.TemporaryDirectory(prefix="ears-ambient-demo-") as folder:
         note = next((e for e in reversed(logged) if e.get("type") == "note"), None)
         assert note and note.get("text") == "more tactile rhythm", f"tell mode lost brief: note={note!r}; screen={text()[-1200:]!r}"
         directed = [e for e in logged if e.get("type") == "proposal" and e.get("t", 0) >= note["t"]]
-        assert len(directed) >= 2 and all(e.get("origin") == "recipe" for e in directed[:2]), "tell mode did not answer immediately"
+        assert len(directed) >= 1 and directed[0].get("origin") == "recipe", "tell mode did not answer immediately"
 
         os.write(master, b"q")
         read(1.2)
         proc.wait(timeout=4)
         assert proc.returncode == 0, f"exit {proc.returncode}"
         assert not any(x in text() for x in ["TypeError", "ReferenceError", "SyntaxError"])
-        print(json.dumps({"ok": True, "checks": ["scored opening label", "curated choices by 5.6s", "clean header", "K picker", "k immediate power", "tell keeps brief and answers immediately", "clean exit"]}))
+        print(json.dumps({"ok": True, "checks": ["scored opening label", "instant choice by 5.6s, second seat composing", "clean header", "K picker", "k immediate power", "tell keeps brief and answers immediately", "clean exit"]}))
     finally:
         if proc.poll() is None:
             proc.terminate()

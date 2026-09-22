@@ -10,6 +10,8 @@ eyes: stars
 cans: none
 body: modular
 skills: carve, fracture, reveal
+signature: paper-aurora, bird-grain, canopy, star-field, saw-dawn, organ-tide, air-flutter, glint
+entrance: star-field
 ---
 # Style
 AMBIENT DISCIPLINE: light. Treats harmony as weather above the field recordings: open Lydian colour, rare high motion and changing bands of shade. Removes a layer whenever light cannot reach the room.

@@ -51,14 +51,20 @@ test("ambient starts as a slow environment with nature in the foreground", () =>
   assert.match(code, /~n\.\(\\rain\)/);
   assert.match(code, /~n\.\(\\birds\)/);
   assert.match(code, /\\instrument, \\cloud/);
-  assert.match(code, /~t\.\(\\paper\)/);
+  // the warm voice: slow D-lydian chords in the D2-A3 register, attacks measured in seconds, and never a bed
+  assert.match(base.slots.d5, /\\instrument, \\glow/);
+  assert.match(base.slots.d5, /\\midinote, Pseq\(\[\[50, 57, 64, 69\]/);
+  assert.match(base.slots.d5, /\\att, Pwhite\(6, 10\)/);
+  assert.match(base.slots.d5, /Rest\(0\)/);
   assert.match(code, /\\instrument, \\texture/);
   assert.match(code, /~t\.\(\\fingertips\)/);
-  assert.equal(base.about, "water → touch → grain → paper → canopy");
+  // the fingertip contact body is a knock in the D2 register, not a sub thump
+  assert.doesNotMatch(base.slots.d6, /\\subfreq, Pwhite\(3\d,/);
+  assert.equal(base.about, "water → touch → grain → glow → canopy");
   assert.match(base.slots.d2, /Pseq\(\[2, Pexprand/);
   assert.match(base.slots.d3, /Pseq\(\[12, Pexprand/);
   assert.match(base.slots.d4, /Pseq\(\[4, Pexprand/);
-  assert.match(base.slots.d5, /Pseq\(\[8,/);
+  assert.match(base.slots.d5, /Pseq\(\[2,/);
   assert.doesNotMatch(code, /\\instrument, \\(pad|fm|gendy)\b/);
   assert.doesNotMatch(code, /\\instrument, \\porcelain\b/);
   assert.doesNotMatch(code, /\\instrument, \\(kick|clap|hat|snare|rim)\b/);

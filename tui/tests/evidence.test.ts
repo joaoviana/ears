@@ -67,3 +67,58 @@ test('Listener marks mixed revisions and dropped invalid frames, without changin
   const p = l.take()!;
   assert.ok(Math.abs(p.rms + 20) < 1e-8); assert.deepEqual(p.capture!.state_revisions, ['a', 'b']); assert.equal(p.capture!.dropped_frames, 1);
 });
+
+test('the parts of one move are one change: a two-slot take is still attributable, an unrelated edit is not', () => {
+  const sent: { type: string; body: Record<string, unknown> }[] = [];
+  const e = new Evidence('s', (type, _from, body) => sent.push({ type, body }));
+  e.sync({ d1: 'a', d2: 'b', d3: 'c' });
+  e.observe(profile(e, 1), 'balanced', 'baseline', false);
+  const x1 = e.begin('d1', 'a2', 'resident', { proposal: 7 }), x2 = e.begin('d2', 'b2', 'resident', { proposal: 7 });
+  e.active(x1, 100); e.active(x2, 101);
+  e.observe(profile(e, 300, -13), 'balanced', 'after', true);
+  const compared = sent.filter((m) => m.type === 'comparison');
+  assert.equal(compared.length, 2);
+  for (const c of compared) assert.ok(!(c.body.confounds as string[]).some((r) => /other state or activation/.test(r)), (c.body.confounds as string[]).join('; '));
+  // a third edit from somebody else lands before the meter reports: that IS another change
+  const y = e.begin('d3', 'c2', 'resident', { proposal: 8 }); e.active(y, 400);
+  const z = e.begin('d1', 'a3', 'resident', { proposal: 9 }); e.active(z, 401);
+  e.observe(profile(e, 600, -14), 'balanced', 'later', true);
+  const last = sent.filter((m) => m.type === 'comparison').slice(-2);
+  assert.ok(last.every((c) => (c.body.confounds as string[]).some((r) => /other state or activation/.test(r))));
+});
+
+test('with a settle time the after-window has to start that long after activation', () => {
+  const sent: { type: string; body: Record<string, unknown> }[] = [];
+  const e = new Evidence('s', (type, _from, body) => sent.push({ type, body }));
+  e.settleMs = 15000;
+  e.sync({ d1: 'a' });
+  e.observe(profile(e, 1), 'balanced', 'baseline', false);
+  const x = e.begin('d1', 'a2', 'resident', { proposal: 3 }); e.active(x, 1000);
+  e.observe(profile(e, 5000, -12), 'balanced', 'too soon', true);
+  assert.equal(sent.filter((m) => m.type === 'comparison').length, 0, 'a window five seconds after activation is not the after-window');
+  e.observe(profile(e, 17000, -12), 'balanced', 'settled', true);
+  assert.equal(sent.filter((m) => m.type === 'comparison').length, 1);
+});
+
+test('a slot retaken before its check gets an early check from the last clean report', () => {
+  const sent: { type: string; body: Record<string, unknown> }[] = [];
+  const e = new Evidence('s', (type, _from, body) => sent.push({ type, body }));
+  e.settleMs = 15000;   // the normal check would wait for a report that starts 15 s after the change
+  e.sync({ d1: 'a' });
+  e.observe(profile(e, 1), 'balanced', 'baseline', false);
+  const x = e.begin('d1', 'a2', 'resident', { proposal: 3 }); e.active(x, 1000);
+  e.begin('d1', 'a3', 'resident', { proposal: 4 });   // retaken with no report after the change at all
+  assert.equal(sent.filter((m) => m.type === 'comparison').at(-1)!.body.status, 'unavailable');
+  const sent2: { type: string; body: Record<string, unknown> }[] = [];
+  const e2 = new Evidence('s2', (type, _from, body) => sent2.push({ type, body }));
+  e2.settleMs = 15000; e2.sync({ d1: 'a' }); e2.observe(profile(e2, 1), 'balanced', 'baseline', false);
+  const y = e2.begin('d1', 'a2', 'resident', { proposal: 3 }); e2.active(y, 1000);
+  e2.observe(profile(e2, 6000, -13), 'balanced', 'after', true);   // a clean report after the change, though sooner than the wait
+  assert.deepEqual(e2.pending(), ['d1']);
+  e2.begin('d1', 'a3', 'resident', { proposal: 4 });
+  const c2 = sent2.filter((m) => m.type === 'comparison').at(-1)!;
+  assert.equal(c2.body.status, 'measured');
+  assert.ok((c2.body.confounds as string[]).some((r) => /checked early/.test(r)));
+  assert.equal(c2.body.proposal, 3);
+  assert.deepEqual(e2.pending(), []);
+});

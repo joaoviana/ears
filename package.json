@@ -18,7 +18,8 @@
     "ears:why": "tsx tui/why.ts",
     "ears:recap": "tsx tui/recap.ts",
     "ears:demo-check": "python3 tui/dev/check-ambient-demo-ui.py",
-    "typecheck:ears": "tsc -p tui/tsconfig.json"
+    "typecheck:ears": "tsc -p tui/tsconfig.json",
+    "ears:transcript": "tsx tui/transcript.ts"
   },
   "keywords": [],
   "author": "",

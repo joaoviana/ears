@@ -39,6 +39,8 @@ export const pick = (d: Differences, m: Metric): number => m === "brightness" ? 
  * movement is just the music. A call only counts as a hit if it clears twice that.
  */
 export class NoiseFloor {
+  /** `cap`: the floor never exceeds this many defaults. Per-layer floors use it; a sparse layer wobbles by tens of dB on its own tap. */
+  constructor(private cap = Number.POSITIVE_INFINITY) {}
   private last: { key: string; d: Record<Metric, number> } | null = null;
   private samples: Record<Metric, number[]> = Object.fromEntries(METRICS.map((m) => [m, []])) as any;
   /** feed every stable observation: `key` identifies the state it was measured under */
@@ -54,7 +56,7 @@ export class NoiseFloor {
   floor(m: Metric): number {
     const s = this.samples[m]; if (s.length < MIN_SAMPLES) return BASE[m];   // not calibrated yet: the fixed default
     const mean = s.reduce((a, b) => a + b, 0) / s.length;
-    return Math.max(BASE[m], mean * 2);
+    return Math.min(BASE[m] * this.cap, Math.max(BASE[m], mean * 2));
   }
 }
 

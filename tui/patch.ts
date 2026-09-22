@@ -51,6 +51,7 @@ export const DEFAULTS: Record<string, Record<string, string>> = {
   droplet:  { amp: "0.05", sub: "55", dec: "0.9", tone: "0.35", splash: "0.45", pan: "0", send: "0.68" },
   twig:     { amp: "0.045", dec: "0.24", tone: "0.45", hollow: "0.5", pan: "0", send: "0.72" },
   rustle:   { amp: "0.032", dec: "1.2", grain: "18", bw: "0.55", pan: "0", send: "0.78" },
+  glow:     { midinote: "[50, 57, 64, 69]", amp: "0.04", att: "7", sus: "14", rel: "11", warm: "3.2", breath: "0.12", shine: "0.3", swell: "0.4", saw: "0.4", pan: "0", send: "0.7" },
   // The two sampled instruments carry a binding the agent must not have to remember. \keys is useless without the
   // ~kf / ~kr pair (they read the event to pick the nearest sampled octave), and a \smp with no \buf plays silence.
   // Filling them here means a rewrite costs the agent four keys again instead of eight, and it cannot forget them.

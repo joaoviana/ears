@@ -19,6 +19,10 @@ export interface DJ {
   id: string; name: string; tagline: string; palette: string; look: string;
   hair: (typeof HAIR)[number]; eyes: (typeof EYES)[number]; cans: (typeof CANS)[number]; body: (typeof BODY)[number]; head: (typeof HEAD)[number]; species: string;
   style: string; idioms: string[]; never: string[]; greeting: string; skills: string[];
+  /** the arsenal gestures this listener reaches for first: its repertoire, so two listeners never offer the same set */
+  signature: string[];
+  /** the gesture it walks in with: offered at once, and taken on its behalf after a two-bar veto */
+  entrance: string;
 }
 
 const ACCENT: Record<string, [number, number, number]> = { ember: [255, 184, 107], neon: [255, 95, 210], ice: [143, 211, 255], acid: [198, 242, 78], sunset: [255, 138, 92], mono: [230, 230, 230] };
@@ -63,7 +67,7 @@ export function parse(md: string, id: string): DJ | null {
   return {
     id, name: f.name || id, tagline: f.description || "", palette: pick(f.palette, PALETTE_NAMES as any, "ember"), look: pick(f.look, LOOKS as any, "orbit"),
     species: SPECIES.includes(f.species) ? f.species : SPECIES[[...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % SPECIES.length], head: pick(f.head, HEAD, "square"), hair: pick(f.hair, HAIR, "bald"), eyes: pick(f.eyes, EYES, "dots"), cans: pick(f.cans, CANS, "big"), body: pick(f.body, BODY, "decks"),
-    skills: (f.skills || "").split(",").map((x) => x.trim()).filter(Boolean), style: sec("Style") || "", idioms: list(sec("Idioms")), never: list(sec("Never")), greeting: sec("Greeting") || "",
+    skills: (f.skills || "").split(",").map((x) => x.trim()).filter(Boolean), signature: (f.signature || "").split(",").map((x) => x.trim()).filter(Boolean), entrance: (f.entrance || "").trim(), style: sec("Style") || "", idioms: list(sec("Idioms")), never: list(sec("Never")), greeting: sec("Greeting") || "",
   };
 }
 
@@ -79,6 +83,8 @@ eyes: ${d.eyes}
 cans: ${d.cans}
 body: ${d.body}
 skills: ${(d.skills || []).join(", ")}
+signature: ${(d.signature || []).join(", ")}
+entrance: ${d.entrance || ""}
 ---
 # Style
 ${d.style}

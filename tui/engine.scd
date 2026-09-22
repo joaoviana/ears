@@ -160,12 +160,15 @@ s.waitForBoot {
                         hp = 35, lp = 10000, pan = 0, send = 0.55, sub = 0, subfreq = 50|
     var hold = (len - att - rel).max(0.02);
     var env = EnvGen.kr(Env.linen(att.max(0.003), hold, rel.max(0.02), 1, \sine), doneAction: 2);
-    // The contact body is the only low end the ambient base has. Its decay now scales with the slice instead of
-    // being capped just under a second, and `sub` reaches 0.9, so a fingertip landing can move air rather than
-    // merely colour the attack. It is still bounded and still rides \amp: it cannot become a sustained bass voice.
-    var bodyEnv = EnvGen.kr(Env.perc(0.003, (len * 0.34).clip(0.18, 1.8), 1, -5));
-    var body = SinOsc.ar(XLine.kr(subfreq.clip(36, 90) * 1.32, subfreq.clip(36, 90), 0.13), 0.25)
-      * bodyEnv * amp * sub.clip(0, 0.9) * 2;
+    // The contact body is the only low end the ambient base has. Its decay scales with the slice, and it still
+    // rides \amp: it cannot become a sustained bass voice. Measured solo, the old body (x2, pure sine, 38-58 Hz) put
+    // the fingertip slot at -22 dBFS in the sub band against -47 for the waves: every landing was a boom 25 dB over
+    // the bed, which is what "boomy" and "ominous" were. It is now a woody knock: a fundamental with a soft second
+    // harmonic, warm-low (clip to 120 Hz so recipes can sit it at D2/A2) and 9 dB lower at the same \sub.
+    var bodyEnv = EnvGen.kr(Env.perc(0.003, (len * 0.3).clip(0.16, 1.4), 1, -5));
+    var bodyF = XLine.kr(subfreq.clip(36, 120) * 1.28, subfreq.clip(36, 120), 0.11);
+    var body = (SinOsc.ar(bodyF, 0.25) + (SinOsc.ar(bodyF * 2, 0.6) * 0.3))
+      * bodyEnv * amp * sub.clip(0, 0.9) * 0.7;
     var sig = PlayBuf.ar(2, buf, BufRateScale.kr(buf) * rate.clip(0.25, 1.5), 1,
       start.clip(0, 0.96) * BufFrames.kr(buf), loop: 1);
     sig = LPF.ar(HPF.ar(sig, hp.clip(20, 5000)), lp.clip(300, 16000).min(SampleRate.ir * 0.42));
@@ -191,9 +194,10 @@ s.waitForBoot {
       LFNoise2.kr(1.3).range(-1, 1), -1, 48) * shimmer.clip(0, 0.35);
     sig = LPF.ar(HPF.ar(sig + halo, hp.clip(20, 5000)),
       (lp * LFNoise2.kr(0.09).range(0.72, 1.18)).clip(300, 15000).min(SampleRate.ir * 0.42));
-    // GrainBuf has sparse statistical overlap, so nominal amp sat far below the direct sample instruments. The
-    // calibrated lift keeps clouds audible at recipe levels while the master still retains >9 dB peak headroom.
-    sig = LeakDC.ar(sig).tanh * env * amp * 1.65;
+    // GrainBuf has sparse statistical overlap, so nominal amp sits far below the direct sample instruments. The
+    // earlier x1.65 lift still measured the base's brush cloud at -55 dBFS solo, i.e. absent under the waves; at x4
+    // the same recipe reads about -40 in the body band, level with the bed. tanh is before amp, so this cannot clip.
+    sig = LeakDC.ar(sig).tanh * env * amp * 4;
     Out.ar(out, sig); Out.ar(~fx, sig * send);
   }).add;
   // A soft physical model for ceramic, wire and ice. One short noise impulse excites inharmonic resonances; a
@@ -268,6 +272,36 @@ s.waitForBoot {
     Out.ar(out, sig); Out.ar(~fx, sig * send);
   }).add;
 
+  // Warm harmonic light. The ambient set had no tonal warmth at all: its only sustained layer was a granular cloud
+  // that measured -55 dBFS, and its only lows were sub impulses. This is the warm voice: a sine fundamental, a soft
+  // second harmonic, and two barely detuned saws low-passed at a few times the fundamental (the "aurora borealis"
+  // trick from docs/borrowed-techniques.md: warmth is a low-pass tied to the note, not a brighter oscillator).
+  // Each voice drifts on its own slow clock, so a chord never sits dead still and never beats the same way twice.
+  // Rand, not .rand, because .rand inside a SynthDef runs once at build time (see the trap in that doc). Attacks
+  // are seconds long by design: a slow attack is the mechanism for warm tonal material, not a limiter on it.
+  // `shine` adds a quiet third and fourth partial that glimmer on their own slow clock (the space-organ top);
+  // `swell` lets the held chord breathe, so a long sustain is never a flat line. The two saws are split left and
+  // right rather than summed, which is where the width comes from: one voice, two slightly different sides.
+  // `saw` 0..1 is the organ: it raises the saw share, opens the low-pass, and adds an octave-up saw pair, so the
+  // same voice runs from a warm sine glow (0) to a wide, bright space-organ chord (1) without changing instrument.
+  SynthDef(\glow, { |out = 0, freq = 110, amp = 0.05, att = 7, sus = 12, rel = 9, warm = 3.2, drift = 1, breath = 0.12,
+                     shine = 0.3, swell = 0.4, saw = 0.3, pan = 0, send = 0.6|
+    var env = EnvGen.kr(Env.linen(att.max(0.05), sus.max(0.05), rel.max(0.05), 1, \sine), doneAction: 2);
+    var wob = 1 + (SinOsc.kr(Rand(0.02, 0.06), Rand(0, 2pi)) * Rand(0.0008, 0.0022) * drift.clip(0, 3));
+    var f = freq.clip(30, 2000) * wob;
+    var body = SinOsc.ar(f) * 0.55 + (SinOsc.ar(f * 2, Rand(0, 2pi)) * 0.12);
+    var organ = saw.clip(0, 1);
+    var cut = (f * warm.clip(1.5, 8) * (1 + (organ * 2.2)) * LFNoise2.kr(0.05).range(0.8, 1.2)).clip(80, 9000).min(SampleRate.ir * 0.42);
+    var grain = LPF.ar(Saw.ar(f * [0.9985, 1.0015]) + (Saw.ar(f * [2.003, 1.996]) * organ * 0.45), cut) * (0.22 + (organ * 0.4));
+    var air = BPF.ar(PinkNoise.ar, (f * 4).clip(200, 5000).min(SampleRate.ir * 0.42), 0.4) * breath.clip(0, 1) * 0.15;
+    var glimmer = LPF.ar((SinOsc.ar(f * 3, Rand(0, 2pi)) * LFNoise2.kr(Rand(0.05, 0.11)).range(0.2, 1))
+      + (SinOsc.ar(f * 4, Rand(0, 2pi)) * 0.6 * LFNoise2.kr(Rand(0.04, 0.09)).range(0.1, 1)), 3600.min(SampleRate.ir * 0.42))
+      * shine.clip(0, 1) * 0.16;
+    var breathe = 1 - (LFTri.kr(Rand(0.025, 0.06), Rand(0, 4)).range(0, 1) * swell.clip(0, 1) * 0.55);
+    var sig = ((body + grain + air + glimmer) * 1.2).tanh * env * breathe;
+    sig = Balance2.ar(sig[0], sig[1], (pan + SinOsc.kr(Rand(0.01, 0.03), Rand(0, 2pi), 0.25)).clip(-1, 1), amp);
+    Out.ar(out, sig); Out.ar(~fx, sig * send);
+  }).add;
   SynthDef(\stab, { |out = 0, freq = 440, amp = 0.1, cutoff = 1800, dec = 0.16, send = 1, crush = 0, fold = 0|
     var sig = ~col.(RLPF.ar(Splay.ar(Saw.ar(freq * [0.994, 1, 1.006])), cutoff.min(SampleRate.ir * 0.42), 0.35), crush, fold)
       * EnvGen.kr(Env.perc(0.004, dec), doneAction: 2);
@@ -283,7 +317,9 @@ s.waitForBoot {
     wet = AllpassC.ar(wet, 0.09, [0.0411, 0.0437] - mod, 4.8);
     wet = AllpassC.ar(wet, 0.12, [0.0713, 0.0899] + (mod * 0.7), 5.7);
     wet = AllpassC.ar(wet, 0.16, [0.1013, 0.1259] - (mod * 0.5), 6.4);
-    wet = LPF.ar(HPF.ar(wet, 85), 9200.min(SampleRate.ir * 0.42));
+    // The wet path is high-passed at 150, not 85: reverb tails below that only ever read as mud, and mud was what
+    // the ambient set measured as (sub 15 dB over body). Nothing musical lives in a reverb tail under 150 Hz.
+    wet = LPF.ar(HPF.ar(wet, 150), 9200.min(SampleRate.ir * 0.42));
     wet = FreeVerb2.ar(wet[0], wet[1], 1, 0.92, 0.58);
     Out.ar(out, ~safe.((wet * 0.3) + (echo * 0.2)));
   }).add;

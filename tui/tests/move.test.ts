@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { parseMove, MAX_SLOTS } from "../agent.ts";
+import { parseMove, validate, ambientBrief, MAX_SLOTS } from "../agent.ts";
 import { applyPatch, describeMove, pair } from "../patch.ts";
 
 const ONE = `SLOT d3
@@ -123,4 +123,22 @@ test("anything the agent does set beats the default", () => {
 test("an unknown instrument gets no defaults rather than the wrong ones", () => {
   const m = parseMove("SLOT d1 REPLACE\nSET instrument = \\theremin\nSET dur = 1\nEXPECT air up\nWHY nope")!;
   assert.equal(applyPatch("", m.patches[0]), "~d.(\\d1, \\instrument, \\theremin, \\dur, 1)");
+});
+
+test("grammar words that leak into a value are read as grammar, and unknown classes never reach the engine", () => {
+  const p = parseMove("SLOT d6\nSET delta = Pseq([0.5, 0.5, 5], inf) FOR 2\nSET buf = REMOVE\nEXPECT density up\nWHY a burst\nEVIDENCE d6")!;
+  assert.equal(p.forBars, 2);
+  assert.deepEqual(p.patches[0].set, [{ key: "delta", value: "Pseq([0.5, 0.5, 5], inf)" }]);
+  assert.deepEqual(p.patches[0].remove, ["buf"]);
+  assert.match(validate({ slot: "d6", code: "~d.(\\d6, \\instrument, \\twig, \\delta, Pseq([1], inf) FOR 2)" }) ?? "", /FOR/);
+  assert.match(validate({ slot: "d6", code: "~d.(\\d6, \\instrument, \\twig, \\buf, REMOVE)" }) ?? "", /REMOVE/);
+  assert.match(validate({ slot: "d6", code: "~d.(\\d6, \\instrument, \\twig, \\delta, Pseqq([1], inf))" }) ?? "", /Pseqq/);
+  assert.equal(validate({ slot: "d6", code: "~d.(\\d6, \\instrument, \\twig, \\delta, Pwrand([0.125, Pexprand(16, 34, 1)], [0.5, 0.5], inf), \\midinote, Pseq([62, Rest(1)], inf), \\lp, ~arc.(1500, 8600, 44), \\amp, ~x.(\"X---x---\", 0.3))" }), null);
+});
+
+test("the ambient brief tells the model how its claim is checked: on the changed layer's own meter", () => {
+  const brief = ambientBrief();
+  assert.match(brief, /FIRST slot of your move/);
+  assert.match(brief, /own meter/);
+  assert.match(brief, /Never say "same" for a layer you are changing/);
 });

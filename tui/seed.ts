@@ -83,7 +83,9 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
   const swing = st.swing ? `Pseq([${f(0.25 + st.swing)}, ${f(0.25 - st.swing)}], inf)` : "1/4";
   const ghosted = (n: number, k: number, rot: number) => Array.from({ length: n }, (_, i) => (((i + rot) * k) % n < k ? (chance(0.35) ? "x" : "X") : "-")).join("");
 
-  const d1 = st.name === "ambient" ? `~d.(\\d1, \\instrument, \\nature, \\buf, ~n.(\\waves), \\dur, 32, \\len, 30, \\att, 4, \\rel, 9, \\start, Pwhite(0.0, 0.65), \\rate, Pwhite(0.94, 1.03), \\hp, 45, \\lp, ~arc.(1200, 7200, 52), \\amp, 0.165, \\pan, Pwhite(-0.2, 0.2), \\send, 0.65)`
+  // The waves are the warm bed everything else sits in, so they sit 3 dB higher than before and lose the surf rumble
+  // under 70 Hz: measured solo, that band was only ever mud, and it is where the fingertip knocks live.
+  const d1 = st.name === "ambient" ? `~d.(\\d1, \\instrument, \\nature, \\buf, ~n.(\\waves), \\dur, 32, \\len, 30, \\att, 4, \\rel, 9, \\start, Pwhite(0.0, 0.65), \\rate, Pwhite(0.94, 1.03), \\hp, 90, \\lp, ~arc.(2000, 11000, 52), \\amp, 0.3, \\pan, Pwhite(-0.2, 0.2), \\send, 0.65)`
     : st.kit ? `~d.(\\d1, \\instrument, \\smp, \\buf, ~k.(\\kick), \\dur, 1/4, \\amp, ~x.(${rows(pick(st.kick))}, ${f(0.78 + r() * 0.08)}), \\dec, ${pick([0.34, 0.42, 0.5])}, \\hp, 28, \\send, 0.04)`
     : `~d.(\\d1, \\instrument, \\kick, \\dur, 1/4, \\amp, ~x.(${rows(pick(st.kick))}, 0.9), \\tune, ${st.mood === "vibey" ? pick([46, 49, 52]) : pick([38, 41, 44, 48])}, \\dec, ${st.name === "dub techno" ? 0.5 : st.mood === "vibey" ? pick([0.24, 0.3]) : pick([0.26, 0.32, 0.4])}, \\drive, ${st.name === "electro" || st.name === "acid" ? 2.2 : st.mood === "vibey" ? 1.15 : pick([1.2, 1.6])})`;
 
@@ -119,7 +121,8 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
     "kit-tick": `~d.(\\d3, \\instrument, \\smp, \\dur, 1/4, \\buf, ~kp.("----m------m--s-"), \\amp, ~x.(["----------------", "----X-----------", "----X------x----", "----X------x--x-"], 0.42), \\rate, Prand([1, 1.7, 0.6, 2.2], inf), \\crush, 0.7, \\fold, 0.45, \\pan, Pwhite(-0.5, 0.5), \\send, 0.5)`,
     // Canopy is the final opening reveal, roughly eleven seconds after the first bar at 64 BPM. It stays distant:
     // recognisable birds above the tactile foreground, never a constant chirping layer.
-    "nature-birds": `~d.(\\d3, \\instrument, \\nature, \\buf, ~n.(\\birds), \\delta, Pseq([12, Pexprand(34, 52, inf)], 1), \\dur, 40, \\len, 34, \\att, 8, \\rel, 12, \\start, Pwhite(0.05, 0.76), \\rate, Pwhite(0.78, 0.98), \\hp, 1250, \\lp, ~arc.(3000, 11000, 62), \\amp, Pseq([Rest(0), Pwrand([Pwhite(0.026, 0.046, 1), Pwhite(0.07, 0.1, 1), Rest(0)], [0.5, 0.12, 0.38], inf)], 1), \\pan, Pbrown(-0.62, 0.62, 0.12), \\send, 0.8)`,
+    // Birds slowed below 0.85 stop being birds and become something unnamed calling in the dark; they stay near pitch.
+    "nature-birds": `~d.(\\d3, \\instrument, \\nature, \\buf, ~n.(\\birds), \\delta, Pseq([12, Pexprand(34, 52, inf)], 1), \\dur, 40, \\len, 34, \\att, 8, \\rel, 12, \\start, Pwhite(0.05, 0.76), \\rate, Pwhite(0.86, 1.0), \\hp, 1250, \\lp, ~arc.(3000, 11000, 62), \\amp, Pseq([Rest(0), Pwrand([Pwhite(0.026, 0.046, 1), Pwhite(0.07, 0.1, 1), Rest(0)], [0.5, 0.12, 0.38], inf)], 1), \\pan, Pbrown(-0.62, 0.62, 0.12), \\send, 0.8)`,
     none: "",   // left for a DJ to fill
   } as Record<string, string>)[st.clap];
 
@@ -140,7 +143,12 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
     "saw-octaves": `~d.(\\d4, \\instrument, \\supersaw, \\dur, Pseq([2, 0.75, 1.25, 2, 1.5, 0.5], inf), \\midinote, Pseq([[${deg(0)}, ${deg(0, 1)}], [${deg(0)}, ${deg(0, 1)}], [${deg(4, -1)}, ${deg(4)}], [${deg(5, -1)}, ${deg(5)}]], inf), ${slow}, \\detune, ${f(0.15 + r() * 0.2)}, \\cutoff, ${int(300, 600)}, \\env, ${int(300, 900)}, \\res, 0.25, \\att, 0.01, \\sus, 0.45, \\rel, 0.35, \\spread, 0.35, \\send, 0.35, \\duck, 0.6, \\amp, 0.32)`,
     octaves: `~d.(\\d4, \\instrument, \\bass, \\dur, 1/4, \\midinote, Pseq([${deg(0)}, \\r, ${deg(0, 1)}, ${deg(0)}, \\r, ${deg(0, 1)}, \\r, ${deg(0)}, ${deg(0)}, \\r, ${deg(0, 1)}, \\r, ${deg(4)}, \\r, ${deg(0, 1)}, \\r], inf), ${follow}, \\cutoff, ${int(600, 1100)}, \\res, 2, \\dec, 0.16, \\duck, 0.35, \\amp, 0.62)`,
     "sub-gap": `~d.(\\d4, \\instrument, \\bass, \\delta, 1/4, \\dur, 0.6, \\midinote, ${deg(0)}, ${follow}, \\amp, ~x.(["X-------X-------", "X-------X-------", "X-------X---X---", "X---X---X---X-X-"], 0.7), \\cutoff, Pseg([300, 900, 400], 4, repeats: inf), \\res, 1.6, \\dec, 0.5, \\crush, 0.4, \\fold, 0.5, \\duck, 0.8)`,   // \\dur longer than \\delta: notes ring into each other instead of sitting in their own box
-    "ambient-drone": `~d.(\\d4, \\instrument, \\cloud, \\buf, ~g.(\\brush), \\delta, Pseq([4, Pexprand(11, 19, inf)], 1), \\dur, 18, \\rate, Pwrand([0.29, 0.38, 0.51, 1.25], [0.18, 0.44, 0.24, 0.14], inf), \\pos, Pbrown(0.06, 0.86, 0.045), \\wander, 0.1, \\grain, Pwhite(0.14, 0.48), \\density, Pwrand([Pwhite(5, 11, 1), Pwhite(17, 38, 1)], [0.62, 0.38], inf), \\att, 2.2, \\sus, 11, \\rel, 5.5, \\hp, 48, \\lp, ~arc.(780, 7800, 64), \\spread, 0.86, \\shimmer, Pwrand([0.022, 0.16], [0.75, 0.25], inf), \\amp, Pseq([Rest(0), Pwhite(0.19, 0.25, inf)], 1), \\send, 0.66)`,
+    // The brush cloud is the sustained layer of the base, and measured solo it sat at -55 dBFS: absent. Slowed to
+    // 0.29-0.51 it was also a dark grind. It now plays nearer its own pitch, denser and longer-grained, high-passed
+    // above the knock register, with more octave shimmer, so it reads as a warm moving current rather than a rumour.
+    // Level was set by measurement over a full minute, not a single event: consecutive events overlap (17 s each,
+    // 10-18 s apart), so the layer runs about 10 dB hotter than one event alone, and reads level with the waves here.
+    "ambient-drone": `~d.(\\d4, \\instrument, \\cloud, \\buf, ~g.(\\brush), \\delta, Pseq([4, Pexprand(11, 19, inf)], 1), \\dur, 18, \\rate, Pwrand([0.5, 0.62, 0.78, 1], [0.2, 0.4, 0.28, 0.12], inf), \\pos, Pbrown(0.06, 0.86, 0.045), \\wander, 0.1, \\grain, Pwhite(0.24, 0.7), \\density, Pwrand([Pwhite(12, 22, 1), Pwhite(24, 44, 1)], [0.6, 0.4], inf), \\att, 3, \\sus, 11, \\rel, 6, \\hp, 140, \\lp, ~arc.(900, 7200, 64), \\spread, 0.86, \\shimmer, Pwrand([0.07, 0.2], [0.7, 0.3], inf), \\amp, Pseq([Rest(0), Pwhite(0.14, 0.18, inf)], 1), \\send, 0.66)`,
   } as Record<string, string>)[st.bass];
 
   const d5 = ({
@@ -159,8 +167,17 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
     "piano-riff": `~d.(\\d5, \\instrument, \\fm, \\dur, 1/4, \\amp, ~x.(["--X-X--X--X-X--X", "--X-X--X--X-XXX-"], 0.3) * Pwhite(0.85, 1.12), \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\ratio, 1, \\index, Pwhite(1.2, 2.2), \\dec, Pwrand([0.26, 0.5], [0.72, 0.28], inf), \\pan, Pwhite(-0.14, 0.14), \\send, 0.72)`,   // the syncopated piano house riff: short and percussive, on the ands, not sustained pad chords
     "kit-piano": `~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.(["--X-X--X--X-X--X", "--X-XX-X--X-XXX-"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)`,
     "keys-wide": `~d.(\\d5, \\instrument, \\keys, \\delta, 1/4, \\dur, 2.5, \\midinote, Pseq([${prog.map((d) => ninth(d, 2)).join(", ")}], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.(["X---------------", "X---------------", "X-----------X---", "X-------X---X---"], 0.4), \\dec, 1.2, \\rel, 0.6, \\crush, 0.5, \\fold, 0.25, \\pan, Pwhite(-0.1, 0.1), \\duck, 0.7, \\send, 0.6)`,
-    // Paper replaces the old porcelain voice: close, warm movement without a pitched strike or ceremonial tail.
-    "ambient-pad": `~d.(\\d5, \\instrument, \\texture, \\buf, ~t.(\\paper), \\delta, Pseq([8, Pwrand([~burst.(2, 9, 0.6, 0.45, 1), ~burst.(3, 14, 0.45, 0.55, 1), ~burst.(1, 19, 0.5, 0.4, 1)], [0.4, 0.33, 0.27], inf)], 1), \\len, Pwhite(3.4, 5.8), \\rel, Pwhite(0.7, 1.25), \\start, Pbrown(0.03, 0.82, 0.06), \\rate, Pwrand([0.48, 0.59, 0.72], [0.2, 0.58, 0.22], inf), \\hp, 85, \\lp, ~arc.(1500, 8600, 44), \\amp, Pseq([Rest(0), Pwhite(0.17, 0.25, inf)], 1), \\pan, Pbrown(-0.72, 0.72, 0.16), \\send, 0.48)`,
+    // The glow replaces the paper bursts and arrives with the rain at 1.88 s (its own attack is six to ten seconds,
+    // so from 7.5 s it was not really present until the fifteen-second mark). It is the second arrival (paper measured as the brightest thing in the base:
+    // crackle at -35 dBFS in the 2-8k band, and it lives on in the arsenal). This is the harmonic warmth the set never
+    // had: slow D-lydian voicings rooted on A2 and D3 (a D2 root measured as sub on the band stick, and warmth lives
+    // in 200-600 Hz), six-to-ten-second attacks, one event in five silent so it is a light that comes and goes rather
+    // than a chord bed. Voicings avoid the bare tritone (D against G#) and minor thirds: the lydian fourth only ever
+    // appears inside a full chord, where it is wonder rather than dread.
+    // The chords are a cycle over a D pedal (Dsus2 → E/D → Dmaj7 → E/D low → open fifths → A/E), each held long
+    // enough to overlap the next, so the harmony walks somewhere the way a slow organ progression does. It never
+    // rests now (the performer heard it once and wanted it back): the swell and the chord changes are its motion.
+    "ambient-pad": `~d.(\\d5, \\instrument, \\glow, \\delta, Pseq([2, Pexprand(10, 18, inf)], 1), \\midinote, Pseq([[50, 57, 64, 69], [50, 59, 64, 68], [50, 57, 61, 66], [50, 56, 59, 64], [50, 57, 62, 69], [45, 52, 61, 64]], inf), \\att, Pwhite(6, 10), \\sus, Pwhite(14, 24), \\rel, Pwhite(10, 16), \\warm, Pwhite(2.4, 4), \\breath, Pwhite(0.05, 0.2), \\shine, Pwhite(0.2, 0.5), \\swell, Pwhite(0.25, 0.5), \\saw, Pwhite(0.25, 0.45), \\amp, Pseq([Rest(0), Pwhite(0.028, 0.042, inf)], 1), \\pan, Pwhite(-0.25, 0.25), \\send, 0.75)`,
   } as Record<string, string>)[st.chords];
 
   const motif = () => { let p = int(0, 4); return Array.from({ length: 8 }, () => { p = Math.max(0, Math.min(7, p + int(-2, 2))); return chance(0.2) ? "\\r" : String(deg([0, 2, 4, 5, 7, 9, 11, 14][p] % 7 + (p > 4 ? 7 : 0), 3)); }); };
@@ -187,9 +204,12 @@ export function makeBase(seed: number, mood: Mood = "vibey", only?: string): Bas
     "hyper-saw": `~d.(\\d6, \\instrument, \\supersaw, \\dur, 1/4, \\midinote, Pseq([${HOOK.join(", ")}], inf), ${follow}, \\amp, ~x.(["X---X-------X---", "X---X---X-x-X-xX"], 0.3), \\detune, 0.85, \\spread, 1, \\bend, Pwrand([0, -12, 7], [0.6, 0.25, 0.15], inf), \\bendt, 0.06, \\drive, 6, \\ring, Pwrand([0, 0.45], [0.75, 0.25], inf), \\ringf, 520, \\crush, 0.45, \\fold, 0.3, \\cutoff, 900, \\env, 6000, \\res, 0.55, \\att, 0.002, \\sus, 0.1, \\rel, 0.2, \\duck, 0.85, \\send, 0.5)`,
     // The first audible gesture is close and physical. A short pair catches attention, then long holes keep it from
     // becoming a shaker loop while the field recordings arrive around it.
-    "ambient-motes": `~d.(\\d6, \\instrument, \\texture, \\buf, ~t.(\\fingertips), \\delta, Pseq([0.6, 0.38, 3.75, 1.1, 6.5, Pwrand([~burst.(3, 7, 0.34, 0.45, 1), ~burst.(2, 12, 0.5, 0.4, 1)], [0.55, 0.45], inf)], 1), \\len, Pwhite(2.6, 4.8), \\rel, Pwhite(0.55, 0.9), \\rate, Pwrand([0.34, 0.46, 0.57, 0.69], [0.14, 0.2, 0.46, 0.2], inf), \\hp, 48, \\lp, ~arc.(1400, 7600, 30), \\sub, Pwrand([Pwhite(0.2, 0.36, 1), Pwhite(0.55, 0.85, 1)], [0.68, 0.32], inf), \\subfreq, Pwhite(38, 58), \\amp, Pwhite(0.13, 0.2), \\pan, Pbrown(-0.68, 0.68, 0.15), \\send, 0.54)`,
+    // The contact body under each fingertip is a knock in the D2 register now, not a sub thump at 38-58 Hz: that
+    // thump measured 25 dB over the waves and was most of what the set's "boomy" reading was. Playback stays nearer
+    // the recording's own speed, because a fingertip slowed to 0.34 is a dull thud, not a touch.
+    "ambient-motes": `~d.(\\d6, \\instrument, \\texture, \\buf, ~t.(\\fingertips), \\delta, Pseq([0.6, 0.38, 3.75, 1.1, 6.5, Pwrand([~burst.(3, 7, 0.34, 0.45, 1), ~burst.(2, 12, 0.5, 0.4, 1)], [0.55, 0.45], inf)], 1), \\len, Pwhite(2.6, 4.8), \\rel, Pwhite(0.55, 0.9), \\rate, Pwrand([0.46, 0.58, 0.68, 0.8], [0.14, 0.4, 0.3, 0.16], inf), \\hp, 110, \\lp, ~arc.(1400, 7600, 30), \\sub, Pwrand([Pwhite(0.08, 0.18, 1), Pwhite(0.2, 0.32, 1)], [0.7, 0.3], inf), \\subfreq, Pwhite(68, 96), \\amp, Pwhite(0.09, 0.14), \\pan, Pbrown(-0.68, 0.68, 0.15), \\send, 0.54)`,
   } as Record<string, string>)[st.lead];
 
-  const about = ambient ? "water → touch → grain → paper → canopy" : `${st.name} · ${prog.map((d) => (st.mood === "vibey" ? ["I", "ii", "iii", "IV", "V", "vi", "vii"] : ["i", "ii", "III", "iv", "v", "VI", "VII"])[d]).join("–")}`;
+  const about = ambient ? "water → touch → grain → glow → canopy" : `${st.name} · ${prog.map((d) => (st.mood === "vibey" ? ["I", "ii", "iii", "IV", "V", "vi", "vii"] : ["i", "ii", "III", "iv", "v", "VI", "VII"])[d]).join("–")}`;
   return { seed, style: st.name, mood: st.mood, bpm, root, scale: scaleName, key: `${NOTE[root % 12]} ${scaleName}`, slots: { d1, d2, d3, d4, d5, d6 }, about };
 }

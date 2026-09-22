@@ -22,6 +22,8 @@ export interface EngineEvents {
   stopping: [];
   ears: [frame: Ears];
   onset: [];
+  /** the interpreter died mid-set and is being relaunched: the host should reload the set once it is ready again */
+  restarting: [];
   scope: [samples: number[]];
   hit: [hit: Hit];
   bar: [bar: { n: number; at: number; bpm: number }];
@@ -59,6 +61,33 @@ export class Engine extends EventEmitter<EngineEvents> {
     });
   }
 
+  /** the interpreter's last words: kept so an exit mid-set leaves a reason in the log, not just "engine exited" */
+  private tail: string[] = [];
+  private restarts = 0;
+  private launch(sclang: string, mute: boolean) {
+    this.sc = spawn(sclang, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
+    const keep = (line: string) => { this.tail.push(line); if (this.tail.length > 40) this.tail.shift(); };
+    this.sc.stdout?.on("data", (d: Buffer) => {
+      for (const line of String(d).split("\n")) if (line.trim()) { keep(line); if ((process.env.EARS_ENGINE_DEBUG || /ERROR|WARNING|FAILURE/.test(line)) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line); }
+    });
+    this.sc.stderr?.on("data", (d: Buffer) => { const t = String(d).trim(); if (t) { keep(`stderr: ${t}`); this.emit("log", t); } });
+    this.sc.on("error", error => { this.emit("log", `engine process error: ${error.message}`); this.stop(); });
+    this.sc.on("exit", (code, signal) => {
+      this.ready = false;
+      if (this.stopped) { this.emit("log", "engine exited"); return; }
+      // Not asked to stop: the interpreter died under a live set. Say what it last said, then bring it back: a
+      // demo with a dead engine is silent and every loop on screen stalls. Its own server may have outlived it and
+      // still holds the audio port, so it is told to quit before the new interpreter boots one.
+      this.emit("log", `engine exited (code ${code ?? "?"}${signal ? `, ${signal}` : ""}) · last lines: ${this.tail.slice(-8).join(" ⏎ ").slice(0, 900)}`);
+      if (this.restarts >= 3) { this.emit("log", "engine exited three times; giving up"); this.stop(); return; }
+      this.restarts++;
+      const audio = this.audioPort;
+      if (audio) try { this.sock.send(osc.toBuffer({ address: "/quit", args: [] }), audio, "127.0.0.1"); } catch {}
+      this.emit("log", `engine restarting (${this.restarts}/3)…`);
+      setTimeout(() => { if (!this.stopped) { this.emit("restarting"); this.launch(sclang, mute); } }, 1500);
+    });
+  }
+
   private async boot(mute: boolean) {
     const sclang = await findSclang(ROOT);
     if (this.stopped) return;
@@ -82,13 +111,7 @@ export class Engine extends EventEmitter<EngineEvents> {
     });
     if (this.stopped) return;
     this.sock.on("error", error => this.emit("log", `engine socket error: ${error.message}`));
-    this.sc = spawn(sclang, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
-    this.sc.stdout?.on("data", (d: Buffer) => {
-      for (const line of String(d).split("\n")) if (line.trim() && (process.env.EARS_ENGINE_DEBUG || /ERROR|WARNING|FAILURE/.test(line)) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line.trim());
-    });
-    this.sc.stderr?.on("data", (d: Buffer) => this.emit("log", String(d).trim()));
-    this.sc.on("error", error => { this.emit("log", `engine process error: ${error.message}`); this.stop(); });
-    this.sc.on("exit", () => { this.ready = false; this.emit("log", "engine exited"); this.stop(); });
+    this.launch(sclang, mute);
 
     // Nothing above this line survives a signal. The TUI's own exit hook closes the session but never stops the
     // engine, and there were no signal handlers at all, so Ctrl-C or closing the terminal left scsynth running --

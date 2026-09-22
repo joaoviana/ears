@@ -26,6 +26,8 @@ export class Session extends EventEmitter<SessionEvents> {
   readonly speech = new Speech();
   readonly evidence = new Evidence(this.bus.session, (type, from, body) => this.bus.send(type, from, body));
   readonly grading = new LiveGrading(this.evidence, this.bus, SLOTS);
+  /** ambient gestures take seconds to arrive: the check's after-window waits this long past activation */
+  settle(ms: number) { this.evidence.settleMs = ms; }
   private remote = new RemoteProposals(this.evidence, SLOTS);
   private hostWrites = new Map<string, string>();
   private timers = new Set<ReturnType<typeof setTimeout>>();

@@ -28,6 +28,10 @@ export function sourceDiff(before: string, after: string) {
 export class Evidence extends EventEmitter<{ observation: [body: ObservationBody]; comparison: [body: ComparisonBody] }> {
   revision = '';
   activeRevision = 0;
+  /** how long after activation the after-window may start: ambient gestures take seconds to arrive, so their check waits */
+  settleMs = 0;
+  /** slots with a change still waiting for its check */
+  pending(): string[] { return [...new Set([...this.executions.values()].filter((x) => !x.done && x.active_at_ms != null).map((x) => x.slot))]; }
   slots: Record<string, string> = {};
   activeSlots: Record<string, string> = {};
   latest?: Observation;
@@ -60,7 +64,14 @@ export class Evidence extends EventEmitter<{ observation: [body: ObservationBody
   current(id: string) { const x = this.executions.get(id); return !!x && !x.done && this.newest.get(x.slot) === id; }
   begin(slot: string, code: string, author: string, context: Context = {}) {
     const old = this.executions.get(this.newest.get(slot) ?? '');
-    if (old && !old.done) { this.receipt('superseded', old, { reason: 'A newer edit replaced this slot' }); this.unavailable(old, 'superseded before a complete comparison'); }
+    if (old && !old.done) {
+      this.receipt('superseded', old, { reason: 'A newer edit replaced this slot' });
+      // A slot retaken before its check used to lose the check entirely, and in a demo takes come faster than
+      // reports. If a clean report already sits at least a bar after the old change, that is the check, marked early.
+      const early = old.active_at_ms != null && old.before ? [...this.recent].reverse().find((o) => o.stable && o.profile.capture && o.profile.capture.start_ms >= old.active_at_ms!) : undefined;
+      if (early) { this.comparison({ id: `${this.session}:c${++this.comparisonN}`, ...this.ids(old), before: old.before!.id, after: early.id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(old.before!.profile, early.profile), confounds: ['live master mix, not an isolated voice', 'checked early: a newer change followed'] }); old.done = true; }
+      else this.unavailable(old, 'superseded before a complete comparison');
+    }
     const beforeCode = this.submitted?.[slot] ?? '';
     this.submitted![slot] = code;
     // 27 of 33 comparisons died here. It demanded that the IMMEDIATELY preceding observation be stable and match
@@ -108,12 +119,22 @@ export class Evidence extends EventEmitter<{ observation: [body: ObservationBody
     this.emit('observation', body);
     for (const x of this.executions.values()) {
       if (x.done || x.active_at_ms == null || !capture) continue;
-      if (!stable || capture.start_ms < x.active_at_ms) continue;
+      if (!stable || capture.start_ms < x.active_at_ms + this.settleMs) continue;
       if (!x.before) { this.unavailable(x, 'no stable observation immediately before this edit', id); continue; }
       // the first four are standing properties of live observation. Only an EVENT makes a comparison unattributable,
       // so those must not read like one: a grader that treats a disclaimer as a confound grades nothing, ever.
       const confounds = ['live master mix, not an isolated voice', 'different musical time; stochastic patterns and effect tails may differ', 'no controlled A/B render or causal attribution', 'shared effects and master processing are not isolated'];
-      if (x.active_revision !== this.activeRevision || x.revision !== this.revision) confounds.push('other state or activation changes occurred');
+      // A move that lands two slots is two executions with two revisions. Measured against the room, each used to
+      // see the other's revision as "another change" and every two-part move came back ungraded: the live set
+      // never checked a prediction for weeks. The parts of one proposal are one change. Only a revision or an
+      // activation that belongs to nobody in this move is an event that intervened.
+      const same = (y: Execution) => y === x || (x.proposal != null && y.proposal === x.proposal);
+      const revN = (r: string) => Number(r.split(':s').pop());
+      // an intervening change: another move that landed after this one's baseline window, or a state change
+      // (a file save, a tempo change) that no execution in any move accounts for
+      const intervening = [...this.executions.values()].some((y) => !same(y) && ((y.active_revision ?? 0) > x.before!.active_revision || revN(y.revision) > revN(x.before!.revision)));
+      const unaccounted = ![...this.executions.values()].some((y) => y.revision === this.revision) && this.revision !== x.before.revision;
+      if (intervening || unaccounted) confounds.push('other state or activation changes occurred');
       if (this.rodeDuring(x.active_at_ms, capture.end_ms)) confounds.push('a mixer transition was riding during this window');
       if (x.before && x.before.revision !== x.revision) confounds.push('the source moved between the baseline window and this edit');
       this.comparison({ id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before.id, after: id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(x.before.profile, profile), confounds });

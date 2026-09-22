@@ -40,3 +40,17 @@ export function slotDifference(before: Record<string, SlotWindow>, after: Record
   return { envelope_db: b.loud - a.loud, centroid_hz: b.centroid - a.centroid, relative_bands_db: Object.fromEntries(BANDS.map((n, i) => [n, b.rel[i] - a.rel[i]])) as Record<string, number>, onsets_per_beat: master.onsets_per_beat, peak_to_envelope_db: master.peak_to_envelope_db };
 }
 export const PER_SLOT_METRICS = new Set(["sub", "low", "mid", "high", "air", "brightness", "loudness"]);
+
+/**
+ * What changed on ONE layer, in that layer's own terms: each band in dB of its own tap, its own loudness, its own
+ * brightness. This is the measurement a claim about a move deserves: "more middle" from a fingertip-to-chord trade
+ * is a large change on that layer and a fraction of a decibel on a six-layer mix, and grading it on the mix called
+ * every gentle move "no real change".
+ */
+export function slotOwnDifference(before: Record<string, SlotWindow>, after: Record<string, SlotWindow>, slot: string, master: Pick<Differences, "onsets_per_beat" | "peak_to_envelope_db">): Differences | null {
+  const a = before[slot], b = after[slot];
+  if (!a || !b) return null;
+  return { envelope_db: dB(b.power) - dB(a.power), centroid_hz: b.centroid - a.centroid,
+    relative_bands_db: Object.fromEntries(BANDS.map((n, i) => [n, dB(b.bands[i]) - dB(a.bands[i])])) as Record<string, number>,
+    onsets_per_beat: master.onsets_per_beat, peak_to_envelope_db: master.peak_to_envelope_db };
+}
