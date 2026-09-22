@@ -25,12 +25,8 @@ function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
   const light = mix(body, WHITE, 0.55), dark = mix(body, INK, 0.45), ear = s.hat * 0.12, open = 0.015 + s.snare * 0.07;
   const glance = Math.sin((s.t ?? 0) * 0.7) * 0.025, lid = s.blink ? 0.12 : 1;
   const eyes = (ex: number, ey: number, rx: number, ry: number, pupil = 0.5, slit = false, tilt = 0) => { for (const d of [-1, 1]) { add(ell(d * ex, ey, rx, ry * lid, d * tilt), WHITE, true); add(ell(d * ex + glance, ey + 0.01, slit ? rx * 0.3 : rx * pupil, ry * lid * (slit ? 0.92 : pupil), d * tilt), INK, true); if (!s.blink) add(ell(d * ex + glance - rx * 0.22, ey - ry * 0.3, rx * 0.16, ry * 0.16), WHITE, true); } };
-  const shoulders = () => {
-    add(ell(0, 1.12, 0.78, 0.42), dark);
-    for (const d of [-1, 1]) { add(tri(d * 0.76, 0.74, d * 0.15, 0.76, d * 0.48, 1.12), mix(body, INK, 0.5)); add(tri(d * 0.68, 0.78, d * 0.27, 0.81, d * 0.48, 0.94), mix(second, INK, 0.35)); }
-    add(box(0, 0.91, 0.2, 0.2, 0.035), mix(body, INK, 0.62));
-  };
-  const cans = () => { if (s.cans === false) return; const glow = mix(mix(second, INK, 0.45), second, 0.35 + s.hat * 0.65); add(both(minus(ell(0, -0.02, 0.8, 0.78), ell(0, -0.02, 0.69, 0.67)), (_x, y) => y < 0.0), mix(second, INK, 0.5)); for (const d of [-1, 1]) { add(ell(d * 0.72, 0.1, 0.15, 0.24), glow); add(ell(d * 0.74, 0.1, 0.07, 0.13), mix(glow, INK, 0.5)); add(ell(d * 0.735, 0.045, 0.028, 0.07), mix(glow, WHITE, 0.65), true); } };
+  const shoulders = () => add(ell(0, 1.12, 0.78, 0.42), dark);
+  const cans = () => { if (s.cans === false) return; const glow = mix(mix(second, INK, 0.45), second, 0.35 + s.hat * 0.65); add(both(minus(ell(0, -0.02, 0.8, 0.78), ell(0, -0.02, 0.69, 0.67)), (_x, y) => y < 0.0), mix(second, INK, 0.5)); for (const d of [-1, 1]) { add(ell(d * 0.72, 0.1, 0.15, 0.24), glow); add(ell(d * 0.74, 0.1, 0.07, 0.13), mix(glow, INK, 0.5)); } };
 
   shoulders();
   switch (species) {
@@ -56,8 +52,6 @@ function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
     case "owl": {
       for (const d of [-1, 1]) add(tri(d * 0.56, -0.4, d * (0.6 + ear), -0.92, d * 0.2, -0.5), dark);
       cans(); add(ell(0, 0.06, 0.64, 0.6), body);
-      add(tri(-0.39, -0.34, 0.39, -0.34, 0, -0.02), mix(body, INK, 0.38));
-      add(box(0, -0.42, 0.29, 0.075, 0.025), dark); add(box(0, -0.41, 0.12, 0.025, 0.012), mix(second, WHITE, 0.42), true);
       for (const d of [-1, 1]) { add(ell(d * 0.27, -0.04, 0.27, 0.28), light); add(ell(d * 0.27, -0.04, 0.2, 0.21 * lid), WHITE, true); add(ell(d * 0.27 + glance, -0.04, 0.11, 0.12 * lid), INK, true); if (!s.blink) add(ell(d * 0.27 + glance - 0.04, -0.09, 0.035, 0.035), WHITE, true); }
       add(tri(-0.07, 0.12, 0.07, 0.12, 0, 0.3 + open), second, true);
       for (let i = -2; i <= 2; i++) for (const r of [0, 1]) add(tri(i * 0.17 + r * 0.085 - 0.06, 0.42 + r * 0.1, i * 0.17 + r * 0.085 + 0.06, 0.42 + r * 0.1, i * 0.17 + r * 0.085, 0.5 + r * 0.1), dark);
@@ -138,15 +132,12 @@ function build(species: string, body: RGB, second: RGB, s: FaceState): Layer[] {
 const QUAD = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█";
 const dist = (a: RGB, b: RGB) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 const mean = (xs: RGB[]): RGB => xs.reduce((acc, c) => acc.map((v, i) => v + c[i] / xs.length), [0, 0, 0]).map(Math.round);
-const BRAILLE_BITS = [0, 3, 1, 4, 2, 5, 6, 7];   // row-major 2 x 4 samples → Unicode dot order
-type CellMode = boolean | "quad" | "braille";
 
-/** rows x cols of terminal cells. Braille samples 2 x 4 pixels per cell; quad keeps the older 2 x 2 path. */
-export function face(species: string, body: RGB, second: RGB, s: FaceState, cols = 24, rows = 12, mode: CellMode = false): string[] {
+/** rows x cols of half-blocks (defaults 12 x 24: a 24 x 24 pixel portrait), or quadrants for a 2*cols x 2*rows one. */
+export function face(species: string, body: RGB, second: RGB, s: FaceState, cols = 24, rows = 12, quad = false): string[] {
   const dim = s.active ? 1 : 0.38, layers = build(species, body, second, s).reverse();
-  const quad = mode === true || mode === "quad", braille = mode === "braille";
-  const bob = s.active ? s.kick * 0.07 : 0, tilt = s.active ? Math.sin((s.bar ?? 0) * 6.2832) * 0.05 : 0, ct = Math.cos(tilt), sn = Math.sin(tilt), H = rows * (braille ? 4 : 2);
-  const textCols = cols; if (quad || braille) cols *= 2;
+  const bob = s.active ? s.kick * 0.07 : 0, tilt = s.active ? Math.sin((s.bar ?? 0) * 6.2832) * 0.05 : 0, ct = Math.cos(tilt), sn = Math.sin(tilt), H = rows * 2;
+  const textCols = cols; if (quad) cols *= 2;
   const px: (RGB | null)[] = new Array(cols * H);
   for (let j = 0; j < H; j++) for (let i = 0; i < cols; i++) {
     let r = 0, g = 0, b = 0, n = 0;
@@ -169,8 +160,7 @@ export function face(species: string, body: RGB, second: RGB, s: FaceState, cols
   for (let j = 0; j < H; j++) for (let i = 0; i < cols; i++) {
     const p = at(i, j);
     if (p) { if (!at(i - 1, j) || !at(i + 1, j) || !at(i, j - 1) || !at(i, j + 1)) rim[j * cols + i] = mix(p, neon, 0.3).map(Math.round); continue; }
-    // Braille is useful for a crisp 2 x 4 silhouette, but sparse halo dots read as visual noise around a face.
-    if (!s.active || braille) continue;
+    if (!s.active) continue;
     const d1 = at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1) || at(i - 1, j - 1) || at(i + 1, j - 1) || at(i - 1, j + 1) || at(i + 1, j + 1);
     const d2 = !d1 && (at(i - 2, j) || at(i + 2, j) || at(i, j - 2) || at(i, j + 2) || at(i - 2, j - 1) || at(i + 2, j - 1) || at(i - 2, j + 1) || at(i + 2, j + 1) || at(i - 1, j - 2) || at(i + 1, j - 2) || at(i - 1, j + 2) || at(i + 1, j + 2));
     const k = d1 ? 0.07 + s.kick * 0.2 : d2 ? 0.025 + s.kick * 0.07 : 0;
@@ -178,31 +168,6 @@ export function face(species: string, body: RGB, second: RGB, s: FaceState, cols
   }
   px.splice(0, px.length, ...rim);
   const out: string[] = [];
-  if (braille) {
-    for (let y = 0; y < H; y += 4) {
-      let line = "", fg = "", bgc = "";
-      for (let x = 0; x < textCols; x++) {
-        const cell: (RGB | null)[] = [];
-        for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 2; dx++) cell.push(px[(y + dy) * cols + x * 2 + dx]);
-        const filled = cell.map((c, k) => (c ? k : -1)).filter((k) => k >= 0);
-        let mask = 0, fgc: RGB | null = null, bgcol: RGB | null = null, glyph = " ";
-        if (filled.length) {
-          let dots = filled;
-          // Never dither a filled cell: dots inside eyes and cheeks look like holes. Braille is reserved for the
-          // silhouette edge; solid regions stay calm, readable blocks with their averaged colour.
-          if (filled.length === 8) { fgc = mean(cell as RGB[]); glyph = "█"; dots = []; }
-          else fgc = mean(filled.map((k) => cell[k]!));
-          if (dots.length) { mask = dots.reduce((m, k) => m | (1 << BRAILLE_BITS[k]), 0); glyph = String.fromCodePoint(0x2800 + mask); }
-        }
-        const wantBg = bgcol ? `48;2;${bgcol[0]};${bgcol[1]};${bgcol[2]}` : "49", wantFg = fgc ? `38;2;${fgc[0]};${fgc[1]};${fgc[2]}` : fg;
-        if (wantBg !== bgc) { line += `\x1b[${wantBg}m`; bgc = wantBg; }
-        if (wantFg !== fg) { line += `\x1b[${wantFg}m`; fg = wantFg; }
-        line += glyph;
-      }
-      out.push(line + "\x1b[39m\x1b[49m");
-    }
-    return out;
-  }
   if (quad) {
     for (let y = 0; y < H; y += 2) {
       let line = "", fg = "", bgc = "";
