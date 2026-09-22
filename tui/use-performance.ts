@@ -13,7 +13,7 @@ import { feed, fake } from "./audio.ts";
 import { roster, save, accent, isAmbientDJ, type DJ } from "./djs.ts";
 import { makeBase, STYLE_NAMES, DARK_NAMES, type Base, type Mood } from "./seed.ts";
 import { Session, SLOTS } from "./session.ts";
-import { type Context } from "./evidence.ts";
+import { sourceDiff, type Context } from "./evidence.ts";
 import { SKILLS, skill, earned, recordNote } from "./skills.ts";
 import { describeExpect, forPrompt, emptyTally, METRICS, type Tally } from "./shots.ts";
 import { type SlotWindow } from "./slotears.ts";
@@ -27,7 +27,7 @@ import { Moments, type Moment } from "./moments.ts";
 import { DEVELOP, developMoment, type Development, type Inspiration } from "./inspiration.ts";
 import { DEFAULT_WILD, angleKind, musicContext } from "./direction.ts";
 import { AmbientLearning } from "./ambient-learning.ts";
-import { AMBIENT_ARSENAL } from "./ambient-arsenal.ts";
+import { AMBIENT_ARSENAL, ambientTide } from "./ambient-arsenal.ts";
 import cfonts from "cfonts";
 
 // name-in-lights fonts (cfonts). Each DJ keeps one; if it doesn't fit the terminal, fall through to narrower ones.
@@ -62,11 +62,20 @@ const TAU: Record<PulseVoice, number> = { kick: 0.22, snare: 0.16, hat: 0.07, st
 const KIND: Record<string, PulseVoice> = { kick: "kick", clap: "snare", hat: "hat", stab: "stab", bass: "stab" };
 
 
+export type Say = { text: string; kind: "dj" | "ok" | "refused" };
+
 interface Guest { dj: DJ; since: number; offered: number; taken: number; level: "suggest" | "auto"; remote?: boolean; pending: string[]; calls?: Tally }
 type Option = Suggestion & Context & { id: number; agent: string };
 
 interface Author { name: string; rgb: number[]; bar: number; fresh: Set<string> }
 interface Application { phase: "submitted" | "queued" | "active" | "failed"; proposal?: number; agent: string; why: string; diff: string; at: number; previousAuthor?: Author }
+/**
+ * The change the booth band talks about: who made it, what they said it was for, and — per slot — the keys it
+ * actually moved. `parts[].diff` comes from the patch the host wrote (or from diffing the two versions of the
+ * source, for a save from your own editor), so CHANGED is never a paraphrase of the idea, it is the edit.
+ */
+export interface Change { at: number; bar: number; who: string; rgb: number[]; why: string; evidence: string; parts: { slot: string; keys: Keys; diff: string }[] }
+type Keys = ReturnType<typeof sourceDiff>["parameters"];
 
 export function usePerformance() {
   const { exit } = useApp();
@@ -121,7 +130,11 @@ export function usePerformance() {
   const [lines, setLines] = useState<Line[]>([]);
   const [ref, setRef] = useState<Profile | null>(() => { try { return JSON.parse(fs.readFileSync(REF, "utf8")); } catch { return null; } });
   const reference = useRef(ref); reference.current = ref;
-  const [say, setSay] = useState("waiting for the first report");
+  // `say` used to carry three different things in one string — a DJ speaking, the host confirming, the host refusing —
+  // told apart on screen by sniffing for a quote character. A refusal is the one the performer must not miss, so the
+  // kind is now carried rather than guessed, and the warning accent follows it.
+  const [say, setSayState] = useState<Say>({ text: "waiting for the first report", kind: "ok" });
+  const setSay = (text: string, kind: Say["kind"] = "ok") => setSayState({ text, kind });
   const [typing, setTyping] = useState<"tell" | "summon" | null>(null), [thinking, setThinking] = useState("");
   const [question, setQuestion] = useState<MusicalQuestion | null>(null);
   const conversation = useRef<ConversationRound | null>(null);
@@ -150,6 +163,7 @@ export function usePerformance() {
   // what each voice measured when this base started: the reference slot drift is judged against
   const slotRef = useRef<Record<string, SlotWindow> | null>(null), needSlotRef = useRef(false), attempts = useRef<Attempt[]>([]);
   const [diagnosis, setDiagnosis] = useState<{ drift: { slot: string; db: number }[]; masking: string[] }>({ drift: [], masking: [] });
+  const lastChange = useRef<Change | null>(null);   // what the booth band shows under CHANGED, and what BECAUSE explains
   const shotCard = useRef<{ who: string; rgb: number[]; call: string; text: string; grade: string; until: number } | null>(null);   // a skill this DJ must demonstrate in its next round
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
@@ -172,6 +186,9 @@ export function usePerformance() {
   const stacked = useRef<number[]>([]);
   const wild = useRef(DEFAULT_WILD);   // 0 tame .. 3 unhinged; w cycles it
   const musicalRound = useRef(0);
+  /** Where the set is in its own arc, as the arsenal computes it for the DJs. The band shows the performer the same
+   *  phase the composer was handed, so NOW is the booth's own idea of the room, not a second one invented on screen. */
+  const tideNow = () => ambientTide({ round: musicalRound.current, history: st.current.history });
   const turns = useRef<string[]>([]);   // recent left-turn ideas shown to the performer
   /** One voice per angle: the worst drift for fix, something empty or undoubled for add, anything else for turn. */
   const aimAt = (round: number): Record<string, string> => {
@@ -204,7 +221,8 @@ export function usePerformance() {
   const newBase = (seed: number, smooth = false, style = STYLE0) => {
     const b = (base.current = makeBase(seed, mood.current, style)), ambient = b.style === "ambient";
     const sd = { name: ambient ? "ambient system" : `seed ${seed}`, rgb: SEEDC };
-    needSlotRef.current = true; slotRef.current = null; attempts.current = []; applications.current = {}; setStatus({});
+    needSlotRef.current = true; slotRef.current = null; attempts.current = []; applications.current = {}; lastChange.current = null; shotCard.current = null; setStatus({});   // a new base is not a change to the old one: the band starts empty with it
+
     if (!archived.current) { archived.current = true; try { const dir = path.join(ROOT, "tui/sets", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")); fs.mkdirSync(dir, { recursive: true }); for (const k of SLOTS) fs.copyFileSync(path.join(SET, k + ".scd"), path.join(dir, k + ".scd")); } catch {} }   // never lose the set that was on disk
     baseActivating.current = ambient ? new Set(SLOTS) : null;
     const loading = baseActivating.current;
@@ -327,7 +345,7 @@ export function usePerformance() {
         if (!st.current.options?.length && st.current.round === round && !controller.signal.aborted) {
           requestState.current.error ||= "no usable response";
           st.current.askAt = st.current.bar + 4;
-          setSay(`no ideas: ${requestState.current.error} · a retries now`);
+          setSay(`no ideas: ${requestState.current.error} · a retries now`, "refused");
         }
         if (st.current.round !== round && !st.current.options?.length && st.current.bar >= st.current.askAt) think();
       });
@@ -375,7 +393,7 @@ export function usePerformance() {
       if (wants && (g.dj.skills || []).includes(wants)) showcase.current = { agent: g.dj.id, skill: wants };   // asking for what a skill provides makes one angle use it, for certain
       if (wants && !(g.dj.skills || []).includes(wants)) { const k = skill(wants); greet.current = { who: g.dj.name, rgb: accent(g.dj.palette), text: `I can't do ${k.name.toLowerCase()} yet: that skill is locked (it unlocks after ${k.takes} of my ideas are taken; I'm on ${g.taken}). Press K to give it to me now.`, until: s.bar + 10 }; }
       s.note = text; discardOptions("new performer instruction"); s.round++; bus.send("note", "human", { text, to: active().id }); think(); }
-    else { setThinking(`writing a DJ who ${text}`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message)).finally(() => setThinking("")); }
+    else { setThinking(`writing a DJ who ${text}`); summon(text, all.current.map((d) => d.id)).then((dj) => { save(dj); all.current = roster(); enter(dj); }, (e) => setSay("summon failed: " + e.message, "refused")).finally(() => setThinking("")); }
   };
   const grantSkill = (g: Guest, id: string) => {
     const s = st.current, k = skill(id);
@@ -391,17 +409,17 @@ export function usePerformance() {
   /** Land several marked options on one bar line. Slots must not overlap: two writes to one slot is the overwrite
    *  race the revision guard exists to stop, and the second would silently win. Grading says both landed together. */
   const takeStack = (by = "human") => {
-    if (moments.current?.playing) { setSay("esc returns live before taking a stack"); return; }
+    if (moments.current?.playing) { setSay("esc returns live before taking a stack", "refused"); return; }
     const s = st.current, ids = [...marks.current];
     const picked = (s.options ?? []).filter((o) => ids.includes(o.id));
     if (picked.length < 2) { marks.current = new Set(); const one = (s.options ?? []).findIndex((o) => o.id === ids[0]); if (one >= 0) take(one, by); return; }
     const slots = picked.flatMap((o) => (o.parts ?? [{ slot: o.slot }]).map((x) => x.slot));
     const clash = slots.find((k, n) => slots.indexOf(k) !== n);
-    if (clash) { setSay(`both of those rewrite ${clash} — take one, then the other`); return; }
-    if (picked.some(option => option.transition)) { setSay("a reveal needs its own wash · take it separately"); return; }
+    if (clash) { setSay(`both of those rewrite ${clash} — take one, then the other`, "refused"); return; }
+    if (picked.some(option => option.transition)) { setSay("a reveal needs its own wash · take it separately", "refused"); return; }
     refreshState();
     const stale = picked.map(option => evidence.check(option)).find(Boolean);
-    if (stale) { setSay(stale); return; }
+    if (stale) { setSay(stale, "refused"); return; }
     marks.current = new Set();
     stacked.current = picked.map((o) => o.id);   // so each one's outcome can say it did not land alone
     for (const o of picked) { const at = (st.current.options ?? []).findIndex((x) => x.id === o.id); if (at >= 0) take(at, by, true); }
@@ -411,14 +429,14 @@ export function usePerformance() {
     setSay(`${picked.length} ideas landed together on the next bar`);
   };
   const take = (i: number, by = "human", more = false) => {
-    if (moments.current?.playing) { setSay("esc returns live before taking an idea"); return; }
+    if (moments.current?.playing) { setSay("esc returns live before taking an idea", "refused"); return; }
     const s = st.current, o = s.options?.[i] as (Option & { riding?: boolean }) | undefined; if (!o) return;
-    if (by === "grant:auto" && s.booth.find(g => g.dj.id === o.agent)?.level !== "auto") { setSay("automatic take cancelled: grant revoked"); return; }
-    if (!DEMO && !engine?.ready) { setSay("engine is still booting; take this option once ready"); return; }
+    if (by === "grant:auto" && s.booth.find(g => g.dj.id === o.agent)?.level !== "auto") { setSay("automatic take cancelled: grant revoked", "refused"); return; }
+    if (!DEMO && !engine?.ready) { setSay("engine is still booting; take this option once ready", "refused"); return; }
     if (!more) {
       refreshState();
       const stale = evidence.check(o);
-      if (stale) { bus.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: stale }); s.options = s.options!.filter(x => x !== o); setSay(stale); return; }
+      if (stale) { bus.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: stale }); s.options = s.options!.filter(x => x !== o); setSay(stale, "refused"); return; }
     }
     const parts = o.parts?.length ? o.parts : [{ slot: o.slot, code: o.code, diff: o.diff }];
     if (parts.every((x) => (evidence.slots[x.slot] || "").trim() === x.code.trim())) { bus.send("rejected", o.agent, { request_id: o.request_id, proposal: o.id, reason: "no source change" }); s.options = s.options!.filter(x => x !== o); return; }
@@ -433,6 +451,11 @@ export function usePerformance() {
         previousAuthor: previous ? { ...previous, fresh: new Set(previous.fresh) } : undefined };
       author(x.slot, x.code, { name: who.name, rgb: accent(who.palette) });   // set before writing, so the file watcher doesn't credit the change to you
     }
+    // The same per-key before/after the `applied` receipt carries, so the band shows the edit the evidence layer
+    // recorded rather than a second opinion about it. `diff` is the patch's own sentence, kept as the fallback for
+    // a slot `parseSlot` cannot read.
+    lastChange.current = { at: Date.now(), bar: s.bar, who: who.name, rgb: accent(who.palette), why: o.why, evidence: o.evidence,
+      parts: parts.map((x) => ({ slot: x.slot, keys: sourceDiff(evidence.slots[x.slot] || "", x.code).parameters, diff: x.diff })) };
     for (const x of parts) writeSlot(x.slot, x.code);
     bus.send("verdict", by === "human" ? "human" : "host", { proposal: o.id, request_id: o.request_id, decision: "take", by });
     // a move that touches more than one slot cannot be attributed to one tap: it is graded on the room
@@ -465,7 +488,7 @@ export function usePerformance() {
         if (application?.previousAuthor) authors.current[slot] = application.previousAuthor; else delete authors.current[slot];
         const history = application?.proposal == null ? undefined : st.current.history.find(item => item.id === application.proposal);
         if (history) { history.verdict = "x"; history.outcome = `engine refused: ${text}`; }
-        setSay(`${slot} rejected by SuperCollider · previous sound restored · ${text}`);
+        setSay(`${slot} rejected by SuperCollider · previous sound restored · ${text}`, "refused");
       }
     });
     session.on("active", slot => {
@@ -481,7 +504,12 @@ export function usePerformance() {
     });
     session.on("edit", ({ slot, code }) => {
       const previous = authors.current[slot];
-      applications.current[slot] = { phase: "submitted", agent: "human", why: "manual source edit", diff: "saved from editor", at: Date.now(), previousAuthor: previous ? { ...previous, fresh: new Set(previous.fresh) } : undefined };
+      // A save from your own editor carries no patch, so the only record of what it did is the two versions of the
+      // source -- which is exactly what the `applied` receipt diffs. Same function, so the band and the wire agree.
+      const keys = sourceDiff(st.current.slots[slot] || "", code).parameters;
+      const moved = keys.length ? `${keys.length} key${keys.length === 1 ? "" : "s"}: ${keys.map((k) => k.key).slice(0, 4).join(", ")}` : "rewritten by hand";
+      applications.current[slot] = { phase: "submitted", agent: "human", why: "you saved the file", diff: moved, at: Date.now(), previousAuthor: previous ? { ...previous, fresh: new Set(previous.fresh) } : undefined };
+      lastChange.current = { at: Date.now(), bar: st.current.bar, who: "you", rgb: YOU, why: "you saved the file", evidence: "", parts: [{ slot, keys, diff: moved }] };
       author(slot, code, { name: "you", rgb: YOU });
       evaluateSlot(slot, code, "human");
     });
@@ -498,7 +526,7 @@ export function usePerformance() {
     session.on("remote", message => {
       const id = message.agent;
       if (!st.current.booth.some(g => g.dj.id === id)) enter({ id, name: id.toUpperCase().replace(/-/g, " "), tagline: "an agent on the wire", palette: "mono", look: "codefield", head: "robot", species: "robot", skills: [], hair: "antenna", eyes: "visor", cans: "none", body: "laptop", style: "", idioms: [], never: [], greeting: message.greeting || "Connected. I can read the room but not touch it." }, true);
-      if (message.kind === "note") { setSay(`${id}: ${message.text}`); bus.send("note", id, { text: message.text }); }
+      if (message.kind === "note") { setSay(`${id}: ${message.text}`, "dj"); bus.send("note", id, { text: message.text }); }
       else offer(message.suggestion, id, message.context);
     });
     session.open(stateContext());
@@ -619,7 +647,7 @@ export function usePerformance() {
     if (input === "a") think();
     if (input === "t") setTyping("tell");
     if (input === "s" && base.current?.style !== "ambient") setTyping("summon");
-    if (input === "d") { const out = all.current.filter((d) => !s.booth.some((g) => g.dj.id === d.id) && (base.current?.style !== "ambient" || isAmbientDJ(d))); if (out.length) enter(out[Math.floor(Math.random() * out.length)]); else setSay("every ambient listener is already in the booth. [s] summons someone new"); }
+    if (input === "d") { const out = all.current.filter((d) => !s.booth.some((g) => g.dj.id === d.id) && (base.current?.style !== "ambient" || isAmbientDJ(d))); if (out.length) enter(out[Math.floor(Math.random() * out.length)]); else setSay("every ambient listener is already in the booth. [s] summons someone new", "refused"); }
     if (input === "x" && s.booth.length > 1) { const g = s.booth.splice(s.turn % s.booth.length, 1)[0]; bus.send("leave", "host", { agent: g.dj.id }); discardOptions("DJ left"); setSay(`${g.dj.name} leaves the booth`); }
     if (input === "l" || input === "L") s.scene = { ...s.scene, look: LOOKS[(LOOKS.indexOf(s.scene.look) + (input === "l" ? 1 : LOOKS.length - 1)) % LOOKS.length] };
     if (input === "p") s.scene = { ...s.scene, palette: PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % PALETTE_NAMES.length] };
@@ -632,7 +660,7 @@ export function usePerformance() {
       if (moments.current?.playing) { setMomentStatus("esc returns live before recording a voice note"); return; }
       recording.current = true; const was = muted; engine?.volume(0); announce("REC", [255, 80, 80], 2); setSay("recording 4 seconds from the microphone… talk, sing, anything");
       recordNote(4).then((name) => { const g = s.booth[s.turn % s.booth.length]; setSay(`recorded “${name}” → tui/samples/${name}.wav. DJs with vocals can use it`); if ((g.dj.skills || []).includes("vocals")) { showcase.current = { agent: g.dj.id, skill: "vocals" }; s.note = `The performer just recorded a voice note called "${name}". Build your vocal idea from it: ~v.("${name}"). Try \\voxpad or pitched \\vox chops.`; discardOptions("new voice note"); s.round++; think(); } else greet.current = { who: g.dj.name, rgb: accent(g.dj.palette), text: `nice voice. I need the vocals skill to use it: press K`, until: s.bar + 10 }; },
-        (e) => setSay(`couldn't record: ${e.message}. (First time? macOS asks to let your terminal use the microphone.)`)).finally(() => { recording.current = false; if (!was) engine?.volume(1); });
+        (e) => setSay(`couldn't record: ${e.message}. (First time? macOS asks to let your terminal use the microphone.)`, "refused")).finally(() => { recording.current = false; if (!was) engine?.volume(1); });
       return;
     }
     if (input === "K") { setOverlay("skills"); return; }
@@ -642,7 +670,7 @@ export function usePerformance() {
       else {
         const current = s.booth[s.turn % s.booth.length], activeSkills = SKILLS.filter(skill => (current.dj.skills || []).includes(skill.id));
         if (activeSkills.length) grantSkill(current, activeSkills[s.round % activeSkills.length].id);
-        else setSay("no ambient power active yet · K opens carve, fracture and reveal");
+        else setSay("no ambient power active yet · K opens carve, fracture and reveal", "refused");
       }
     }
     if (input === "e") setLogs((x) => !x);
@@ -660,6 +688,6 @@ export function usePerformance() {
   });
 
   return {
-    trend, build, muted, log, stdout, st, pulse, stacking, inspiration, busy, requestState, base, baseStartedAt, bpmRef, barAt, logs, banner, full, ramp, overlay, t0, authors, applications, lanes, amps, status, ref, lines, diagnosis, shotCard, greet, typing, thinking, question, say, marks, all, setOverlay, enter, grantSkill, selectedMoment, setSelectedMoment, savedMoments, playMoments, developFavorite, moments, momentStatus, bus, submit, active,
+    trend, build, muted, log, stdout, st, pulse, stacking, inspiration, busy, requestState, base, baseStartedAt, bpmRef, barAt, logs, banner, full, ramp, overlay, t0, authors, applications, lanes, amps, status, ref, lines, diagnosis, shotCard, lastChange, tideNow, manual: !AUTO, greet, typing, thinking, question, say, marks, all, setOverlay, enter, grantSkill, selectedMoment, setSelectedMoment, savedMoments, playMoments, developFavorite, moments, momentStatus, bus, submit, active,
   };
 }

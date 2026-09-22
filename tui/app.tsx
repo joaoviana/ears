@@ -11,6 +11,7 @@ import { avatar, accent, isAmbientDJ } from "./djs.ts";
 import { SKILLS } from "./skills.ts";
 import { describeExpect } from "./shots.ts";
 import { pretty } from "./bus.ts";
+import { instrumentOf, pair } from "./patch.ts";
 import { DEVELOP, developmentStatus, type Development } from "./inspiration.ts";
 
 // Defined at module level on purpose: a component created inside App would be a new type on every frame (the screen
@@ -28,6 +29,8 @@ const FALLBACK_W = 120, FALLBACK_H = 48;
 const TIGHT_ROWS = 42;            // below this the booth loses its faces and the cards lose their second and third lines
 const PANE_H = 15;                // "live layers" and "ears" are a fixed height so the field never jumps between rounds
 const BOOTH_H = 18, BOOTH_H_TIGHT = 6;
+const MIN_FIELD_H = 4;            // the band takes its rows from the field, and never the footer's
+const BAND_CHROME = 3;            // the band's border and its title row
 const BOOTH_COL_W = 26;           // one DJ column: 16-pixel face plus its name and counters
 const EARS_COL_W = 41;            // the band rows; whatever is left of the "ears" pane is the trend chart
 const LEFT_FRACTION = 0.56;       // "live layers" against "ears"
@@ -54,7 +57,8 @@ function packHelp(groups: [string, [string, string][]][], width: number) {
 }
 
 function App() {
-  const { trend, build, muted, log, stdout, st, pulse, stacking, inspiration, busy, requestState, base, baseStartedAt, bpmRef, barAt, logs, banner, full, ramp, overlay, t0, authors, applications, lanes, amps, status, ref, lines, diagnosis, shotCard, greet, typing, thinking, question, say, marks, all, setOverlay, enter, grantSkill, selectedMoment, setSelectedMoment, savedMoments, playMoments, developFavorite, moments, momentStatus, bus, submit, active } = usePerformance();
+  const { trend, build, muted, log, stdout, st, pulse, stacking, inspiration, busy, requestState, base, baseStartedAt, bpmRef, barAt, logs, banner, full, ramp, overlay, t0, authors, applications, lanes, amps, status, ref, lines, diagnosis, shotCard, lastChange, tideNow, manual, greet, typing, thinking, question, say, marks, all, setOverlay, enter, grantSkill, selectedMoment, setSelectedMoment, savedMoments, playMoments, developFavorite, moments, momentStatus, bus, submit, active } = usePerformance();
+  const bandFloor = React.useRef(0);
   const W = Math.max(MIN_W, stdout.columns || FALLBACK_W), H = stdout.rows || FALLBACK_H, s = st.current, p = pulse.current, now = Date.now();
   const thinkingFor = thinking ? Math.max(0, now - requestState.current.startedAt) : 0;
   const thinkingCeiling = inspiration.current ? FAVOURITE_CEILING_MS : COMPOSE_CEILING_MS;
@@ -67,11 +71,95 @@ function App() {
   const th = UI[(s.next && wipe > 0.5 ? s.next : s.scene).palette] ?? UI.ember, A = th.a, B = th.b, Argb = hex(A), Brgb = hex(B), Trgb = hex(TEXT), Drgb = hex(DIM), Frgb = hex(FAINT);
   const tight = H < TIGHT_ROWS, paneH = PANE_H, boothH = tight ? BOOTH_H_TIGHT : BOOTH_H;
   const leftW = Math.floor(W * LEFT_FRACTION), boothW = tight ? Math.min(44, Math.floor(W * 0.4)) : Math.min(s.booth.length, 3) * BOOTH_COL_W + 4;
+  const ambient = base.current?.style === "ambient";
+
+  // ── the booth band ─────────────────────────────────────────────────────────────────────────────────────────────
+  // The demo's hardest question was "what is changing, and how is that making it better?". The answer used to be
+  // spread across a card that expired, a dim diff line under an option, and a masking note in the ears pane. This is
+  // all four halves of it in one place, and it is persistent rather than transient: on a projector, somebody looking
+  // up at any moment must see the current state, not the ghost of a card they missed.
+  //
+  // Every row is composed out of state that was really measured or really written. A row with nothing true to say is
+  // not rendered at all — no filler, because filler on a projector is indistinguishable from a lie.
+  const tide = ambient ? tideNow() : null;
+  // Six slots named one by one do not fit and do not read; a run of the same instrument is one thing musically
+  // ("d1 d2 d3 nature") and one thing on the row.
+  const held = SLOTS.filter((k) => (s.slots[k] || "").trim()).reduce((groups: { slots: string[]; inst: string }[], k) => {
+    const inst = instrumentOf(s.slots[k] || ""), last = groups[groups.length - 1];
+    if (last && last.inst === inst) last.slots.push(k); else groups.push({ slots: [k], inst });
+    return groups;
+  }, []);
+  const change = lastChange.current;
+  const changePhase = change ? applications.current[change.parts[0].slot]?.phase : undefined;
+  // How long the room has been standing still: the newest authored bar across the six slots.
+  const authored = SLOTS.map((k) => authors.current[k]?.bar).filter((b): b is number => typeof b === "number");
+  const idleBars = authored.length ? Math.max(0, s.bar - Math.max(...authored)) : 0;
+  const masked = diagnosis.masking.map((m) => m.match(/(d\d) and (d\d) are both filling (\w+)/)).filter((m): m is RegExpMatchArray => !!m)
+    .slice(0, 1).map((m) => `${m[1]}+${m[2]} both fill ${m[3]}`);
+  const drifted = diagnosis.drift.filter((d) => Math.abs(d.db) > 6).slice(0, 1).map((d) => `${d.slot} is ${d.db > 0 ? "+" : ""}${d.db.toFixed(0)} dB against the base`);
+  // The DJ's own stated evidence, minus the tide it already ends with (NOW says that), then the measured facts.
+  const because = [
+    ...(change?.evidence ? [change.evidence.replace(/\s*·\s*tide\s+\S+\s*$/, "").trim()] : []),
+    ...masked, ...drifted,
+    ...(idleBars >= 8 ? [`nothing has moved for ${idleBars} bars`] : []),
+  ].filter(Boolean);
+  // The keys the edit really moved, from the same per-key diff the `applied` receipt carries. One key per row, in
+  // the windowed form `pair` uses, because two long patterns that differ late read as identical when cut from the
+  // left. A slot `parseSlot` cannot read has no keys, and falls back to the patch's own sentence.
+  const short = (v: string) => (v.length > 26 ? v.slice(0, 25) + "…" : v);
+  const keyLines = (change?.parts ?? []).flatMap((part) => part.keys.map((k) => {
+    const lead = (change!.parts.length > 1 ? `${part.slot} ` : "");
+    if (k.before == null) return `${lead}+ ${k.key} ${short(k.after ?? "")}`;
+    if (k.after == null) return `${lead}− ${k.key}`;
+    const [was, now2] = pair(k.before.trim(), k.after.trim(), 24);
+    return `${lead}${k.key} ${was} → ${now2}`;
+  }));
+  // A whole-slot rewrite moves twenty-odd keys, and "+26 more" under two of them is not a reading of anything. Past
+  // a handful, the patch's own sentence ("rewrite · instrument \texture · …") is the honest summary of the edit.
+  const keyRows = keyLines.length && keyLines.length <= 6
+    ? [keyLines[0], ...(keyLines.length > 1 ? [keyLines[1] + (keyLines.length > 2 ? `   +${keyLines.length - 2} more` : "")] : [])]
+    : change && change.parts.some((x) => x.diff) ? [change.parts.map((x) => (change.parts.length > 1 ? `${x.slot} ` : "") + x.diff).join("  |  ")] : [];
+  const said = (change?.why ?? "").replace(/^(the room [^:]{0,24}|one rare thing is allowed to happen): /, "");
+  const shot = shotCard.current;
+  const label = (t: string) => <Text color={DIM}>{t.padEnd(9)}</Text>;
+  const phaseMark = changePhase === "failed" ? <Text color={B} bold>  ✗ refused</Text>
+    : changePhase === "submitted" ? <Text color={DIM}>  ○ submitted</Text>
+    : changePhase === "queued" ? <Text color={A}>  ◌ next phrase</Text>
+    : changePhase === "active" ? <Text color={A}>  ● in speakers</Text> : null;
+  // keep: lower survives longer when the terminal is short. CHANGED is the question being asked, so it goes last.
+  const bandRows: { key: string; keep: number; node: React.ReactNode }[] = [
+    { key: "now", keep: 1, node: <Text key="now" wrap="truncate">{label("NOW")}{tide ? <><Text color={A} bold>tide: {tide.phase}</Text><Text color={FAINT}>  ·  </Text></> : null}{held.length
+        ? held.map((h, i) => <Text key={h.slots[0]}>{i ? <Text color={FAINT}>  ·  </Text> : null}<Text color={B}>{h.slots.join(" ")}</Text> <Text color={TEXT}>{h.inst || "no voice"}</Text></Text>)
+        : <Text color={DIM}>six empty slots</Text>}</Text> },
+    ...(because.length ? [{ key: "because", keep: 2, node: <Text key="because" wrap="truncate">{label("BECAUSE")}<Text color={TEXT}>{because.join(", and ")}</Text></Text> }] : []),
+    ...(change ? [{ key: "changed", keep: 0, node: <Text key="changed" wrap="truncate">{label("CHANGED")}<Text color={B} bold>{change.parts.map((x) => x.slot).join("+")}</Text>  <Text color={TEXT}>{said}</Text>{phaseMark}</Text> }] : []),
+    ...keyRows.map((line, i) => ({ key: `keys${i}`, keep: 4 + i, node: <Text key={`keys${i}`} wrap="truncate">{label("")}<Text color={DIM}>{line}</Text></Text> })),
+    ...(shot ? [{ key: "called", keep: 3, node: <Text key="called" wrap="truncate">{label("CALLED")}{fgc(shot.rgb)}{s.bar < shot.until ? "\x1b[1m" : ""}{shot.who}{"\x1b[22m"}{RESET} <Text color={TEXT}>{shot.call}</Text> <Text color={DIM}>· measured</Text> <Text color={TEXT}>{shot.text}</Text>  <Text bold={s.bar < shot.until} color={shot.grade === "hit" ? A : shot.grade === "miss" ? B : DIM}>{shot.grade === "hit" ? "● HIT" : shot.grade === "miss" ? "✗ MISS" : shot.grade === "flat" ? "○ FLAT" : "· ungraded"}</Text><Text color={FAINT}>   observed on the master mix</Text></Text> }] : []),
+  ];
+  // The band's rows come out of the field, never out of the footer: the cap is what is left after the panes, the
+  // booth and a minimum field, so the rows on screen always sum to H. Short terminals drop the changed-keys line
+  // first, then CALLED, then BECAUSE, then NOW; CHANGED is the last row standing. `tight` keeps at most two.
+  const bandRoom = full ? 0 : Math.max(0, H - CHROME_ROWS - paneH - boothH - MIN_FIELD_H);
+  // Too short for a box and its title? Keep the rows and lose the box: the words are the thing, the border is not.
+  const bandBox = bandRoom >= BAND_CHROME + 1;
+  const bandCap = bandBox ? bandRoom - BAND_CHROME : bandRoom;
+  // The band reserves the most rows it has ever needed since this base started, so a masking note that comes and
+  // goes with a report cannot resize the field underneath it every two bars. It grows once and then holds still.
+  if (!change) bandFloor.current = 0;
+  bandFloor.current = Math.max(bandFloor.current, bandRows.length);
+  const bandLimit = tight ? Math.min(2, bandCap) : bandCap;
+  const bandShown = Math.min(bandRows.length, bandLimit), bandReserved = Math.min(bandFloor.current, bandLimit);
+  const bandH = bandReserved > 0 ? bandReserved + (bandBox ? BAND_CHROME : 0) : 0;
+  const keptBand = new Set([...bandRows].sort((a, b) => a.keep - b.keep).slice(0, bandShown).map((r) => r.key));
+  const band = bandRows.filter((r) => keptBand.has(r.key));
   // Stage mode: the six lanes, the line-up and one line per option. The strip is measured rather than assumed, so the
   // field stops one row above it instead of pushing the footer off the bottom of the projector.
   const stageOptionRows = question ? 1 + question.answers.length : Math.max(1, s.options?.length ?? 0);
-  const stripH = SLOTS.length + 2 + stageOptionRows;
-  const fieldH = full ? Math.max(6, H - CHROME_ROWS - stripH) : Math.max(4, H - CHROME_ROWS - paneH - boothH);
+  // Stage mode keeps the three most important rows, in the same reading order as the windowed band.
+  const stageKept = new Set([...bandRows].sort((a, b) => a.keep - b.keep).slice(0, 3).map((r) => r.key));
+  const stageBand = full ? bandRows.filter((r) => stageKept.has(r.key)) : [];
+  const stripH = SLOTS.length + 2 + stageOptionRows + stageBand.length;
+  const fieldH = full ? Math.max(6, H - CHROME_ROWS - stripH) : Math.max(MIN_FIELD_H, H - CHROME_ROWS - paneH - boothH - bandH);
   const bodyH = Math.max(6, H - CHROME_ROWS);   // an overlay that needs the room takes the panes' rows too
   const bn = banner.current && now - banner.current.from < banner.current.ms ? ({ lines: banner.current.lines, rgb: banner.current.rgb, t: (now - banner.current.from) / banner.current.ms } as Banner) : null;
   const logW = logs ? Math.min(96, Math.floor(W * 0.5)) : 0;
@@ -79,7 +167,6 @@ function App() {
   // Windowed, the code gets its own row under the lane; in stage mode it shares the row, so it loses the lane's width.
   const codeW = full ? W - 4 - LANE_PREFIX - 3 : leftW - 4;
   const beat = Math.floor(p.bar * 4), who = active(), step = Math.floor(p.bar * 16) % 16;
-  const ambient = base.current?.style === "ambient";
   const openingAge = s.bar - baseStartedAt.current;
   const openingCue = ambient && openingAge >= 0 && openingAge < 4 ? ["touch + water", "rain + grain", "warm paper", "canopy"][openingAge] : "";
   const moveVerb = (o: NonNullable<typeof s.options>[number]) => {
@@ -209,7 +296,6 @@ function App() {
           })}
         </Pane>
         <Pane grad={grad} title={typing ? (typing === "tell" ? `you → ${who.name.toLowerCase()}` : "summon a dj") : question ? `${who.name.toLowerCase()} asks` : ((st.current.booth.filter((x) => !x.remote).length > 1 ? `the booth offers` : `${who.name.toLowerCase()} offers`) + (stacking ? " · STACK" : ""))} note={typing ? "enter to send · esc to cancel" : question ? "1 2 answer · t your own words · n skip" : s.options?.length ? (autoIn !== null ? `n vetoes · o takes control back` : (stacking ? "1 2 3 mark · enter lands them on one bar · 0 cancels" : "1 2 3 take · 0 stacks · lands next bar · n skip · t direct")) : ambient ? "a ask · t direct · k power · K choose · ? keys" : "a ask · t tell · s summon · ? keys"} width={W - boothW} height={boothH}>
-          {shotCard.current && s.bar < shotCard.current.until && !typing ? <Text wrap="truncate">{fgc(shotCard.current.rgb)}{"\x1b[1m"}{shotCard.current.who}{"\x1b[22m"}{RESET} <Text color={DIM}>called</Text> <Text color={TEXT}>{shotCard.current.call}</Text> <Text color={DIM}>· measured</Text> <Text color={TEXT}>{shotCard.current.text}</Text>  <Text bold color={shotCard.current.grade === "hit" ? A : shotCard.current.grade === "miss" ? B : DIM}>{shotCard.current.grade === "hit" ? "● HIT" : shotCard.current.grade === "miss" ? "✗ MISS" : shotCard.current.grade === "flat" ? "○ FLAT" : "· ungraded"}</Text></Text> : null}
           {greet.current && s.bar < greet.current.until && !typing ? <Text wrap="truncate">{fgc(greet.current.rgb)}{"\x1b[1m"}{greet.current.who}{"\x1b[22m"}{RESET} <Text color={TEXT}>“{greet.current.text}”</Text></Text> : null}
           {typing ? <Box><Text color={A}>{typing === "summon" ? "a DJ who " : "› "}</Text><TextInput key={typing} placeholder={typing === "summon" ? "plays acid, a bit unhinged…" : "more rhythm · carve the rain · thinner and stranger…"} onSubmit={submit} /></Box>
             : question ? <>
@@ -228,12 +314,20 @@ function App() {
               ))}
               {thinking && s.options.length < 3 ? <Box marginTop={1}>{waiting}</Box> : null}
             </> : thinking ? waiting
-            : <Text color={say.includes("“") ? TEXT : DIM} wrap="wrap">{say || "…"}</Text>}
+            : <Text color={say.kind === "refused" ? B : say.kind === "dj" ? TEXT : DIM} bold={say.kind === "refused"} wrap="wrap">{say.text || (manual ? "waiting for you · a asks the booth for a move" : "…")}</Text>}
           <Box flexGrow={1} />
-          {paneBusy && say ? <Text wrap="truncate"><Text color={B} bold>› </Text><Text color={TEXT}>{say}</Text></Text> : null}
+          {paneBusy && say.text ? <Text wrap="truncate"><Text color={B} bold>› </Text><Text color={say.kind === "refused" ? B : TEXT} bold={say.kind === "refused"}>{say.text}</Text></Text> : null}
           {!tight && <Text wrap="truncate"><Text color={FAINT}>{s.history.slice(-24).map((h) => (h.verdict === "y" ? "●" : h.verdict === "x" ? "×" : "·")).join(" ")}</Text>{s.note ? <Text color={DIM}>   note: “{s.note}”</Text> : null}</Text>}
         </Pane>
       </Box>}
+
+      {!full && overlay !== "help" && bandH > 0 && (bandBox
+        ? <Box>
+            <Pane grad={grad} title="the booth" note={manual && !thinking && !s.options?.length ? "manual · a asks for a move" : "what the room is, why it moved, what moved"} width={W} height={bandH}>
+              {band.map((r) => r.node)}
+            </Pane>
+          </Box>
+        : <Box flexDirection="column" width={W} height={bandH} paddingX={1} overflow="hidden">{band.map((r) => r.node)}</Box>)}
 
       {/* Four side-by-side groups need ~220 columns; no terminal has them, so Ink used to shrink and silently cut the
           descriptions in half. Pack into as many rows as fit, and take the panes' rows so there is somewhere to put them. */}
@@ -291,8 +385,10 @@ function App() {
           {question.answers.map((answer, i) => <Text key={answer.label} wrap="truncate"><Text color={A} bold> {i + 1} </Text><Text color={TEXT}>{answer.label}</Text></Text>)}
         </> : s.options?.length ? s.options.map((o, i) => (
           <Text key={o.id} wrap="truncate"><Text color={A} bold>{marks.current.has(o.id) ? " ● " : ` ${i + 1} `}</Text><Text color={B} bold>{moveVerb(o)} </Text><Text color={B}>{(o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]).join("+")}</Text>  <Text color={TEXT}>{o.why}</Text>{o.expect ? <Text color={A}>  calls {describeExpect(o.expect)}</Text> : null}</Text>
-        )) : <Text color={DIM} wrap="truncate">{thinkingLabel || say}</Text>}
-        <Text wrap="truncate">{say && (s.options?.length || question) ? <><Text color={B} bold>› </Text><Text color={TEXT}>{say}</Text></> : " "}</Text>
+        )) : <Text color={DIM} wrap="truncate">{thinkingLabel || say.text}</Text>}
+        <Text wrap="truncate">{say.text && (s.options?.length || question) ? <><Text color={B} bold>› </Text><Text color={say.kind === "refused" ? B : TEXT} bold={say.kind === "refused"}>{say.text}</Text></> : " "}</Text>
+        {/* Stage mode keeps the band too, measured into the strip: the projector layout is the one that most needs it. */}
+        {stageBand.map((r) => r.node)}
       </Box>}
       <Text wrap="truncate" color={DIM}> {moments.current?.playing ? "REPLAY · meters track live" : `A ${moments.current?.A ? "●" : "○"}  B ${moments.current?.B ? "●" : "○"}`}  {inspiration.current ? `${favouriteStatus} · J clear | favourite: ${inspiration.current.intent} · ${inspiration.current.label} | ` : ""}{momentStatus}</Text>
       <Box justifyContent="space-between" paddingX={1}>

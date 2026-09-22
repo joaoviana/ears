@@ -184,6 +184,35 @@ While a model composes, the spinner carries the elapsed seconds *and* a bar fill
 `auto`, the veto window is stated above the options as **AUTO takes one of these in N bars**, not only in the pane's
 note.
 
+**The booth band** sits across the bottom of the windowed layout and stays there, because on a projector a card that
+has already expired is a card nobody saw. Four labelled rows, each composed only out of state that was really
+measured or really written — a row with nothing true to say is not drawn rather than padded with something plausible:
+
+- **NOW** — the tide phase the arsenal handed the composer (`ambientTide`), and which slots hold which instrument,
+  with runs of the same instrument grouped (`d1 d2 d3 nature`). Outside ambient there is no tide, so it shows slots only.
+- **BECAUSE** — the taken idea's own `EVIDENCE` line, then the measured facts behind it: two voices filling the same
+  band at the same moments (`masking.ts`), a slot more than 6 dB from where the base started (`slotDrift`), and how
+  many bars the room has stood still. Empty until something real is measured, which before the first report it is not.
+- **CHANGED** — the edit that landed: the slots, what the DJ said it was for, where it is (submitted · next phrase ·
+  in speakers · refused), and under it the keys the edit really moved, one per row (`delta Pseq([9, …]) → Pexprand(9, 17)`).
+  Those come from `sourceDiff` in `evidence.ts` — the same per-key before/after the `applied` receipt puts on the wire,
+  so the band and the log cannot disagree. Past six keys the change is a rewrite, and the patch's own sentence is shown
+  instead of two keys out of twenty. A save from your own editor carries no patch, so it is diffed the same way and
+  describes itself rather than reading "saved from editor".
+- **CALLED** — the called shot: what was predicted, what was measured, and the grade, with `observed on the master
+  mix` after it. The grade says the mix moved, never that this edit moved it — the same hedge the comparison's own
+  `confounds` carry. It used to be a transient row above the options, which meant it expired while it was still the
+  most interesting thing on screen; it now lives here and stays, dimming once its window has passed.
+
+The band takes its rows from the field and never from the footer: the cap is what is left after the panes, the booth
+and a minimum field, so the rows on screen always sum to the terminal's height. Its height is the most rows it has
+needed since this base started, so a masking note that comes and goes with a report cannot resize the field every
+two bars. As it runs out of room it drops the
+changed-keys line first, then CALLED, then BECAUSE, then NOW — CHANGED is the last row standing. In `tight` mode
+(under 42 rows) it keeps two rows, and when there is no room for a box at all it loses the border and keeps the
+words. Stage mode carries the same three most important rows inside its measured strip. With `--manual` the band's
+title says so, so a booth that is waiting for **a** never looks like a booth that is thinking.
+
 The interface wears the active palette: two accents per palette over shared neutrals, so a transition recolours
 the whole screen, not only the field. `pixels` (the default character mode) draws field looks with half-blocks:
 each cell is two samples, foreground over background, so it reads as a real shader at twice the vertical resolution.

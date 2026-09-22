@@ -99,3 +99,12 @@ export function describe(code: string, p: Patch): string {
   if (p.replace) return "rewrite · " + p.set.map((s) => `${s.key.replace(/^\\/, "")} ${short(s.value)}`).slice(0, 3).join(" · ");
   return [...p.set.map((s) => { const k = s.key.replace(/^\\/, ""); if (!(k in before)) return `+ ${k} ${short(s.value)}`; const [x, y] = pair(before[k], s.value); return `${k} ${x} → ${y}`; }), ...(p.remove || []).map((k) => `− ${k.replace(/^\\/, "")}`)].join(" · ");
 }
+
+/** The instrument a slot is holding, for the "which slots hold what" line. Slots that only carry mixer keys
+ *  (a `fxhp` sweep over whatever is already there) have no instrument of their own, and say so. */
+export function instrumentOf(code: string): string {
+  const pairs = parseSlot(code);
+  const inst = pairs.find((x) => x.key === "instrument")?.value.replace(/^\\/, "").trim();
+  if (inst) return inst;
+  return pairs.some((x) => x.key.startsWith("fx")) ? "fx" : "";
+}
