@@ -2,20 +2,44 @@
 import dgram from "dgram";
 import fs from "fs";
 import path from "path";
-import { spawn, type ChildProcess, execSync } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
+import { fileURLToPath } from "node:url";
+import { findSclang } from "./platform.ts";
+import { readOsc } from "./osc-reader.ts";
+import type { SlotFrame } from "./slotears.ts";
 import { EventEmitter } from "events";
 import * as osc from "osc-min";
+import { randomUUID } from "node:crypto";
 
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const SCLANG = ["/Applications/SuperCollider.app/Contents/MacOS/sclang", path.join(ROOT, ".tools/SuperCollider.app/Contents/MacOS/sclang")].find((p) => fs.existsSync(p));
-
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export interface Ears { rms: number; peak: number; centroid: number; flatness: number; bands: number[]; side: number; headroomPeak: number }
 export interface Hit { slot: string; inst: string; at: number; amp: number; step: number; offGrid: number }
+export interface ClipCapture { path: string; frames: number; sample_rate: number; start_ms: number; end_ms: number; ring_end_frame?: number; ring_frames?: number }
 
-export class Engine extends EventEmitter {
+export interface EngineEvents {
+  ready: [];
+  log: [message: string];
+  stopping: [];
+  ears: [frame: Ears];
+  onset: [];
+  scope: [samples: number[]];
+  hit: [hit: Hit];
+  bar: [bar: { n: number; at: number; bpm: number }];
+  slotears: [frame: SlotFrame & { side: number; slow: number; fast: number }];
+  voxd: [phrase: string];
+  clipd: [clip: ClipCapture & { id: string; error?: string }];
+  audition: [event: { id: string; status: string; error?: string }];
+  dropped: [kind: string];
+  evald: [receipt: { id: string; ok: boolean; msg: string; execution_id: string; scheduled_at_ms?: number }];
+  active: [receipt: { slot: string; execution_id: string; at: number; basis: string }];
+}
+
+export class Engine extends EventEmitter<EngineEvents> {
   private sock = dgram.createSocket("udp4");
   private sc: ChildProcess | null = null;
   private lang = 0;
+  private stopped = false;
+  private starting?: Promise<void>;
   ready = false;
   /** what the audio device is really running at; 24000 means a Bluetooth headset with its microphone on */
   sampleRate = 0;
@@ -25,72 +49,120 @@ export class Engine extends EventEmitter {
     return this.clock.map(scSeconds, latency, observedSeconds);
   }
 
-  /**
-   * A stale scsynth on our audio port makes sclang wait forever and the screen sits on "booting SuperCollider..."
-   * with nothing to go on. It happens whenever a previous run's language process died without taking its audio
-   * server with it -- killing sclang does not kill scsynth. Say so, and clear it, rather than hanging.
-   */
-  private clearStaleServer() {
-    const port = Number(process.env.EARS_SC_PORT || 57110);
-    try {
-      // lsof cannot see another process's UDP socket on macOS without privileges -- it returns nothing while the
-      // server is plainly there. scsynth puts its port on its own command line, so match that instead.
-      const pids = execSync(`pgrep -f "scsynth -u ${port}" 2>/dev/null || true`, { encoding: "utf8" }).trim().split("\n").filter(Boolean);
-      if (!pids.length) return;
-      this.emit("log", `an audio server from an earlier run is still on port ${port}; clearing it`);
-      for (const pid of pids) { try { process.kill(Number(pid)); } catch {} }
-      for (let i = 0; i < 25; i++) {
-        try { if (!execSync(`pgrep -f "scsynth -u ${port}" 2>/dev/null || true`, { encoding: "utf8" }).trim()) break; execSync("sleep 0.2"); } catch { break; }
-      }
-    } catch {}
+  /** Async startup keeps the TUI responsive; stop() also cancels a pending boot. */
+  start(mute = false): Promise<void> {
+    return this.starting ??= this.boot(mute).catch(error => {
+      if (!this.stopped) this.emit("log", `engine startup failed: ${error.message}`);
+      this.stop();
+    });
   }
 
-
-  start(mute = false) {
-    if (!SCLANG) throw new Error("SuperCollider not found. See offline/README.md");
-    this.clearStaleServer();
-    this.sock.on("message", (buf) => this.onMessage(buf));
-    this.sock.bind(Number(process.env.EARS_PORT || 57200), "127.0.0.1");
-    this.sc = spawn(SCLANG, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
-    this.sc.stdout?.on("data", (d) => {
+  private async boot(mute: boolean) {
+    const sclang = await findSclang(ROOT);
+    if (this.stopped) return;
+    const port = Number(process.env.EARS_SC_PORT || 57110);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("invalid EARS_SC_PORT");
+    // Never kill another performance just because its process name matches. An occupied port is actionable.
+    const probe = dgram.createSocket("udp4");
+    await new Promise<void>((resolve, reject) => {
+      probe.once("error", error => { probe.close(); reject(new Error(`audio port ${port} unavailable (${error.message}); stop its owner or choose EARS_SC_PORT`)); });
+      probe.bind(port, "127.0.0.1", () => probe.close(() => resolve()));
+    });
+    if (this.stopped) return;
+    this.sock.on("message", buf => this.onMessage(buf));
+    await new Promise<void>((resolve, reject) => {
+      this.sock.once("error", reject);
+      this.sock.bind(Number(process.env.EARS_PORT || 57200), "127.0.0.1", () => {
+        this.sock.off("error", reject);
+        resolve();
+      });
+    });
+    if (this.stopped) return;
+    this.sock.on("error", error => this.emit("log", `engine socket error: ${error.message}`));
+    this.sc = spawn(sclang, [path.join(ROOT, "tui/engine.scd")], { env: { ...process.env, ...(mute ? { SOUNDCHECK_MUTE: "1" } : {}) } });
+    this.sc.stdout?.on("data", (d: Buffer) => {
       for (const line of String(d).split("\n")) if (line.trim() && (process.env.EARS_ENGINE_DEBUG || /ERROR|WARNING|FAILURE/.test(line)) && !/n_set|Node \d+ not found/.test(line)) this.emit("log", line.trim());
     });
-    this.sc.stderr?.on("data", (d) => this.emit("log", String(d).trim()));
-    this.sc.on("error", (error) => this.emit("log", `engine process error: ${error.message}`));
-    this.sc.on("exit", () => this.emit("log", "engine exited"));
+    this.sc.stderr?.on("data", (d: Buffer) => this.emit("log", String(d).trim()));
+    this.sc.on("error", error => { this.emit("log", `engine process error: ${error.message}`); this.stop(); });
+    this.sc.on("exit", () => { this.ready = false; this.emit("log", "engine exited"); this.stop(); });
   }
 
   private onMessage(buf: Buffer) {
-    let m: any;
-    try { m = osc.fromBuffer(buf); } catch { return; }
-    const a = (m.args || []).map((x: any) => x.value);
-    switch (m.address) {
-      case "/ready": this.lang = a[0]; this.ready = true; this.sampleRate = Number(a[1]) || 0; this.emit("ready"); break;
-      case "/ears": this.emit("ears", { rms: a[0], peak: a[1], centroid: a[2], flatness: a[3], bands: a.slice(4, 9), side: a[9] ?? 0, headroomPeak: this.headPeak } as Ears); break;
-      case "/onset": this.emit("onset"); break;
-      case "/scope": this.emit("scope", a as number[]); break;   // 512 stereo frames, interleaved L R
-      case "/hit": this.emit("hit", { slot: a[0], inst: a[1], at: this.toLocal(a[4], a[2]), amp: a[3], step: Math.floor(((a[5] % 4) + 4) % 4 * 4 + 0.001) % 16, offGrid: a[6] ?? 0 } as Hit); break;
-      case "/bar": this.emit("bar", { n: a[0], at: this.toLocal(a[3], a[1]), bpm: a[2] }); break;
-      case "/head": this.headPeak = Math.max(this.headPeak * 0.92, Number(a[0]) || 0); break;   // pre-limiter peak, decaying so one transient does not stick
-      case "/slotears": this.emit("slotears", { slot: "d" + a[0], rms: a[1], centroid: a[2], bands: a.slice(3, 8), side: a[8] ?? 0, slow: a[9] ?? 0, fast: a[10] ?? 0 }); break;
-      case "/voxd": this.emit("voxd", String(a[0])); break;
-      case "/dropped": this.emit("dropped", a[0]); break;
-      case "/evald": this.emit("evald", { id: a[0], ok: a[1] === 1, msg: a[2], execution_id: a[3], scheduled_at_ms: a[4] > 0 ? this.toLocal(a[4], a[5], a[6]) : undefined }); break;
-      case "/active": this.emit("active", { slot: a[0], execution_id: a[1], at: this.toLocal(a[3], a[2], a[5]), basis: a[4] }); break;
-    }
+    if (this.stopped) return;
+    let dispatch: (() => void) | undefined;
+    const event = <K extends keyof EngineEvents>(type: K, ...args: EngineEvents[K]) => {
+      // Node's EventEmitter adds reserved-event conditional types; the public map above owns these events.
+      const emit = this.emit.bind(this) as <E extends keyof EngineEvents>(name: E, ...values: EngineEvents[E]) => boolean;
+      dispatch = () => { emit(type, ...args); };
+    };
+    try {
+      const m = readOsc(buf), n = m.number, s = m.string;
+      switch (m.address) {
+        case "/ready": {
+          const port = n(0), sampleRate = n(1, 0);
+          if (!Number.isInteger(port) || port < 1 || port > 65535) return;
+          this.lang = port; this.sampleRate = sampleRate; this.ready = true; event("ready"); break;
+        }
+        case "/ears": event("ears", { rms: n(0), peak: n(1), centroid: n(2), flatness: n(3), bands: m.numbers(4, 9), side: n(9, 0), headroomPeak: this.headPeak }); break;
+        case "/onset": event("onset"); break;
+        case "/scope": event("scope", m.numbers()); break;
+        case "/hit": event("hit", { slot: s(0), inst: s(1), at: this.toLocal(n(4), n(2)), amp: n(3), step: Math.floor(((n(5) % 4) + 4) % 4 * 4 + 0.001) % 16, offGrid: n(6, 0) }); break;
+        case "/bar": event("bar", { n: n(0), at: this.toLocal(n(3), n(1)), bpm: n(2) }); break;
+        case "/head": this.headPeak = Math.max(this.headPeak * 0.92, n(0)); break;
+        case "/slotears": event("slotears", { slot: "d" + n(0), rms: n(1), centroid: n(2), bands: m.numbers(3, 8), side: n(8, 0), slow: n(9, 0), fast: n(10, 0) }); break;
+        case "/voxd": event("voxd", s(0)); break;
+        case "/clipd": {
+          const end = this.toLocal(n(4), 0, n(5)), frames = n(2), rate = n(3);
+          if (frames < 0 || rate <= 0) return;
+          event("clipd", { id: s(0), path: s(1), frames, sample_rate: rate, start_ms: end - frames / rate * 1000, end_ms: end, error: s(6, ""), ring_end_frame: m.optionalNumber(7), ring_frames: m.optionalNumber(8) }); break;
+        }
+        case "/audition": event("audition", { id: s(0), status: s(1), error: s(2, "") }); break;
+        case "/dropped": event("dropped", s(0)); break;
+        case "/evald": event("evald", { id: s(0), ok: n(1) === 1, msg: s(2), execution_id: s(3), scheduled_at_ms: n(4) > 0 ? this.toLocal(n(4), n(5), n(6)) : undefined }); break;
+        case "/active": event("active", { slot: s(0), execution_id: s(1), at: this.toLocal(n(3), n(2), n(5)), basis: s(4) }); break;
+      }
+    } catch { return; /* Malformed UDP packets cannot become engine events. */ }
+    dispatch?.();
   }
 
   private send(address: string, args: (string | number)[]) {
-    if (this.lang) this.sock.send(osc.toBuffer({ address, args: args.map((v) => (typeof v === "number" ? { type: "float", value: v } : v)) } as any), this.lang, "127.0.0.1");
+    if (!this.lang) return;
+    try { this.sock.send(osc.toBuffer({ address, args: args.map(v => typeof v === "number" ? { type: "float" as const, value: v } : v) }), this.lang, "127.0.0.1"); }
+    catch (error) { if (!this.stopped) this.emit("log", `engine send failed: ${(error as Error).message}`); }
   }
   eval(code: string, id: string, executionId = "") { this.send("/eval", [code, id, executionId]); }
   volume(v: number) { this.send("/vol", [v]); }
   vox(phrase: string, file: string) { this.send("/vox", [phrase, file]); }
-  tempo(bpm: number) { this.send("/tempo", [bpm]); }
-  transition(kind: "build" | "wash" | "riser", bars: number) { this.send("/transition", [kind, bars]); }
+  tempo(bpm: number, bars = 0) { this.send("/tempo", [bpm, bars]); }
+  transition(kind: "build" | "wash" | "riser", bars: number, releaseBars = 2) { this.send("/transition", [kind, bars, releaseBars]); }
+
+  captureClip(file: string, seconds = 4): Promise<ClipCapture> {
+    if (!this.ready) return Promise.reject(new Error("audio engine is not ready"));
+    const id = randomUUID();
+    return new Promise((resolve, reject) => {
+      const cleanup = () => { clearTimeout(timer); this.off("clipd", done); this.off("stopping", stopped); };
+      const stopped = () => { cleanup(); reject(new Error("engine stopped")); };
+      const done = (clip: ClipCapture & { id: string; error?: string }) => {
+        if (clip.id !== id) return;
+        cleanup();
+        if (clip.error) reject(new Error(clip.error));
+        else if (!fs.existsSync(file) || fs.statSync(file).size < 44) reject(new Error("engine did not write an audio clip"));
+        else resolve(clip);
+      };
+      const timer = setTimeout(() => { cleanup(); reject(new Error("audio capture timed out")); }, 10000);
+      this.on("clipd", done); this.once("stopping", stopped);
+      this.send("/clip", [id, file, Math.max(0.1, Math.min(24, seconds))]);
+    });
+  }
+  audition(file: string, id: string) { this.send("/audition/play", [id, file]); }
+  stopAudition() { this.send("/audition/stop", []); }
 
   /** Quits this engine's own server, then its sclang. Never touches another engine that may be running. */
   stop() {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.ready = false; this.emit("stopping");
     try { this.send("/eval", ["s.quit; { 0.exit }.defer(0.2); 1", "bye"]); } catch {}
     const sc = this.sc, sock = this.sock;
     setTimeout(() => { try { sc?.kill(); } catch {} try { sock.close(); } catch {} }, 400).unref?.();

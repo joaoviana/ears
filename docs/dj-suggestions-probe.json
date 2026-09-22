@@ -1,0 +1,253 @@
+{
+  "purpose": "Real Claude CLI suggestion probes; no engine started or audio auditioned.",
+  "runs": [
+    {
+      "effort": "medium",
+      "result": {
+        "at": "2026-09-21T20:22:24.492Z",
+        "dj": "queen-funty",
+        "audioAuditioned": false,
+        "syntheticReport": true,
+        "base": {
+          "seed": 4821,
+          "style": "boogie",
+          "mood": "vibey",
+          "bpm": 112,
+          "root": 33,
+          "scale": "major",
+          "key": "A major",
+          "slots": {
+            "d1": "~d.(\\d1, \\instrument, \\smp, \\buf, ~k.(\\kick), \\dur, 1/4, \\amp, ~x.([\"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X--XX---\"], 0.816), \\dec, 0.5, \\hp, 28, \\send, 0.04)",
+            "d2": "~d.(\\d2, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.(\"hhhHhhhhhhhHhhhh\"), \\amp, ~x.([\"X-xX-xX-X-xX-xXx\", \"X-xX-xX-X-xXxXXx\"], 0.32), \\dec, Pwrand([0.05, 0.16], [0.85, 0.15], inf), \\pan, Pwhite(-0.35, 0.35), \\send, 0.1)",
+            "d3": "~d.(\\d3, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.([\"--c-C--v-b--C-c-\", \"--c-C--v-b--C-vb\"]), \\amp, ~x.([\"--x-X--x-x--X-x-\", \"--x-X--x-x--X-xx\"], 0.46), \\pan, Pseq([-0.3, 0.05, 0.3, 0.1], inf), \\send, 0.254)",
+            "d4": "~d.(\\d4, \\instrument, \\bass, \\dur, 1/4, \\midinote, Pseq([33, \\r, 45, 33, \\r, 45, \\r, 33, 33, \\r, 45, \\r, 40, \\r, 45, \\r], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\cutoff, 1021, \\res, 2, \\dec, 0.16, \\duck, 0.35, \\amp, 0.62)",
+            "d5": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[57, 61, 68, 71], [66, 69, 76, 80], [59, 62, 69, 73], [64, 68, 74, 78]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X-X--X--X-X--X\", \"--X-X--X--X-X-X-\", \"--X-X--X--X-X--X\", \"--X-XX-X--X-XXX-\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+            "d6": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([73, 76, 69, 85, 88, 69, 85, 88, 73, 76, 69, 85, 88, 69, 85, 88, \\r, 78, \\r, 73, 76, 73, 76, 69, 73, 76, 69, 85, 88, 69, 85, 88], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.16, \\amp, 0.085, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)"
+          },
+          "about": "boogie \u00b7 I\u2013vi\u2013ii\u2013V"
+        },
+        "samples": [
+          {
+            "round": 0,
+            "options": [],
+            "events": [
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "groove",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "hook",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "turn",
+                "model": "sonnet"
+              },
+              {
+                "kind": "rejected",
+                "agent": "queen-funty",
+                "angle": "groove",
+                "reason": "no answer within 16s",
+                "ms": 16002
+              },
+              {
+                "kind": "rejected",
+                "agent": "queen-funty",
+                "angle": "hook",
+                "reason": "no answer within 16s",
+                "ms": 16004
+              },
+              {
+                "kind": "rejected",
+                "agent": "queen-funty",
+                "angle": "turn",
+                "reason": "no answer within 16s",
+                "ms": 16005
+              }
+            ],
+            "error": "no angle produced a usable idea"
+          },
+          {
+            "round": 1,
+            "options": [
+              {
+                "slot": "d6",
+                "code": "~d.(\\d6, \\instrument, \\pluck, \\dur, 1/3, \\midinote, Pseq([73, 76, 69, 85, 88, \\r, 85, 88, \\r, 73, 76, 69], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(12), \\dec, 0.3, \\amp, ~x.([\"X-xXx-XxX-xX\", \"X-xXx-XxXxXX\"], 0.2), \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.4, \\tone, 0.7)",
+                "parts": [
+                  {
+                    "slot": "d6",
+                    "code": "~d.(\\d6, \\instrument, \\pluck, \\dur, 1/3, \\midinote, Pseq([73, 76, 69, 85, 88, \\r, 85, 88, \\r, 73, 76, 69], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(12), \\dec, 0.3, \\amp, ~x.([\"X-xXx-XxX-xX\", \"X-xXx-XxXxXX\"], 0.2), \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.4, \\tone, 0.7)",
+                    "diff": "instrument \\fm \u2192 \\pluck \u00b7 dur 1/4 \u2192 1/3 \u00b7 midinote \u2026, 88, 69, 85, 88, 73, 76, 69\u2026 \u2192 \u2026, 88, \\r, 85, 88, \\r, 73, 76\u2026 \u00b7 ctranspose \u2026-3, 2, -5], inf).stutter(16) \u2192 \u2026-3, 2, -5], inf).stutter(12) \u00b7 dec 0.16 \u2192 0.3 \u00b7 + tone 0.7 \u00b7 amp 0.085 \u2192 ~x.([\"X-xXx-XxX-xX\", \"X-xXx-\u2026 \u00b7 send 0.9 \u2192 0.4 \u00b7 \u2212 ratio \u00b7 \u2212 index"
+                  }
+                ],
+                "why": "The FM lead's straight 16ths become plucked triplets, a 3-against-4 strut over the kick.",
+                "evidence": "d6 is a straight 1/4 FM arpeggio, so the lead's fragment 73 76 69 85 88 now runs in 1/3.",
+                "diff": "instrument \\fm \u2192 \\pluck \u00b7 dur 1/4 \u2192 1/3 \u00b7 midinote \u2026, 88, 69, 85, 88, 73, 76, 69\u2026 \u2192 \u2026, 88, \\r, 85, 88, \\r, 73, 76\u2026 \u00b7 ctranspose \u2026-3, 2, -5], inf).stutter(16) \u2192 \u2026-3, 2, -5], inf).stutter(12) \u00b7 dec 0.16 \u2192 0.3 \u00b7 + tone 0.7 \u00b7 amp 0.085 \u2192 ~x.([\"X-xXx-XxX-xX\", \"X-xXx-\u2026 \u00b7 send 0.9 \u2192 0.4 \u00b7 \u2212 ratio \u00b7 \u2212 index",
+                "angle": "turn",
+                "ms": 12139,
+                "expect": {
+                  "metric": "groove",
+                  "dir": "up"
+                }
+              }
+            ],
+            "events": [
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "groove",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "hook",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "turn",
+                "model": "sonnet"
+              },
+              {
+                "kind": "rejected",
+                "agent": "queen-funty",
+                "angle": "groove",
+                "reason": "no answer within 16s",
+                "ms": 16003
+              },
+              {
+                "kind": "rejected",
+                "agent": "queen-funty",
+                "angle": "hook",
+                "reason": "no answer within 16s",
+                "ms": 16003
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "effort": "low",
+      "result": {
+        "at": "2026-09-21T20:23:43.467Z",
+        "dj": "queen-funty",
+        "audioAuditioned": false,
+        "syntheticReport": true,
+        "base": {
+          "seed": 4821,
+          "style": "boogie",
+          "mood": "vibey",
+          "bpm": 112,
+          "root": 33,
+          "scale": "major",
+          "key": "A major",
+          "slots": {
+            "d1": "~d.(\\d1, \\instrument, \\smp, \\buf, ~k.(\\kick), \\dur, 1/4, \\amp, ~x.([\"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X--XX---\"], 0.816), \\dec, 0.5, \\hp, 28, \\send, 0.04)",
+            "d2": "~d.(\\d2, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.(\"hhhHhhhhhhhHhhhh\"), \\amp, ~x.([\"X-xX-xX-X-xX-xXx\", \"X-xX-xX-X-xXxXXx\"], 0.32), \\dec, Pwrand([0.05, 0.16], [0.85, 0.15], inf), \\pan, Pwhite(-0.35, 0.35), \\send, 0.1)",
+            "d3": "~d.(\\d3, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.([\"--c-C--v-b--C-c-\", \"--c-C--v-b--C-vb\"]), \\amp, ~x.([\"--x-X--x-x--X-x-\", \"--x-X--x-x--X-xx\"], 0.46), \\pan, Pseq([-0.3, 0.05, 0.3, 0.1], inf), \\send, 0.254)",
+            "d4": "~d.(\\d4, \\instrument, \\bass, \\dur, 1/4, \\midinote, Pseq([33, \\r, 45, 33, \\r, 45, \\r, 33, 33, \\r, 45, \\r, 40, \\r, 45, \\r], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\cutoff, 1021, \\res, 2, \\dec, 0.16, \\duck, 0.35, \\amp, 0.62)",
+            "d5": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[57, 61, 68, 71], [66, 69, 76, 80], [59, 62, 69, 73], [64, 68, 74, 78]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X-X--X--X-X--X\", \"--X-X--X--X-X-X-\", \"--X-X--X--X-X--X\", \"--X-XX-X--X-XXX-\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+            "d6": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([73, 76, 69, 85, 88, 69, 85, 88, 73, 76, 69, 85, 88, 69, 85, 88, \\r, 78, \\r, 73, 76, 73, 76, 69, 73, 76, 69, 85, 88, 69, 85, 88], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.16, \\amp, 0.085, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)"
+          },
+          "about": "boogie \u00b7 I\u2013vi\u2013ii\u2013V"
+        },
+        "samples": [
+          {
+            "round": 0,
+            "options": [
+              {
+                "slot": "d6",
+                "code": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/3, \\midinote, Pseq([81, \\r, 76, 85, \\r, 80, 88, \\r, 81, 76, \\r, 73], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\ratio, 3.5, \\index, Pbrown(1, 3, 0.3), \\dec, 0.12, \\amp, 0.09, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)",
+                "parts": [
+                  {
+                    "slot": "d6",
+                    "code": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/3, \\midinote, Pseq([81, \\r, 76, 85, \\r, 80, 88, \\r, 81, 76, \\r, 73], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\ratio, 3.5, \\index, Pbrown(1, 3, 0.3), \\dec, 0.12, \\amp, 0.09, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)",
+                    "diff": "dur 1/4 \u2192 1/3 \u00b7 midinote Pseq([73, 76, 69, 85, 88, 69\u2026 \u2192 Pseq([81, \\r, 76, 85, \\r, 80\u2026 \u00b7 ratio 2 \u2192 3.5 \u00b7 index Pbrown(0.6, 2, 0.2) \u2192 Pbrown(1, 3, 0.3) \u00b7 dec 0.16 \u2192 0.12 \u00b7 amp 0.085 \u2192 0.09"
+                  }
+                ],
+                "why": "The lead is all straight 16ths, so: bell triplets, a hemiola cycling every 4 beats, then home on the downbeat.",
+                "evidence": "d6 is a busy 1/4 fm riff; the kick, hats and bass stay straight.",
+                "diff": "dur 1/4 \u2192 1/3 \u00b7 midinote Pseq([73, 76, 69, 85, 88, 69\u2026 \u2192 Pseq([81, \\r, 76, 85, \\r, 80\u2026 \u00b7 ratio 2 \u2192 3.5 \u00b7 index Pbrown(0.6, 2, 0.2) \u2192 Pbrown(1, 3, 0.3) \u00b7 dec 0.16 \u2192 0.12 \u00b7 amp 0.085 \u2192 0.09",
+                "angle": "turn",
+                "ms": 3901,
+                "expect": {
+                  "metric": "density",
+                  "dir": "down"
+                }
+              },
+              {
+                "slot": "d3",
+                "code": "~d.(\\d3, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.([\"m--mC-m-c--mC-m-\", \"m--mC-m-c--mC-m-\", \"m--mC-m-c--mC-m-\", \"m--mC-m-c--mCcvb\"]), \\amp, ~x.([\"x--xX-x-x--xX-x-\", \"x--xX-x-x--xX-x-\", \"x--xX-x-x--xX-x-\", \"x--xX-x-x--xXxxx\"], 0.46), \\pan, Pseq([-0.3, 0.05, 0.3, 0.1], inf), \\send, 0.254)",
+                "parts": [
+                  {
+                    "slot": "d3",
+                    "code": "~d.(\\d3, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.([\"m--mC-m-c--mC-m-\", \"m--mC-m-c--mC-m-\", \"m--mC-m-c--mC-m-\", \"m--mC-m-c--mCcvb\"]), \\amp, ~x.([\"x--xX-x-x--xX-x-\", \"x--xX-x-x--xX-x-\", \"x--xX-x-x--xX-x-\", \"x--xX-x-x--xXxxx\"], 0.46), \\pan, Pseq([-0.3, 0.05, 0.3, 0.1], inf), \\send, 0.254)",
+                    "diff": "buf \u2026kp.([\"--c-C--v-b--C-c-\", \"--\u2026 \u2192 \u2026kp.([\"m--mC-m-c--mC-m-\", \"m-\u2026 \u00b7 amp ~x.([\"--x-X--x-x--X-x-\", \"--\u2026 \u2192 ~x.([\"x--xX-x-x--xX-x-\", \"x-\u2026"
+                  }
+                ],
+                "why": "Rim ticks fall 3-3-2 across the same clap backbeat, and a conga run turns the bar.",
+                "evidence": "d3 is a plain 2-and-4 clap row with sparse congas, so the 3-3-2 rims give it a new cycle.",
+                "diff": "buf \u2026kp.([\"--c-C--v-b--C-c-\", \"--\u2026 \u2192 \u2026kp.([\"m--mC-m-c--mC-m-\", \"m-\u2026 \u00b7 amp ~x.([\"--x-X--x-x--X-x-\", \"--\u2026 \u2192 ~x.([\"x--xX-x-x--xX-x-\", \"x-\u2026",
+                "angle": "groove",
+                "ms": 11371,
+                "expect": {
+                  "metric": "density",
+                  "dir": "up"
+                }
+              },
+              {
+                "slot": "d5",
+                "code": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[57, 61, 68, 71], [69, 73, 80, 83], [66, 69, 76, 80], [78, 81, 88, 92], [59, 62, 69, 73], [71, 74, 81, 85], [64, 68, 74, 78], [76, 80, 86, 90]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X--x--X-\", \"-xXxX-XXx-X-XXXX\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.18, 0.5], [0.75, 0.25], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+                "parts": [
+                  {
+                    "slot": "d5",
+                    "code": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[57, 61, 68, 71], [69, 73, 80, 83], [66, 69, 76, 80], [78, 81, 88, 92], [59, 62, 69, 73], [71, 74, 81, 85], [64, 68, 74, 78], [76, 80, 86, 90]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X-----X-\", \"---X-X-xX--X-XX-\", \"--X--X--X--x--X-\", \"-xXxX-XXx-X-XXXX\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.18, 0.5], [0.75, 0.25], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+                    "diff": "midinote \u20261], [66, 69, 76, 80], [59, 6\u2026 \u2192 \u20261], [69, 73, 80, 83], [66, 6\u2026 \u00b7 amp \u2026[\"--X-X--X--X-X--X\", \"--X-X-\u2026 \u2192 \u2026[\"--X--X--X-----X-\", \"---X-X\u2026 \u00b7 dec \u2026nd([0.3, 0.65], [0.7, 0.3], \u2026 \u2192 \u2026nd([0.18, 0.5], [0.75, 0.25]\u2026"
+                  }
+                ],
+                "why": "Each chord asks with a low syncopated stab bar, then answers an octave up, busier.",
+                "evidence": "d5 currently repeats one chord rhythm per bar with no reply; the row and octave turnaround add the answer.",
+                "diff": "midinote \u20261], [66, 69, 76, 80], [59, 6\u2026 \u2192 \u20261], [69, 73, 80, 83], [66, 6\u2026 \u00b7 amp \u2026[\"--X-X--X--X-X--X\", \"--X-X-\u2026 \u2192 \u2026[\"--X--X--X-----X-\", \"---X-X\u2026 \u00b7 dec \u2026nd([0.3, 0.65], [0.7, 0.3], \u2026 \u2192 \u2026nd([0.18, 0.5], [0.75, 0.25]\u2026",
+                "angle": "hook",
+                "ms": 15637,
+                "expect": {
+                  "metric": "brightness",
+                  "dir": "up"
+                }
+              }
+            ],
+            "events": [
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "groove",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "hook",
+                "model": "sonnet"
+              },
+              {
+                "kind": "ask",
+                "agent": "queen-funty",
+                "angle": "turn",
+                "model": "sonnet"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -35,9 +35,13 @@ def free_port(kind):
 
 
 port = free_port(socket.SOCK_STREAM)
+engine_port = free_port(socket.SOCK_DGRAM)
+server_port = free_port(socket.SOCK_DGRAM)
+while server_port == engine_port:
+    server_port = free_port(socket.SOCK_DGRAM)
 env = dict(os.environ, EARS_ENGINE_DEBUG="", EARS_SET=str(work / "set"), EARS_DJS=str(work / "djs"),
            EARS_LOG_DIR=str(work / "logs"), EARS_BUS_PORT=str(port),
-           EARS_PORT=str(free_port(socket.SOCK_DGRAM)), EARS_SC_PORT=str(free_port(socket.SOCK_DGRAM)))
+           EARS_PORT=str(engine_port), EARS_SC_PORT=str(server_port))
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
 diagnostics = deque(maxlen=16)
@@ -104,7 +108,8 @@ try:
         def propose(request, revision, value="0.2"):
             m = dict(v=0, type="proposal", **{"from": "host-test"}, request_id=request,
                      based_on_revision=revision, evidence_ids=[], slot="d1",
-                     set=[dict(key="amp", value=value)], why="Check gain change", evidence="Muted test intention")
+                     set=[dict(key="amp", value=value)], expected_change="loudness down",
+                     why="Check gain change", evidence="Muted test intention")
             sock.sendall((json.dumps(m) + "\n").encode())
 
         propose("bad-revision", "obsolete")
@@ -136,7 +141,13 @@ try:
         rejected = wait(lambda m: m.get("request_id") == "stale-at-take" and m["type"] == "rejected")
         assert "stale" in rejected["reason"]
         assert (work / "set/d1.scd").read_text().strip() == code.replace("0.4", "0.2")
-    result = dict(ok=True, log=str((work / "logs/latest.jsonl").resolve()), checks=["stale admission", "human take", "ordered receipts", "clock ordering", "measured comparison", "identical manual save re-evaluates", "duplicate request", "stale take preserves newer source"])
+        active_source = (work / "set/d1.scd").read_text().strip()
+        (work / "set/d1.scd").write_text(r"~d.(\d1, \instrument, \kick, \dur, Pseq([)")
+        failed = wait(lambda m: m["type"] == "error" and m.get("slot") == "d1")
+        wait(lambda m: m["type"] == "state" and m.get("slots", {}).get("d1") == active_source)
+        assert (work / "set/d1.scd").read_text().strip() == active_source
+        assert not any(m["type"] == "active" and m.get("execution_id") == failed["execution_id"] for m in messages())
+    result = dict(ok=True, log=str((work / "logs/latest.jsonl").resolve()), checks=["stale admission", "human take", "ordered receipts", "clock ordering", "measured comparison", "identical manual save re-evaluates", "duplicate request", "stale take preserves newer source", "syntax failure restores active source"])
 finally:
     if proc.poll() is None:
         os.write(master, b"q")

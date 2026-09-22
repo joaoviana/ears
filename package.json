@@ -14,16 +14,21 @@
     "ears:reset": "cp tui/set.start/*.scd tui/set/",
     "ears:tail": "tsx tui/tail.ts",
     "test:ears": "tsx --test tui/tests/*.test.ts",
-    "ears:bench": "EARS_PORT=57300 EARS_SC_PORT=57190 tsx tui/dev/bench.ts",
-    "ears:why": "tsx tui/why.ts"
+    "ears:bench": "EARS_PORT=57300 EARS_SC_PORT=57190 EARS_NO_GLUE=1 tsx tui/dev/bench.ts",
+    "ears:why": "tsx tui/why.ts",
+    "ears:demo-check": "python3 tui/dev/check-ambient-demo-ui.py",
+    "typecheck:ears": "tsc -p tui/tsconfig.json"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@types/asciichart": "^1.5.8",
+    "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
     "vite": "^6.4.3"
   },
   "dependencies": {

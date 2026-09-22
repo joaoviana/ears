@@ -44,6 +44,22 @@ export const DEFAULTS: Record<string, Record<string, string>> = {
   pad:      { amp: "0.2", cutoff: "1600", att: "0.8", sus: "2", rel: "2", send: "0.6", duck: "0.7" },
   choir:    { amp: "0.24", vowel: "0", att: "0.5", sus: "2", rel: "1.5", bright: "1", send: "0.6", duck: "0.7" },
   noise:    { amp: "0.12", freq: "2000", att: "0.4", dec: "1.2", bw: "0.5", sweep: "1", send: "0.5" },
+  nature:   { buf: "~n.(\\rain)", amp: "0.1", rate: "1", start: "0", len: "24", att: "4", rel: "6", hp: "40", lp: "12000", send: "0.55" },
+  texture:  { buf: "~t.(\\fingertips)", amp: "0.1", rate: "0.7", start: "0", len: "4", att: "0.015", rel: "0.7", hp: "35", lp: "10000", send: "0.55" },
+  cloud:    { buf: "~g.(\\rain)", amp: "0.09", rate: "0.7", pos: "0.2", wander: "0.12", grain: "0.2", density: "14", jitter: "0.1", att: "2", sus: "8", rel: "4", hp: "80", lp: "8000", spread: "0.9", shimmer: "0.06", send: "0.72" },
+  porcelain:{ amp: "0.06", dec: "4", colour: "0.45", irregular: "0.06", pan: "0", send: "0.9" },
+  droplet:  { amp: "0.05", sub: "55", dec: "0.9", tone: "0.35", splash: "0.45", pan: "0", send: "0.68" },
+  twig:     { amp: "0.045", dec: "0.24", tone: "0.45", hollow: "0.5", pan: "0", send: "0.72" },
+  rustle:   { amp: "0.032", dec: "1.2", grain: "18", bw: "0.55", pan: "0", send: "0.78" },
+  // The two sampled instruments carry a binding the agent must not have to remember. \keys is useless without the
+  // ~kf / ~kr pair (they read the event to pick the nearest sampled octave), and a \smp with no \buf plays silence.
+  // Filling them here means a rewrite costs the agent four keys again instead of eight, and it cannot forget them.
+  gendy:    { amp: "0.2", knum: "12", chaos: "0.6", scale: "0.5", dec: "0.4", cutoff: "4000", res: "0.3", send: "0.4" },
+  smp:      { buf: "~k.(\\kick)", amp: "0.5", dec: "8", send: "0.1" },
+  // ORDER MATTERS on \keys: ~kf and ~kr read \midinote and \ctranspose off the event, so both must already be in
+  // the Pbind when \buf is reached. A key the agent sets that is NOT listed here gets appended at the END, which
+  // would put \midinote after \buf and render a silent, mis-pitched piano. So both are seeded here.
+  keys:     { midinote: "60", ctranspose: "0", buf: "~kf", rootfreq: "~kr", amp: "0.4", dec: "0.4", rel: "0.2", send: "0.4" },
 };
 
 export function applyPatch(code: string, p: Patch): string {

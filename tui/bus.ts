@@ -6,10 +6,11 @@ import net from "net";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "events";
 import { ROOT } from "./engine.ts";
+import { isInbound, isRecord, type Inbound } from "./remote.ts";
 
 export interface Msg { v: 0; t: number; bar: number; type: string; from: string; [k: string]: unknown }
 
-export class Bus extends EventEmitter {
+export class Bus extends EventEmitter<{ msg: [message: Msg]; inbound: [message: Inbound]; fault: [error: Error]; listening: [address: ReturnType<net.Server["address"]>] }> {
   recent: Msg[] = [];
   bar = 0;
   readonly session = randomUUID();
@@ -32,7 +33,17 @@ export class Bus extends EventEmitter {
       // a newcomer hears the room as it is now: the latest code and the latest report
       for (const type of ["hello", "state", "observation"]) { const m = this.snapshots.get(type); if (m) sock.write(JSON.stringify(m) + "\n"); }
       let buf = "";
-      sock.on("data", (d) => { buf += d; if (buf.length > 1024 * 1024) { sock.destroy(); return; } let i; while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); try { const m = JSON.parse(line); if (m && m.v === 0 && ["proposal", "note"].includes(m.type)) this.emit("inbound", m); } catch {} } });
+      sock.on("data", data => {
+        buf += data;
+        if (buf.length > 1024 * 1024) { sock.destroy(); return; }
+        let end: number;
+        while ((end = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, end); buf = buf.slice(end + 1);
+          let message: unknown;
+          try { message = JSON.parse(line); } catch { continue; }
+          if (isInbound(message)) this.emit("inbound", message);
+        }
+      });
     });
     server.on("error", (error) => { this.send("transport_error", "host", { reason: error.message }); process.stderr.write(`EARS socket error: ${error.message}\n`); this.emit("fault", error); });
     server.on("listening", () => this.emit("listening", server.address()));
@@ -63,8 +74,12 @@ export class Bus extends EventEmitter {
 export function pretty(m: Msg): { time: string; type: string; from: string; text: string } {
   const d = new Date(m.t), time = d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
   const s = (x: unknown) => String(x ?? ""), ms = m.ms ? `  ${(Number(m.ms) / 1000).toFixed(1)}s` : "";
+  const expected = isRecord(m.expected) ? m.expected : {};
   const text =
     m.type === "observation" ? s(m.summary)
+    : m.type === "round_start" ? `round ${s(m.round)} · ${s(m.ambient) === "true" ? "ambient · " : ""}${Array.isArray(m.agents) ? m.agents.join(" + ") : ""} · revision ${s(m.revision)}/${s(m.active_revision)}`
+    : m.type === "curation" ? `${Array.isArray(m.recipes) ? m.recipes.join(" + ") : "no ready recipes"}`
+    : m.type === "learning" ? `${s(m.recipe)} · ${s(m.signal)} · score ${Number(m.score ?? 0).toFixed(3)} · ${s(m.takes)} take/${s(m.skips)} skip · ${s(m.hit)} hit/${s(m.miss)} miss/${s(m.flat)} flat`
     : m.type === "request" ? `${s(m.angle)} · ${s(m.model)}`
     : m.type === "proposal" ? `#${s(m.id)} ${s(m.slot)} ${s(m.diff)} — ${s(m.why)}${ms}`
     : m.type === "rejected" ? `${s(m.angle)} refused: ${s(m.reason)}${ms}`
@@ -75,10 +90,15 @@ export function pretty(m: Msg): { time: string; type: string; from: string; text
     : m.type === "active" ? `${s(m.slot)} pattern active; audio effect unverified`
     : m.type === "superseded" ? `${s(m.slot)} replaced by a newer edit`
     : m.type === "comparison" ? `${s(m.status)} · ${s(m.before)} → ${s(m.after)}`
+    : m.type === "audio_artifact" ? `${s(m.role)} · saved ${s(m.id)} · live capture, attribution unverified`
+    : m.type === "inspiration" ? `${s(m.decision)} · ${s(m.label || m.artifact_id)}${m.intent ? ` · ${s(m.intent)}` : ""}`
+    : m.type === "preference" ? `human ${s(m.decision)} · ${s(m.artifact_id)}`
+    : m.type === "audition" ? `${s(m.status)} · ${s(m.artifact_id || m.reason)}`
+    : m.type === "capture_error" ? s(m.reason)
     : m.type === "landed" ? `${s(m.slot)} legacy acknowledgement`
     : m.type === "error" ? `${s(m.slot)} refused by the engine: ${s(m.reason)}`
     : m.type === "grant" ? `${s(m.agent)} → ${m.skill ? "skill " + s(m.skill) : s(m.level)}`
-    : m.type === "outcome" ? `${s(m.agent)} called ${s((m.expected as any)?.metric)} ${s((m.expected as any)?.dir)} → ${String(m.grade).toUpperCase()}${m.delta != null ? ` (${Number(m.delta) >= 0 ? "+" : ""}${Number(m.delta).toFixed(1)} ${s(m.unit)}, floor ±${Number(m.noise_floor).toFixed(1)})` : ""}`
+    : m.type === "outcome" ? `${s(m.agent)} called ${s(expected.metric)} ${s(expected.dir)} → ${String(m.grade).toUpperCase()}${m.delta != null ? ` (${Number(m.delta) >= 0 ? "+" : ""}${Number(m.delta).toFixed(1)} ${s(m.unit)}, floor ±${Number(m.noise_floor).toFixed(1)})` : ""}`
     : m.type === "unlock" ? `${s(m.agent)} earned ${s(m.skill)} · waiting for the human to activate it`
     : m.type === "state" ? `${s(m.tempo)} bpm · ${s(m.key)} · ${Object.keys((m.slots as object) || {}).length} slots`
     : m.type === "note" ? `“${s(m.text)}”`

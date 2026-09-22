@@ -1,9 +1,21 @@
 // Evidence bookkeeping is independent of the UI and of SuperCollider.
+import { EventEmitter } from 'node:events';
+import type { Differences } from './shots.ts';
 import { parseSlot } from './patch.ts';
 import { audioMetrics, metricDelta, type Profile } from './report.ts';
 
 type Emit = (type: string, from: string, body: Record<string, unknown>) => unknown;
 export interface Context { request_id?: string; proposal?: number; based_on_revision?: string; evidence_ids?: string[]; expected_change?: string }
+export type ObservationBody = {
+  id: string; state_revision: string; active_revisions: number[];
+  metrics: ReturnType<typeof audioMetrics>; quality: { stable_state: boolean };
+  window: { start_ms: number; end_ms: number } | null;
+};
+export type ComparisonBody = {
+  id: string; execution_id: string; proposal?: number; before?: string; after?: string;
+  status: 'measured' | 'unavailable'; differences?: Differences; confounds: string[];
+} & Record<string, unknown>;
+
 interface Observation { id: string; profile: Profile; revision: string; active_revision: number; stable: boolean }
 interface Execution extends Context { execution_id: string; slot: string; code: string; author: string; revision: string; before?: Observation; active_at_ms?: number; active_revision?: number; done?: boolean }
 
@@ -13,7 +25,7 @@ export function sourceDiff(before: string, after: string) {
   return { before, after, parameters: [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => a[k] !== b[k]).map(key => ({ key, before: a[key] ?? null, after: b[key] ?? null })), semantics: 'source expressions only; patterns have not been expanded' };
 }
 
-export class Evidence {
+export class Evidence extends EventEmitter<{ observation: [body: ObservationBody]; comparison: [body: ComparisonBody] }> {
   revision = '';
   activeRevision = 0;
   slots: Record<string, string> = {};
@@ -28,7 +40,7 @@ export class Evidence {
   private executions = new Map<string, Execution>();
   private newest = new Map<string, string>();
   private observations = new Set<string>();
-  constructor(readonly session: string, private emit: Emit) {}
+  constructor(readonly session: string, private publish: Emit) { super(); }
 
   sync(slots: Record<string, string>, context: Record<string, unknown> = {}) {
     const normalized = Object.fromEntries(Object.entries(slots).sort().map(([k, v]) => [k, v.trim()]));
@@ -38,7 +50,7 @@ export class Evidence {
     }
     return this.revision;
   }
-  private state() { this.emit('state', 'host', { ...this.context, revision: this.revision, slots: { ...this.slots }, active_slots: { ...this.activeSlots }, active_revision: this.activeRevision }); }
+  private state() { this.publish('state', 'host', { ...this.context, revision: this.revision, slots: { ...this.slots }, active_slots: { ...this.activeSlots }, active_revision: this.activeRevision }); }
   check(context: Context): string | null {
     if (!context.based_on_revision) return 'based_on_revision is required; read_room before proposing';
     if (context.based_on_revision !== this.revision) return 'stale revision; read_room and reconsider the change';
@@ -91,7 +103,9 @@ export class Evidence {
     this.latest = observation; this.observations.add(id);
     this.recent.push(observation); if (this.recent.length > 6) this.recent.shift();   // a short memory, so a baseline survives one busy window
     if (this.observations.size > 200) this.observations.delete(this.observations.values().next().value!);
-    this.emit('observation', 'ears', { id, kind: 'listening-report', state_revision: this.revision, state_revisions: capture?.state_revisions ?? [], active_revisions: capture?.active_revisions ?? [], summary, text, same_summary: sameSummary, metrics: audioMetrics(profile), scope: { kind: 'master', tap: 'post-master/pre-volume', channels: 'stereo downmix to mono', per_voice: false }, window: capture ? { start_ms: capture.start_ms, end_ms: capture.end_ms, time_basis: 'host_receive_time' } : null, quality: { stable_state: stable, frames: capture?.frames ?? 0, dropped_frames: capture?.dropped_frames ?? 0, timing_uncertainty_ms: null }, analyzer: { id: 'sc-envelope-v1', envelope_attack_seconds: 0.01, envelope_release_seconds: 0.25, fft_size: 2048, report_hz: 15, onset_threshold: 0.18 } });
+    const body = { id, kind: 'listening-report', state_revision: this.revision, state_revisions: capture?.state_revisions ?? [], active_revisions: capture?.active_revisions ?? [], summary, text, same_summary: sameSummary, metrics: audioMetrics(profile), scope: { kind: 'master', tap: 'post-master/pre-volume', channels: 'stereo downmix to mono', per_voice: false }, window: capture ? { start_ms: capture.start_ms, end_ms: capture.end_ms, time_basis: 'host_receive_time' } : null, quality: { stable_state: stable, frames: capture?.frames ?? 0, dropped_frames: capture?.dropped_frames ?? 0, timing_uncertainty_ms: null }, analyzer: { id: 'sc-envelope-v1', envelope_attack_seconds: 0.01, envelope_release_seconds: 0.25, fft_size: 2048, report_hz: 15, onset_threshold: 0.18 } };
+    this.publish('observation', 'ears', body);
+    this.emit('observation', body);
     for (const x of this.executions.values()) {
       if (x.done || x.active_at_ms == null || !capture) continue;
       if (!stable || capture.start_ms < x.active_at_ms) continue;
@@ -102,7 +116,7 @@ export class Evidence {
       if (x.active_revision !== this.activeRevision || x.revision !== this.revision) confounds.push('other state or activation changes occurred');
       if (this.rodeDuring(x.active_at_ms, capture.end_ms)) confounds.push('a mixer transition was riding during this window');
       if (x.before && x.before.revision !== x.revision) confounds.push('the source moved between the baseline window and this edit');
-      this.emit('comparison', 'ears', { id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before.id, after: id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(x.before.profile, profile), confounds });
+      this.comparison({ id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before.id, after: id, mode: 'live_observation', attribution: 'unverified', status: 'measured', differences: metricDelta(x.before.profile, profile), confounds });
       x.done = true;
     }
     return id;
@@ -114,6 +128,7 @@ export class Evidence {
   private rodeDuring(from: number, to: number) { return this.rides.some((r) => r.from <= to && r.to >= from); }
   close() { for (const x of this.executions.values()) if (!x.done) this.unavailable(x, 'session ended before a complete comparison'); }
   private ids(x: Execution) { return { execution_id: x.execution_id, slot: x.slot, proposal: x.proposal, request_id: x.request_id, revision: x.revision, author: x.author, based_on_revision: x.based_on_revision, evidence_ids: x.evidence_ids }; }
-  private receipt(type: string, x: Execution, body: Record<string, unknown>) { this.emit(type, 'host', { ...this.ids(x), ...body }); }
-  private unavailable(x: Execution, reason: string, after?: string) { x.done = true; this.emit('comparison', 'ears', { id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before?.id, after, mode: 'live_observation', attribution: 'unverified', status: 'unavailable', confounds: [reason] }); }
+  private receipt(type: string, x: Execution, body: Record<string, unknown>) { this.publish(type, 'host', { ...this.ids(x), ...body }); }
+  private comparison(body: ComparisonBody) { this.publish('comparison', 'ears', body); this.emit('comparison', body); }
+  private unavailable(x: Execution, reason: string, after?: string) { x.done = true; this.comparison({ id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before?.id, after, mode: 'live_observation', attribution: 'unverified', status: 'unavailable', confounds: [reason] }); }
 }

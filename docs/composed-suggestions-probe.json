@@ -1,0 +1,153 @@
+{
+  "at": "2026-09-21T21:16:51.116Z",
+  "audioAuditioned": false,
+  "sourceChanged": false,
+  "context": "Tempo and key unknown: infer relationships from the supplied current patterns.",
+  "note": "Offer a purposeful new musical idea using SuperCollider's available instruments and patterns. Keep one recognisable rhythmic anchor. Avoid generic row rotations, reversing a motif, or merely moving alternate notes up an octave. Make the musical relationship to the current set clear.",
+  "slots": {
+    "d1": "~d.(\\d1, \\instrument, \\smp, \\buf, ~k.(\\kick), \\dur, 1/4, \\amp, ~x.([\"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X---X---\", \"X---X---X--XX---\"], 0.819), \\dec, 0.34, \\hp, 28, \\send, 0.04)\n",
+    "d2": "~d.(\\d2, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.(\"hhhHhhhhhhhHhhhh\"), \\amp, ~x.([\"X-xX-xX-X-xX-xXx\", \"X-xX-xX-X-xXxXXx\"], 0.32), \\dec, Pwrand([0.05, 0.16], [0.85, 0.15], inf), \\pan, Pwhite(-0.35, 0.35), \\send, 0.1)\n",
+    "d3": "~d.(\\d3, \\instrument, \\smp, \\dur, Pseq([0.285, 0.215], inf), \\buf, ~kp.([\"--c-C--v-b--C-c-\", \"--c-C--v-b--C-vb\"]), \\amp, ~x.([\"--x-X--x-x--X-x-\", \"--x-X--x-x--X-xx\"], 0.46), \\pan, Pseq([-0.3, 0.05, 0.3, 0.1], inf), \\send, 0.37)\n",
+    "d4": "~d.(\\d4, \\instrument, \\bass, \\dur, 1/4, \\midinote, Pseq([37, \\r, 49, 37, \\r, 49, \\r, 37, 37, \\r, 49, \\r, 44, \\r, 49, \\r], inf), \\ctranspose, Pseq([0, 4, 5, -5], inf).stutter(16), \\cutoff, 1099, \\res, 2, \\dec, 0.16, \\duck, 0.35, \\amp, 0.62)\n",
+    "d5": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[61, 65, 71, 75], [65, 68, 71, 75], [66, 70, 77, 80], [56, 59, 66, 70]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X-X--X--X-X--X\", \"--X-XX-X--X-XXX-\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)\n",
+    "d6": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([\\r, 80, 73, 73, 82, 77, \\r, 73, \\r, 80, 73, 73, 82, 77, \\r, 73, 73, 73, \\r, 73, 77, 73, 80, 82, \\r, 80, 73, 73, 82, 77, \\r, 73], inf), \\ctranspose, Pseq([0, 4, 5, -5], inf).stutter(16), \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.16, \\amp, 0.085, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)\n"
+  },
+  "candidates": [
+    {
+      "option": {
+        "slot": "d5",
+        "code": "~d.(\\d5, \\instrument, \\keys, \\dur, Pseq([0.285, 0.215], inf), \\midinote, Pseq([[61, 65, 71, 75], [65, 68, 71, 75], [66, 70, 77, 80], [56, 59, 66, 70]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"X--x--X-x--X--X-\", \"X--x--X-x--X--X-\", \"X--x--X-x--X--X-\", \"X--x--X-x-xX-xXx\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+        "parts": [
+          {
+            "slot": "d5",
+            "code": "~d.(\\d5, \\instrument, \\keys, \\dur, Pseq([0.285, 0.215], inf), \\midinote, Pseq([[61, 65, 71, 75], [65, 68, 71, 75], [66, 70, 77, 80], [56, 59, 66, 70]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"X--x--X-x--X--X-\", \"X--x--X-x--X--X-\", \"X--x--X-x--X--X-\", \"X--x--X-x-xX-xXx\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)",
+            "diff": "dur 1/4 → Pseq([0.285, 0.215], inf) · amp ~x.([\"--X-X--X--X-X--X\", \"--… → ~x.([\"X--x--X-x--X--X-\", \"X-…"
+          }
+        ],
+        "why": "Keys lock into the drums' swing and play a 3-3-2 push, kick stays the anchor.",
+        "evidence": "d2/d3 run swung Pseq([0.285, 0.215]) while d5 sits dead straight at 1/4.",
+        "diff": "dur 1/4 → Pseq([0.285, 0.215], inf) · amp ~x.([\"--X-X--X--X-X--X\", \"--… → ~x.([\"X--x--X-x--X--X-\", \"X-…",
+        "angle": "groove",
+        "ms": 13518,
+        "expect": {
+          "metric": "groove",
+          "dir": "up"
+        },
+        "origin": "model"
+      },
+      "agent": "resident"
+    },
+    {
+      "option": {
+        "slot": "d6",
+        "code": "~d.(\\d6, \\instrument, \\choir, \\dur, 4, \\amp, 0.24, \\vowel, 0, \\att, 0.5, \\sus, 2, \\rel, 1.5, \\bright, 1, \\send, 0.6, \\duck, 0.7, \\midinote, [61, 68, 73, 77], \\ctranspose, Pseq([0, 4, 5, -5], inf))",
+        "parts": [
+          {
+            "slot": "d6",
+            "code": "~d.(\\d6, \\instrument, \\choir, \\dur, 4, \\amp, 0.24, \\vowel, 0, \\att, 0.5, \\sus, 2, \\rel, 1.5, \\bright, 1, \\send, 0.6, \\duck, 0.7, \\midinote, [61, 68, 73, 77], \\ctranspose, Pseq([0, 4, 5, -5], inf))",
+            "diff": "rewrite · instrument \\choir · dur 4 · midinote [61, 68, 73, 77]"
+          }
+        ],
+        "why": "Everything is busy 16ths, so the lead becomes one held choir chord per bar, following the same 0/4/5/-5 root moves.",
+        "evidence": "d4, d5 and d6 all run 16th rows on the same 0, 4, 5, -5 cycle, with nothing sustained.",
+        "diff": "rewrite · instrument \\choir · dur 4 · midinote [61, 68, 73, 77]",
+        "angle": "turn",
+        "ms": 13529,
+        "expect": {
+          "metric": "density",
+          "dir": "down"
+        },
+        "origin": "model"
+      },
+      "agent": "resident"
+    },
+    {
+      "option": {
+        "slot": "d6",
+        "code": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([73, \\r, \\r, 77, \\r, 80, \\r, \\r, 82, \\r, 80, \\r, 77, \\r, \\r, \\r, \\r, \\r, 80, \\r, 77, \\r, 73, \\r, \\r, \\r, \\r, \\r, 73, \\r, \\r, \\r], inf), \\ctranspose, Pseq([0, 4, 5, -5], inf).stutter(16), \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.3, \\amp, 0.105, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)",
+        "parts": [
+          {
+            "slot": "d6",
+            "code": "~d.(\\d6, \\instrument, \\fm, \\dur, 1/4, \\midinote, Pseq([73, \\r, \\r, 77, \\r, 80, \\r, \\r, 82, \\r, 80, \\r, 77, \\r, \\r, \\r, \\r, \\r, 80, \\r, 77, \\r, 73, \\r, \\r, \\r, \\r, \\r, 73, \\r, \\r, \\r], inf), \\ctranspose, Pseq([0, 4, 5, -5], inf).stutter(16), \\ratio, 2, \\index, Pbrown(0.6, 2, 0.2), \\dec, 0.3, \\amp, 0.105, \\pan, Pbrown(-0.6, 0.6, 0.15), \\send, 0.9)",
+            "diff": "midinote Pseq([\\r, 80, 73, 73, 82, 77… → Pseq([73, \\r, \\r, 77, \\r, 80… · dec 0.16 → 0.3 · amp 0.085 → 0.105"
+          }
+        ],
+        "why": "The lead's busy run becomes a sparse call rising to 82, answered by a falling 80-77-73.",
+        "evidence": "d6 plays about 24 of 32 steps with no phrase shape. The riff notes 73/77/80/82 and the per-bar ctranspose stay, so it is still in key.",
+        "diff": "midinote Pseq([\\r, 80, 73, 73, 82, 77… → Pseq([73, \\r, \\r, 77, \\r, 80… · dec 0.16 → 0.3 · amp 0.085 → 0.105",
+        "angle": "hook",
+        "ms": 16356,
+        "expect": {
+          "metric": "density",
+          "dir": "down"
+        },
+        "origin": "model"
+      },
+      "agent": "resident"
+    }
+  ],
+  "events": [
+    {
+      "kind": "ask",
+      "detail": {
+        "agent": "resident",
+        "angle": "groove",
+        "model": "sonnet"
+      }
+    },
+    {
+      "kind": "ask",
+      "detail": {
+        "agent": "resident",
+        "angle": "hook",
+        "model": "sonnet"
+      }
+    },
+    {
+      "kind": "ask",
+      "detail": {
+        "agent": "resident",
+        "angle": "turn",
+        "model": "sonnet"
+      }
+    }
+  ],
+  "review": {
+    "model": "jev-1.13.0",
+    "candidates": [
+      {
+        "index": 0,
+        "intent": {
+          "score": 1.4,
+          "confidence": 0.11
+        },
+        "development": {
+          "score": 1.89,
+          "confidence": 0.84
+        }
+      },
+      {
+        "index": 1,
+        "intent": {
+          "score": 1.14,
+          "confidence": 0.21
+        },
+        "development": {
+          "score": 1.84,
+          "confidence": 0.77
+        }
+      },
+      {
+        "index": 2,
+        "intent": {
+          "score": 1.37,
+          "confidence": 0.06
+        },
+        "development": {
+          "score": 1.94,
+          "confidence": 0.92
+        }
+      }
+    ]
+  }
+}

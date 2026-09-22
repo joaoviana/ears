@@ -1,0 +1,40 @@
+{
+  "syntheticReference": true,
+  "audioAuditioned": false,
+  "inspiration": {
+    "artifact_id": "synthetic-favourite",
+    "label": "probe source, not an audio capture",
+    "intent": "answer",
+    "slots": {
+      "d4": "~d.(\\d4, \\instrument, \\bass, \\dur, 1/4, \\midinote, Pseq([33, \\r, 45, 33, \\r, 45, \\r, 33, 33, \\r, 45, \\r, 40, \\r, 45, \\r], inf), \\ctranspose, Pseq([0, -3, 2, -5], inf).stutter(16), \\cutoff, 1021, \\res, 2, \\dec, 0.16, \\duck, 0.35, \\amp, 0.62)",
+      "d5": "~d.(\\d5, \\instrument, \\keys, \\dur, 1/4, \\midinote, Pseq([[57, 61, 68, 71], [66, 69, 76, 80], [59, 62, 69, 73], [64, 68, 74, 78]], inf).stutter(16), \\buf, ~kf, \\rootfreq, ~kr, \\amp, ~x.([\"--X-X--X--X-X--X\", \"--X-X--X--X-X-X-\", \"--X-X--X--X-X--X\", \"--X-XX-X--X-XXX-\"], 0.42) * Pwhite(0.85, 1.1), \\dec, Pwrand([0.3, 0.65], [0.7, 0.3], inf), \\rel, 0.2, \\wow, 0.004, \\flut, 0.0015, \\pan, Pwhite(-0.12, 0.12), \\duck, 0.3, \\send, 0.4)"
+    },
+    "source_basis": "active source at capture request",
+    "context": "tempo 112; key A major",
+    "mixed_window": false
+  },
+  "currentContext": "130 BPM, key E lydian (bass root midinote 28); italo: italo \u00b7 I\u2013iii\u2013IV\u2013V",
+  "options": [
+    {
+      "inspiration_id": "synthetic-favourite",
+      "slot": "d6",
+      "code": "~d.(\\d6, \\instrument, \\supersaw, \\dur, 1/4, \\midinote, Pseq([\\r, \\r, 64, \\r, 68, \\r, \\r, 71, \\r, \\r, 68, \\r, 66, \\r, \\r, 64, \\r, \\r, 64, \\r, 68, \\r, \\r, 71, \\r, \\r, 76, \\r, 73, \\r, 71, \\r], inf), \\ctranspose, Pseq([0, 4, 6, -5], inf).stutter(16), \\detune, 0.35, \\cutoff, 300, \\env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \\res, 0.471, \\att, 0, \\sus, 0.09, \\rel, 0.12, \\spread, 0.9, \\send, 0.7, \\amp, 0.13)",
+      "parts": [
+        {
+          "slot": "d6",
+          "code": "~d.(\\d6, \\instrument, \\supersaw, \\dur, 1/4, \\midinote, Pseq([\\r, \\r, 64, \\r, 68, \\r, \\r, 71, \\r, \\r, 68, \\r, 66, \\r, \\r, 64, \\r, \\r, 64, \\r, 68, \\r, \\r, 71, \\r, \\r, 76, \\r, 73, \\r, 71, \\r], inf), \\ctranspose, Pseq([0, 4, 6, -5], inf).stutter(16), \\detune, 0.35, \\cutoff, 300, \\env, Pseq([600, 1100, 2000, 3400, 2400, 1400], inf).stutter(16), \\res, 0.471, \\att, 0, \\sus, 0.09, \\rel, 0.12, \\spread, 0.9, \\send, 0.7, \\amp, 0.13)",
+          "diff": "midinote Pseq([64, 73, 71, 56, 52, 59\u2026 \u2192 Pseq([\\r, \\r, 64, \\r, 68, \\r\u2026 \u00b7 ctranspose \u2026, 4, 6, -5], inf).stutter(4) \u2192 \u2026, 4, 6, -5], inf).stutter(16\u2026"
+        }
+      ],
+      "why": "Question bar sinks to E, answer bar leaps an octave to 76, syncopated on the saw lead.",
+      "evidence": "Saved d5 \"--X-X--X--X-X--X\" contour; the current d6 is a running six-note loop with no gaps or reply.",
+      "diff": "midinote Pseq([64, 73, 71, 56, 52, 59\u2026 \u2192 Pseq([\\r, \\r, 64, \\r, 68, \\r\u2026 \u00b7 ctranspose \u2026, 4, 6, -5], inf).stutter(4) \u2192 \u2026, 4, 6, -5], inf).stutter(16\u2026",
+      "angle": "hook",
+      "ms": 12389,
+      "expect": {
+        "metric": "density",
+        "dir": "up"
+      }
+    }
+  ]
+}
