@@ -1,6 +1,4 @@
 node_modules
-dist
-public/faust
 .env
 .tools
 tui/sets

@@ -1,58 +1,56 @@
-# soundcheck
+# EARS
 
-One musical brief, played by several audio engines, so the stack for **Guest DJ** (Claude Founder House, Wed 23 Sept)
-gets chosen by ear instead of by reading docs.
+**What if Claude could listen?**
 
-```
+A live music set that runs in a terminal. SuperCollider makes the sound, an `ears` synth on the master bus measures
+what actually comes out of the speakers, and Claude DJs read those measurements and propose one change at a time.
+A human says yes or no. Nothing reaches the speakers without passing validation and a verdict.
+
+![EARS mid-set: the booth, the room readout, and the protocol wire](docs/screenshot.png)
+
+## Run it
+
+You need [SuperCollider](https://supercollider.github.io/) (tested with 3.14), Node 20.19+, and the
+[Claude Code](https://claude.com/claude-code) CLI signed in. DJs run as `claude -p` with no tools, on your
+subscription, with no API key.
+
+```sh
 npm install
-npm run dev        # http://localhost:5188
+npm run ears              # the set (ambient by default)
+npm run ears:stage        # tmux: your $EDITOR on the left, EARS on the right
+npm run ears -- --mute    # silent: the ears still measure, nothing reaches the speakers
+npm run ears -- --demo    # visuals only, no SuperCollider
 ```
 
-Press **1–5** to switch engine on the same reference track (Detroit techno, 130 BPM, F minor), **space** to stop.
-Every pane is editable; **⌘/ctrl + enter** re-runs it. Reference tracks are level-matched to within a few dB so louder
-doesn't win by default.
+`a` asks the booth, `y` / `n` takes or skips an idea, `t` gives a direction, `?` lists every key.
 
-| Key | Engine | What to listen for |
-|---|---|---|
-| 1 | **Strudel** | Real TR-909 / Linn / MPC60 samples and sampled piano. Five genres, because this is the front-runner and the hosted sandbox could only play synths. |
-| 2 | **Tone.js** | The same track built from synth objects. Then *FM bells + pad*: sound design Strudel's oscillators can't do. |
-| 3 | **Faust** | The same track as one DSP expression, with a Moog ladder model and zita reverb. Then *Physical models*: simulated djembe, marimba and nylon string. |
-| 4 | **Glicol** | The same track in a graph language that runs entirely inside one AudioWorklet. |
-| 5 | **SuperCollider** | The same track rendered to WAV by the native engine and looped. Read-only in the page: edit `offline/supercollider/render.scd`, then `npm run render`. |
+## What's going on
 
-## Hearing native engines in the browser
+- **The ears.** Every two bars the host measures the mix (sub, low, mid, high, air, brightness, loudness, punch,
+  width, groove) and turns it into a listening report: *sub thin · high dull · air closed · centroid dark*.
+- **The DJs.** Each DJ is a markdown file in [`tui/djs/`](tui/djs), shaped like a Claude Code skill: a style,
+  idioms, things it will never do, and skills (fills, drops, vocals) it can only use once you grant them.
+- **Called shots.** Every proposal predicts one measurable thing: *this will bring up the deep bass*. Once it
+  lands, the meter reports again and the host grades it: hit, miss, flat, or ungraded when it cannot tell.
+- **The veto.** A DJ returns text, not code. The host parses it, validates it, and writes the SuperCollider itself,
+  and only after a verdict.
 
-Anything that can't run in a browser gets rendered to a file instead. `npm run render` runs `sclang` headless, which
-turns the patterns into an OSC score and has `scsynth` write a WAV faster than realtime (no audio device, no window).
-`scripts/loop-wav.mjs` then cuts bars 17–32 out of it, so the reverb tail from the previous bars is already ringing
-at the loop point, and level-matches it. SuperCollider doesn't need installing: a copy unpacked into `.tools/`
-(gitignored) works, which is how it was done here because Homebrew wanted `sudo xcodebuild -license accept`.
+## The protocol
 
-TidalCycles and Sonic Pi are both front-ends that drive SuperCollider, so engine 5 is what they sound like
-underneath. Their files in `offline/` have still **not been run**.
+Everything above travels over [**ears-protocol**](https://github.com/joaoviana/ears-protocol): the agent proposes,
+the human decides, only the host touches the work. EARS is its reference host and imports its types and vocabulary.
+Any agent can join the booth over `localhost:57400`, and the protocol's MCP bridge lets a Claude Code session sit
+next to the built-in DJs.
 
-**Read `DECISION.md` after listening**, not before.
+## More
 
-## EARS: the all-terminal set
+[`tui/README.md`](tui/README.md) is the full manual: every key, mode, the DJ file format, transitions, the evidence
+and grading rules, and how everything was checked.
 
-`npm run ears:stage` — SuperCollider live, a listening report, Claude's one suggestion at a time with y/n, and ASCII
-visuals locked to the beat, in Ink. See `tui/README.md`.
-
-## How it was checked
-
-A headless Chromium played every track and measured the output: all ten produce signal, no console errors, every
-sample bank loads. `npm run check:faust` compiles the Faust tracks offline and prints RMS/peak. None of that says
-whether anything sounds *good*. That part needs ears, which is the point of the repo.
-
-## Layout
-
-```
-src/engines/*.js    one file per engine: { tracks, play(code), stop(), analyser() }
-src/faust/*.dsp     Faust sources (compiled in the browser by libfaust WASM)
-src/main.js         shell: lazy-loads engines, one-at-a-time playback, meter
-offline/            Tidal / SuperCollider / Sonic Pi / Orca, unverified
-scripts/            faust offline check, libfaust copy step
+```sh
+npm run test:ears         # tests
+npm run typecheck:ears
+npm run ears:demo-check   # headless UI check, no SuperCollider needed
 ```
 
-Samples stream from GitHub on first play, so the first bar of a Strudel track can be missing a hit while files load.
-For the venue, vendor the handful of samples actually used.
+MIT licensed. The nature and texture recordings are CC0; their sources are listed in `tui/samples/*/SOURCES.md`.

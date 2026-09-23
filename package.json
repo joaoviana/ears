@@ -1,13 +1,8 @@
 {
-  "name": "soundcheck",
+  "name": "ears",
   "version": "1.0.0",
-  "description": "One brief, several audio engines: hear what Strudel, Tone.js, Faust and Glicol each sound like before choosing a stack.",
+  "description": "A live music set in the terminal: Claude DJs propose SuperCollider changes, measure what comes out of the speakers, and a human says yes or no.",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "postinstall": "node scripts/copy-faust.mjs",
-    "check:faust": "node scripts/faust-check.mjs",
-    "render": "sh scripts/render.sh",
     "ears": "tsx tui/app.tsx",
     "ears:stage": "sh tui/ears.sh",
     "ears:ref": "tsx tui/make-ref.ts",
@@ -22,7 +17,7 @@
     "ears:transcript": "tsx tui/transcript.ts"
   },
   "keywords": [],
-  "author": "",
+  "author": "Joao Viana",
   "license": "MIT",
   "type": "module",
   "devDependencies": {
@@ -30,23 +25,18 @@
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2",
-    "vite": "^6.4.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@grame/faustwasm": "^0.18.4",
     "@inkjs/ui": "^2.0.0",
-    "@strudel/web": "^1.3.0",
     "asciichart": "^1.5.25",
     "cfonts": "^3.3.1",
     "chokidar": "^5.0.0",
     "ears-protocol": "git+https://github.com/joaoviana/ears-protocol.git",
-    "glicol": "^0.4.0",
     "gradient-string": "^3.0.0",
     "ink": "^6.8.0",
     "osc-min": "^2.1.2",
-    "react": "^19.3.0",
-    "tone": "^15.1.22"
+    "react": "^19.3.0"
   },
   "private": true
 }
