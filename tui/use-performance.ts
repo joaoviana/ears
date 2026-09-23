@@ -8,10 +8,14 @@ import path from "path";
 import { ROOT, type Hit } from "./engine.ts";
 import { Listener, compare, type Profile, type Line } from "./report.ts";
 import { summon, type Suggestion, type Past, type AskInput, WILD } from "./agent.ts";
-import { LOOKS, PALETTE_NAMES, WIPES, UI, NEUTRAL, type Pulse, type Ramp, type Scene } from "./ascii.ts";
+import { LOOKS, PALETTE_NAMES, WIPES, UI, type Pulse, type Scene } from "./ascii.ts";
 import { feed, fake } from "./audio.ts";
 import { roster, save, accent, isAmbientDJ, type DJ } from "./djs.ts";
 import { makeBase, STYLE_NAMES, DARK_NAMES, type Base, type Mood } from "./seed.ts";
+import { MUTE, AUTO, DEMO, KEEP, ARMED, MOOD0, STYLE0, INITIAL_STYLE, SEED, START, type Layout } from "./flags.ts";
+import { RAMP_NAMES, hex, tokens, bannerLines } from "./paint.ts";
+import { aimAt as aimFor, quietLine as quietFor } from "./aim.ts";
+import { movedSlots, movedReason } from "./staleness.ts";
 import { Session, SLOTS } from "./session.ts";
 import { sourceDiff, type Context } from "./evidence.ts";
 import { SKILLS, skill, earned, recordNote } from "./skills.ts";
@@ -28,36 +32,10 @@ import { DEVELOP, developMoment, type Development, type Inspiration } from "./in
 import { DEFAULT_WILD, angleKind, musicContext } from "./direction.ts";
 import { AmbientLearning } from "./ambient-learning.ts";
 import { AMBIENT_ARSENAL, ambientTide } from "./ambient-arsenal.ts";
-import cfonts from "cfonts";
-
-// name-in-lights fonts (cfonts). Each DJ keeps one; if it doesn't fit the terminal, fall through to narrower ones.
-const FONTS = ["block", "slick", "pallet", "shade", "grid", "simple3d"] as const, NARROW = ["chrome", "tiny"] as const;
-const bigText = (text: string, font: string): string[] => {
-  try {
-    const result = cfonts.render(text, { font, colors: ["system"], space: false, env: "node", maxLength: 0, lineHeight: 0 }, false, 0, { width: 500, height: 50 });
-    return result ? result.string.replace(/\x1b\[[0-9;]*m/g, "").split("\n").filter(line => line.trim()) : [];
-  } catch { return []; }
-};
-const hashOf = (id: string) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 const SET = process.env.EARS_SET || path.join(ROOT, "tui/set");   // EARS_SET lets a test instance play from its own folder
 const REF = path.join(ROOT, "tui/refs/house.json");
-export const RAMP_NAMES: Ramp[] = ["pixels", "ascii", "blocks", "dots", "code"];
-export const { text: TEXT, dim: DIM, faint: FAINT } = NEUTRAL;
-export const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-const arg = (f: string) => process.argv.includes(f);
-export type Layout = "show" | "stage" | "window";
-const MUTE = arg("--mute"), AUTO = !arg("--manual"), DEMO = arg("--demo"), KEEP = arg("--keep");
-// fills need 1 taken idea, vocals 2, drops 3. A showcase gets maybe four rounds, so the loudest moves are
-// gated behind a counter it cannot reach. --skills hands every DJ the lot on arrival.
-const ARMED = arg("--skills");
-const MOOD0 = ((): Mood => { const i = process.argv.indexOf("--mood"), v = i > 0 ? process.argv[i + 1] : "vibey"; return v === "dark" || v === "any" ? v : "vibey"; })();
-const STYLE0 = (() => { const i = process.argv.indexOf("--style"); return i > 0 ? process.argv[i + 1] : (process.env.EARS_STYLE || undefined); })();
-const INITIAL_STYLE = STYLE0 || "ambient";
-const SEED = (() => { const i = process.argv.indexOf("--seed"); return i > 0 ? Number(process.argv[i + 1]) : Math.floor(Math.random() * 9000) + 1000; })();
-export const fgc = ([r, g, b]: number[], k = 1) => `\x1b[38;2;${Math.round(r * k)};${Math.round(g * k)};${Math.round(b * k)}m`, RESET = "\x1b[39m";
 const YOU = [255, 255, 255], SEEDC = [138, 135, 153];   // your own edits are white; the seed's are grey; DJs bring their colour
-export const tokens = (c: string) => c.replace(/\s*\n\s*/g, " ").trim().split(/(?<=,)\s+/).filter(Boolean);
 type PulseVoice = "kick" | "snare" | "hat" | "stab";
 const TAU: Record<PulseVoice, number> = { kick: 0.22, snare: 0.16, hat: 0.07, stab: 0.3 };
 const KIND: Record<string, PulseVoice> = { kick: "kick", clap: "snare", hat: "hat", stab: "stab", bass: "stab" };
@@ -140,7 +118,7 @@ export function usePerformance() {
   const [typing, setTyping] = useState<"tell" | "summon" | null>(null), [thinking, setThinking] = useState("");
   const [question, setQuestion] = useState<MusicalQuestion | null>(null);
   const conversation = useRef<ConversationRound | null>(null);
-  const [ramp, setRamp] = useState(0), [layout, setLayout] = useState<Layout>(arg("--full") ? "stage" : arg("--window") ? "window" : "show"), [guide, setGuide] = useState(!arg("--no-guide")), [script, setScript] = useState(arg("--script")), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(arg("--voice")), [overlay, setOverlay] = useState<null | "help" | "roster" | "skills" | "moments" | "moment-action">(null), [logs, setLogs] = useState(arg("--logs")), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
+  const [ramp, setRamp] = useState(0), [layout, setLayout] = useState<Layout>(START.layout), [guide, setGuide] = useState(START.guide), [script, setScript] = useState(START.script), [muted, setMuted] = useState(MUTE), [voice, setVoice] = useState(START.voice), [overlay, setOverlay] = useState<null | "help" | "roster" | "skills" | "moments" | "moment-action">(null), [logs, setLogs] = useState(START.logs), [log, setLog] = useState(DEMO ? "demo mode: no sound engine" : "booting SuperCollider…");
   const [momentStatus, setMomentStatus] = useState("[ save A · ] save B · \\ hear A/B · M keep · H memories");
   const [savedMoments, setSavedMoments] = useState<Moment[]>([]);
   const [selectedMoment, setSelectedMoment] = useState<Moment | null>(null);
@@ -170,11 +148,8 @@ export function usePerformance() {
   const active = () => st.current.booth[st.current.turn % st.current.booth.length].dj;
   const announce = (text: string, rgb: number[], bars = 2, fontKey = text) => {
     const cols = stdout.columns || 120, W = cols - (logsRef.current ? Math.min(96, Math.floor(cols * 0.5)) : 0) - 2, to = hex((UI[st.current.pending?.palette ?? st.current.scene.palette] ?? UI.ember).b);
-    for (const font of [FONTS[hashOf(fontKey) % FONTS.length], "block", ...NARROW]) {
-      const lines = bigText(text, font); if (!lines.length) continue;
-      const w = Math.max(...lines.map((l) => l.length));
-      if (w + 4 <= W) { banner.current = { lines: ["", ...lines, ""].map((l) => "  " + l.padEnd(w) + "  "), rgb, rgb2: to, from: Date.now(), ms: barAt.current.len * bars }; return; }
-    }
+    const lines = bannerLines(text, W, fontKey);
+    if (lines) banner.current = { lines, rgb, rgb2: to, from: Date.now(), ms: barAt.current.len * bars };
   };
   const queueScene = (sc: Partial<Scene>) => { const s = st.current; s.pending = { wipe: WIPES[Math.floor(Math.random() * WIPES.length)], look: sc.look ?? LOOKS[(LOOKS.indexOf(s.scene.look) + 1 + Math.floor(Math.random() * (LOOKS.length - 1))) % LOOKS.length], palette: sc.palette ?? PALETTE_NAMES[(PALETTE_NAMES.indexOf(s.scene.palette) + 1) % (PALETTE_NAMES.length - 1)] }; };
 
@@ -192,23 +167,9 @@ export function usePerformance() {
    *  phase the composer was handed, so NOW is the booth's own idea of the room, not a second one invented on screen. */
   const tideNow = () => ambientTide({ round: musicalRound.current, history: st.current.history });
   const turns = useRef<string[]>([]);   // recent left-turn ideas shown to the performer
-  /** One voice per angle: the worst drift for fix, something empty or undoubled for add, anything else for turn. */
-  const aimAt = (round: number): Record<string, string> => {
-    const s = st.current, all = SLOTS;
-    const drift = slotRef.current ? slotDrift(slotEars.all(Date.now() - 6000, Date.now()), slotRef.current) : [];
-    const empty = all.filter((k) => !(evidence.slots[k] || "").trim());
-    const stale = all.filter((k) => (evidence.slots[k] || "").trim()).map((k) => ({ k, n: s.bar - (authors.current[k]?.bar ?? 0) })).sort((a, b) => b.n - a.n);
-    const fix = drift[0]?.slot ?? stale[0]?.k ?? "d1";
-    const add = empty[0] ?? stale.map((x) => x.k).find((k) => k !== fix) ?? "d6";
-    const turn = all.find((k) => k !== fix && k !== add) ?? "d3";
-    return { fix, add, turn: wild.current >= 2 ? "d6" : turn, groove: round % 2 ? "d3" : "d2", hook: round % 2 ? "d4" : "d5" };
-  };
-  const quietLine = () => {
-    const s = st.current, stale = SLOTS.filter((k) => (evidence.slots[k] || "").trim())
-      .map((k) => ({ k, bars: s.bar - (authors.current[k]?.bar ?? 0) })).filter((x) => x.bars >= 8).sort((a, b) => b.bars - a.bars);
-    if (!stale.length) return "Everything has been touched in the last 8 bars.";
-    return `Nothing has changed in ${stale.slice(0, 4).map((x) => `${x.k} for ${x.bars} bars`).join(", ")}.`;
-  };
+  const aimAt = (round: number) => aimFor({ round, wild: wild.current, bar: st.current.bar, slots: evidence.slots, touched: authors.current,
+    drift: slotRef.current ? slotDrift(slotEars.all(Date.now() - 6000, Date.now()), slotRef.current) : [] });
+  const quietLine = () => quietFor(evidence.slots, authors.current, st.current.bar);
   const author = (slot: string, code: string, a: { name: string; rgb: number[] }) => {
     const before = new Set(tokens(st.current.slots[slot] || ""));
     authors.current[slot] = { ...a, bar: st.current.bar, fresh: new Set(tokens(code).filter((t) => !before.has(t))) };
@@ -246,13 +207,13 @@ export function usePerformance() {
     // A revision covers the whole session, so one edit anywhere used to invalidate every idea in flight -- a whole
     // round came back with nothing but "stale revision". An idea is only stale if a slot IT touches has moved since.
     const touched = (o.parts ?? [{ slot: o.slot }]).map((x) => x.slot);
-    const untouched = !!seen && touched.every((k) => (seen[k] ?? "").trim() === (evidence.slots[k] || "").trim());
+    const untouched = !!seen && !movedSlots(touched, seen, evidence.slots).length;
     const stale = evidence.check(context);
     if (stale && untouched) context = { ...context, based_on_revision: evidence.revision };
     // 'stale revision' told us nothing about WHY, nine times in ten rounds. Name the slot that moved and what it
     // was, so the log says whether this is the guard working or the guard misfiring.
-    const moved = seen ? touched.filter((k) => (seen[k] ?? "").trim() !== (evidence.slots[k] || "").trim()) : [];
-    const why = untouched ? null : stale ? (moved.length ? `${moved.join(" and ")} changed since this idea was formed; read_room and reconsider` : `${stale} (no snapshot of what the agent saw)`) : null;
+    const moved = seen ? movedSlots(touched, seen, evidence.slots) : [];
+    const why = untouched ? null : stale ? (moved.length ? movedReason(moved) : `${stale} (no snapshot of what the agent saw)`) : null;
     const bad = why || (s.options && s.options.length >= 3 ? "booth is full; wait for a verdict" : null);
     if (bad) { bus.send("rejected", agent, { request_id: context.request_id, reason: bad }); return; }
     const opt: Option = { ...o, ...context, id: ++s.seq, agent, saw: Object.fromEntries(touched.map((k) => [k, (evidence.slots[k] || "").trim()])) };
@@ -444,8 +405,8 @@ export function usePerformance() {
   const staleFor = (o: Option) => {
     const touched = (o.parts?.length ? o.parts.map((x) => x.slot) : [o.slot]);
     if (!o.saw) return evidence.check(o);
-    const moved = touched.filter((k) => (evidence.slots[k] || "").trim() !== (o.saw![k] ?? ""));
-    return moved.length ? `${moved.join(" and ")} changed since this idea was formed; read_room and reconsider` : null;
+    const moved = movedSlots(touched, o.saw, evidence.slots);
+    return moved.length ? movedReason(moved) : null;
   };
   const take = (i: number, by = "human", more = false) => {
     if (moments.current?.playing) { setSay("esc returns live before taking an idea", "refused"); return; }
