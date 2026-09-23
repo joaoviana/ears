@@ -1,10 +1,12 @@
 // Evidence bookkeeping is independent of the UI and of SuperCollider.
 import { EventEmitter } from 'node:events';
 import type { Differences } from './shots.ts';
+import type { WireType } from './bus.ts';
+import type { Execution as Receipt } from 'ears-protocol/types';
 import { parseSlot } from './patch.ts';
 import { audioMetrics, metricDelta, type Profile } from './report.ts';
 
-type Emit = (type: string, from: string, body: Record<string, unknown>) => unknown;
+type Emit = (type: WireType, from: string, body: Record<string, unknown>) => unknown;
 export interface Context { request_id?: string; proposal?: number; based_on_revision?: string; evidence_ids?: string[]; expected_change?: string }
 export type ObservationBody = {
   id: string; state_revision: string; active_revisions: number[];
@@ -149,7 +151,7 @@ export class Evidence extends EventEmitter<{ observation: [body: ObservationBody
   private rodeDuring(from: number, to: number) { return this.rides.some((r) => r.from <= to && r.to >= from); }
   close() { for (const x of this.executions.values()) if (!x.done) this.unavailable(x, 'session ended before a complete comparison'); }
   private ids(x: Execution) { return { execution_id: x.execution_id, slot: x.slot, proposal: x.proposal, request_id: x.request_id, revision: x.revision, author: x.author, based_on_revision: x.based_on_revision, evidence_ids: x.evidence_ids }; }
-  private receipt(type: string, x: Execution, body: Record<string, unknown>) { this.publish(type, 'host', { ...this.ids(x), ...body }); }
+  private receipt(type: Receipt['type'], x: Execution, body: Record<string, unknown>) { this.publish(type, 'host', { ...this.ids(x), ...body }); }
   private comparison(body: ComparisonBody) { this.publish('comparison', 'ears', body); this.emit('comparison', body); }
   private unavailable(x: Execution, reason: string, after?: string) { x.done = true; this.comparison({ id: `${this.session}:c${++this.comparisonN}`, ...this.ids(x), before: x.before?.id, after, mode: 'live_observation', attribution: 'unverified', status: 'unavailable', confounds: [reason] }); }
 }

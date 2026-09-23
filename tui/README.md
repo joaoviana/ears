@@ -388,7 +388,7 @@ speakers without passing validation and a verdict.
 
 ## The protocol, and outside agents
 
-The messages above are the [EARS protocol](../../ears-protocol/SPEC.md), in its own repo. This TUI is its reference
+The messages above are the [EARS protocol](https://github.com/joaoviana/ears-protocol/blob/main/SPEC.md), in its own repo. This TUI is its reference
 host: it listens on `localhost:57400`, and anything that connects can watch the wire and send `proposal` and `note`
 and nothing else. `ears-protocol/src/mcp.ts` bridges that to MCP, so a Claude Code session can sit in the booth:
 it shows up as a robot marked `wire`, its ideas join the same option list, and they pass the same validator.
@@ -490,6 +490,8 @@ seed.ts       nine styles → six slots                  ascii.ts   looks, palet
 bus.ts        the wire: screen log, JSONL, localhost socket      evidence.ts revisions, receipts, before/after comparisons
 app.tsx       presentation only                        tail.ts    `npm run ears:tail`
 use-performance.ts  performer actions, React state and visual timing
+flags.ts      command-line switches and the seed        paint.ts   truecolor, text shades, name-in-lights banner
+aim.ts        which voice each angle aims at, quiet line  staleness.ts which touched slots moved under an idea
 conversation.ts     immediate direction questions and cancellable model preparation
 session.ts    source I/O, watcher ownership, admission, execution receipts and lifecycle
 remote.ts     validates untrusted guest proposals      live-grading.ts calibration and linked outcomes
@@ -522,12 +524,12 @@ and `latest.jsonl` points to the current session. To produce a file for another 
 
 ```sh
 cd ../ears-protocol
-npm run summarize -- ../soundcheck/tui/logs/latest.jsonl session-handoff.md
+npm run summarize -- ../ears/tui/logs/latest.jsonl session-handoff.md
 ```
 
 Comparisons are explicitly observational: different musical time, stochastic patterns, mixer transitions, and
 shared effect tails are confounds. Per-voice taps, controlled A/B rendering, and full event-pattern diffs remain
-future work. See [the protocol specification](../../ears-protocol/SPEC.md#evidence-v1-capability).
+future work. See [the protocol specification](https://github.com/joaoviana/ears-protocol/blob/main/SPEC.md#evidence-v1-capability).
 
 ```sh
 npm run test:ears                        # pure evidence, clock, and TCP/log tests

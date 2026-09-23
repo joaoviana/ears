@@ -6,9 +6,15 @@ import net from "net";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "events";
 import { ROOT } from "./engine.ts";
+import type { Envelope, MessageType } from "ears-protocol/types";
 import { isInbound, isRecord, type Inbound } from "./remote.ts";
 
-export interface Msg { v: 0; t: number; bar: number; type: string; from: string; [k: string]: unknown }
+/** Messages only this host sends. The protocol tells readers to ignore types they do not know, so these are safe to put on the wire. */
+export type HostOnly = "learning" | "inspiration" | "script" | "round_start" | "mode" | "curation";
+/** Anything else must be a type the protocol defines, or this file stops typechecking. */
+export type WireType = MessageType | HostOnly;
+
+export interface Msg extends Envelope { bar: number; type: WireType; [k: string]: unknown }
 
 export class Bus extends EventEmitter<{ msg: [message: Msg]; inbound: [message: Inbound]; fault: [error: Error]; listening: [address: ReturnType<net.Server["address"]>] }> {
   recent: Msg[] = [];
@@ -51,7 +57,7 @@ export class Bus extends EventEmitter<{ msg: [message: Msg]; inbound: [message: 
     return this;
   }
 
-  send(type: string, from: string, body: Record<string, unknown> = {}) {
+  send(type: WireType, from: string, body: Record<string, unknown> = {}) {
     const m: Msg = { ...body, v: 0, t: Date.now(), bar: this.bar, type, from, session_id: this.session, seq: ++this.seq };
     this.recent.push(m);
     if (this.recent.length > 400) this.recent.shift();
